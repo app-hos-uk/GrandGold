@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+build/
+.tmp/
+.cache/
+
+# Database (SQLite dev)
+database/
+*.db
+
+# Env
+.env
+.env.*
+
+# Strapi
+.strapi/
+*.log

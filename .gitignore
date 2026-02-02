@@ -1,0 +1,75 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Turborepo
+.turbo/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Admin config (stores API keys)
+.grandgold/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# OS
+*.DS_Store
+*.pem
+
+# Docker
+docker-compose.override.yml
+
+# GCP
+.gcloud/
+service-account.json
+*-service-account.json
+
+# Strapi
+.strapi-updater.json
+.strapi/
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Lock files (keep package-lock.json)
+yarn.lock
+pnpm-lock.yaml
+
+# Vercel
+.vercel
+
+# PWA
+public/sw.js
+public/workbox-*.js

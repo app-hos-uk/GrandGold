@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GrandGold API Documentation</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    .swagger-ui .topbar {
+      background-color: #1a1a2e;
+    }
+    .swagger-ui .topbar .download-url-wrapper .download-url-button {
+      background-color: #d4a853;
+    }
+    .swagger-ui .topbar-wrapper img {
+      content: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">💎</text></svg>');
+    }
+    .swagger-ui .info .title {
+      color: #1a1a2e;
+    }
+    .swagger-ui .info .title small {
+      background-color: #d4a853;
+    }
+    .swagger-ui .opblock.opblock-post {
+      border-color: #49cc90;
+      background: rgba(73, 204, 144, 0.1);
+    }
+    .swagger-ui .opblock.opblock-get {
+      border-color: #61affe;
+      background: rgba(97, 175, 254, 0.1);
+    }
+    .swagger-ui .opblock.opblock-delete {
+      border-color: #f93e3e;
+      background: rgba(249, 62, 62, 0.1);
+    }
+    .swagger-ui .opblock.opblock-patch {
+      border-color: #50e3c2;
+      background: rgba(80, 227, 194, 0.1);
+    }
+    .swagger-ui .btn.execute {
+      background-color: #d4a853;
+      border-color: #d4a853;
+    }
+    .swagger-ui .btn.execute:hover {
+      background-color: #b8923f;
+    }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      const ui = SwaggerUIBundle({
+        url: "./openapi.yaml",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout",
+        tryItOutEnabled: true,
+        supportedSubmitMethods: ['get', 'post', 'put', 'delete', 'patch'],
+        validatorUrl: null,
+        defaultModelsExpandDepth: 1,
+        defaultModelExpandDepth: 1,
+        docExpansion: 'list',
+        filter: true,
+        showExtensions: true,
+        showCommonExtensions: true
+      });
+      window.ui = ui;
+    };
+  </script>
+</body>
+</html>

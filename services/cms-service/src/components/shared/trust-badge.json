@@ -1,0 +1,25 @@
+{
+  "collectionName": "components_shared_trust_badges",
+  "info": {
+    "displayName": "Trust Badge",
+    "description": "Trust and certification badges"
+  },
+  "options": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "icon": {
+      "type": "media",
+      "allowedTypes": ["images"],
+      "multiple": false
+    },
+    "iconName": {
+      "type": "string"
+    }
+  }
+}

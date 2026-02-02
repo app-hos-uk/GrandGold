@@ -1,0 +1,165 @@
+# GrandGold Cloud Build Configuration
+# Triggered on push to main branch
+
+steps:
+  # Install dependencies
+  - name: 'node:20-alpine'
+    entrypoint: npm
+    args: ['ci']
+    id: 'install'
+
+  # Build shared packages
+  - name: 'node:20-alpine'
+    entrypoint: npm
+    args: ['run', 'build', '--workspace=@grandgold/types']
+    id: 'build-types'
+    waitFor: ['install']
+
+  - name: 'node:20-alpine'
+    entrypoint: npm
+    args: ['run', 'build', '--workspace=@grandgold/utils']
+    id: 'build-utils'
+    waitFor: ['build-types']
+
+  - name: 'node:20-alpine'
+    entrypoint: npm
+    args: ['run', 'build', '--workspace=@grandgold/database']
+    id: 'build-database'
+    waitFor: ['build-utils']
+
+  # Build and push auth-service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/auth-service:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/auth-service:latest'
+      - '-f'
+      - './services/auth-service/Dockerfile'
+      - '.'
+    id: 'build-auth-service'
+    waitFor: ['build-database']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/auth-service:$COMMIT_SHA']
+    id: 'push-auth-service'
+    waitFor: ['build-auth-service']
+
+  # Build and push seller-service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/seller-service:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/seller-service:latest'
+      - '-f'
+      - './services/seller-service/Dockerfile'
+      - '.'
+    id: 'build-seller-service'
+    waitFor: ['build-database']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/seller-service:$COMMIT_SHA']
+    id: 'push-seller-service'
+    waitFor: ['build-seller-service']
+
+  # Build and push fintech-service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/fintech-service:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/fintech-service:latest'
+      - '-f'
+      - './services/fintech-service/Dockerfile'
+      - '.'
+    id: 'build-fintech-service'
+    waitFor: ['build-database']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/fintech-service:$COMMIT_SHA']
+    id: 'push-fintech-service'
+    waitFor: ['build-fintech-service']
+
+  # Build and push web app
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/web:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/web:latest'
+      - '-f'
+      - './apps/web/Dockerfile'
+      - '.'
+    id: 'build-web'
+    waitFor: ['build-utils']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/web:$COMMIT_SHA']
+    id: 'push-web'
+    waitFor: ['build-web']
+
+  # Deploy auth-service to Cloud Run (India)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'auth-service'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/auth-service:$COMMIT_SHA'
+      - '--region'
+      - 'asia-south1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '512Mi'
+      - '--set-env-vars'
+      - 'NODE_ENV=production'
+    id: 'deploy-auth-india'
+    waitFor: ['push-auth-service']
+
+  # Deploy web app to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'web'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/web:$COMMIT_SHA'
+      - '--region'
+      - 'asia-south1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '1Gi'
+      - '--set-env-vars'
+      - 'NODE_ENV=production'
+    id: 'deploy-web'
+    waitFor: ['push-web']
+
+images:
+  - 'gcr.io/$PROJECT_ID/auth-service:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/auth-service:latest'
+  - 'gcr.io/$PROJECT_ID/seller-service:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/seller-service:latest'
+  - 'gcr.io/$PROJECT_ID/fintech-service:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/fintech-service:latest'
+  - 'gcr.io/$PROJECT_ID/web:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/web:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+timeout: '1800s'
+
+substitutions:
+  _DEPLOY_REGION: asia-south1

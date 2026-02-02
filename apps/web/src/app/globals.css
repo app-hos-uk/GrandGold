@@ -1,0 +1,199 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light theme - HSL format for Tailwind */
+    --background: 30 100% 99%; /* cream-50 */
+    --foreground: 0 0% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 45 70% 52%; /* gold-500 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 350 40% 32%; /* burgundy-500 */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 30 60% 86%; /* cream-400 */
+    --muted-foreground: 30 25% 31%;
+    --accent: 30 80% 90%; /* cream-300 */
+    --accent-foreground: 0 0% 10%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 50% 81%; /* cream-500 */
+    --input: 30 50% 81%;
+    --ring: 45 70% 52%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 0 0% 10%;
+    --foreground: 30 80% 90%;
+    --card: 0 0% 15%;
+    --card-foreground: 30 80% 90%;
+    --popover: 0 0% 15%;
+    --popover-foreground: 30 80% 90%;
+    --primary: 45 70% 52%;
+    --primary-foreground: 0 0% 10%;
+    --secondary: 350 60% 68%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 25%;
+    --muted-foreground: 0 0% 64%;
+    --accent: 0 0% 25%;
+    --accent-foreground: 30 80% 90%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 25%;
+    --input: 0 0% 25%;
+    --ring: 45 70% 52%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom selection color */
+  ::selection {
+    @apply bg-gold-500/30 text-gold-900;
+  }
+
+  /* Focus styles */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-gold-500 ring-offset-2;
+  }
+}
+
+@layer components {
+  /* Gold shimmer effect */
+  .shimmer {
+    @apply relative overflow-hidden;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(212, 175, 55, 0.2),
+      transparent
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  /* Luxury button */
+  .btn-luxury {
+    @apply relative overflow-hidden px-8 py-3 font-medium text-white bg-gradient-gold rounded-lg shadow-gold transition-all duration-300;
+  }
+  
+  .btn-luxury:hover {
+    @apply shadow-lg scale-105;
+  }
+
+  .btn-luxury::after {
+    content: '';
+    @apply absolute inset-0 bg-white/20 translate-x-[-100%] skew-x-12;
+    transition: transform 0.6s;
+  }
+
+  .btn-luxury:hover::after {
+    @apply translate-x-[100%];
+  }
+
+  /* Gold text gradient */
+  .text-gold-gradient {
+    @apply bg-gradient-to-r from-gold-500 via-gold-400 to-gold-500 bg-clip-text text-transparent;
+  }
+
+  /* Luxury card */
+  .card-luxury {
+    @apply bg-white rounded-xl shadow-luxury border border-cream-200 overflow-hidden transition-all duration-300;
+  }
+
+  .card-luxury:hover {
+    @apply shadow-xl -translate-y-1;
+  }
+
+  /* Price ticker */
+  .price-ticker {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-gold-500/10 rounded-full text-gold-700 font-medium;
+  }
+
+  /* Product badge */
+  .badge-gold {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gold-100 text-gold-800;
+  }
+
+  .badge-ar {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800;
+  }
+
+  /* Loading skeleton */
+  .skeleton {
+    @apply bg-cream-200 animate-pulse rounded;
+  }
+
+  /* Scrollbar styling */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.gold.500') theme('colors.cream.100');
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-cream-100 rounded-full;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gold-500 rounded-full;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gold-600;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but keep functionality */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Text balance for headings */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Safe area padding for mobile */
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

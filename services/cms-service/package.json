@@ -1,0 +1,40 @@
+{
+  "name": "@grandgold/cms-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GrandGold CMS Service - Headless Strapi Integration",
+  "license": "MIT",
+  "scripts": {
+    "develop": "strapi develop",
+    "start": "strapi start",
+    "build": "strapi build",
+    "reset-db": "rm -rf database .tmp \"$HOME/.grandgold-cms\" 2>/dev/null; echo 'Database reset. Run pnpm develop to start fresh.'",
+    "strapi": "strapi",
+    "deploy": "strapi deploy"
+  },
+  "dependencies": {
+    "@strapi/plugin-cloud": "^4.25.0",
+    "@strapi/plugin-graphql": "^4.25.0",
+    "@strapi/plugin-i18n": "^4.25.0",
+    "@strapi/plugin-users-permissions": "^4.25.0",
+    "@strapi/provider-upload-cloudinary": "^4.25.0",
+    "@strapi/strapi": "^4.25.0",
+    "better-sqlite3": "^9.4.0",
+    "pg": "^8.11.0",
+    "sharp": "^0.33.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^5.3.4",
+    "styled-components": "^5.3.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0 <=20.x.x",
+    "npm": ">=6.0.0"
+  },
+  "strapi": {
+    "uuid": "grandgold-cms-strapi"
+  }
+}

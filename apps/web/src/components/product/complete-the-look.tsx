@@ -1,0 +1,56 @@
+'use client';
+
+import Link from 'next/link';
+import { Sparkles } from 'lucide-react';
+
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+}
+
+interface CompleteTheLookProps {
+  country: 'in' | 'ae' | 'uk';
+  currentProduct: Product;
+  suggestions: Product[];
+}
+
+/** Suggests complementary products to "complete the look" */
+export function CompleteTheLook({ country, currentProduct, suggestions }: CompleteTheLookProps) {
+  const filtered = suggestions
+    .filter((p) => p.id !== currentProduct.id && p.category !== currentProduct.category)
+    .slice(0, 4);
+  if (filtered.length === 0) return null;
+
+  const currency = country === 'in' ? '₹' : country === 'ae' ? 'AED ' : '£';
+
+  return (
+    <section>
+      <h2 className="text-2xl font-semibold text-center mb-8">Complete the Look</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        {filtered.map((product) => (
+          <Link
+            key={product.id}
+            href={`/${country}/product/${product.id}`}
+            className="group"
+          >
+            <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow">
+              <div className="aspect-square bg-gradient-to-br from-cream-100 to-cream-200 flex items-center justify-center relative">
+                <Sparkles className="w-16 h-16 text-gold-300" />
+              </div>
+              <div className="p-4">
+                <h3 className="font-medium text-gray-900 line-clamp-2 group-hover:text-gold-600 transition-colors">
+                  {product.name}
+                </h3>
+                <p className="mt-2 font-semibold text-gray-900">
+                  {currency}{product.price.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
