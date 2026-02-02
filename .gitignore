@@ -63,9 +63,9 @@ tmp/
 temp/
 *.tmp
 
-# Lock files (keep package-lock.json)
+# Lock files (keep pnpm-lock.yaml for pnpm projects)
 yarn.lock
-pnpm-lock.yaml
+package-lock.json
 
 # Vercel
 .vercel

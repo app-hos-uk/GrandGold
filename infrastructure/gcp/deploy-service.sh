@@ -44,12 +44,20 @@ gcloud config set project ${PROJECT_ID}
 
 # Build the Docker image
 echo -e "${YELLOW}Building Docker image...${NC}"
-if [ -d "services/${SERVICE_NAME}" ]; then
-    gcloud builds submit --tag ${IMAGE_NAME} --timeout=20m .
-else
-    echo -e "${RED}Error: Service directory not found: services/${SERVICE_NAME}${NC}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLOUDBUILD_CONFIG="${SCRIPT_DIR}/cloudbuild-service.yaml"
+DOCKERFILE="./services/${SERVICE_NAME}/Dockerfile"
+
+if [ ! -f "${DOCKERFILE}" ]; then
+    echo -e "${RED}Error: Dockerfile not found at ${DOCKERFILE}${NC}"
     exit 1
 fi
+
+gcloud builds submit \
+    --config=${CLOUDBUILD_CONFIG} \
+    --substitutions=_SERVICE_NAME=${SERVICE_NAME} \
+    --timeout=20m \
+    .
 
 # Deploy to Cloud Run
 echo -e "${YELLOW}Deploying to Cloud Run...${NC}"

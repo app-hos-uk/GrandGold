@@ -40,16 +40,34 @@ fi
 # Set project
 gcloud config set project ${PROJECT_ID}
 
-# Build all service images
+# Build all service images (sequentially to catch errors)
 echo -e "${YELLOW}Building all service images...${NC}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLOUDBUILD_CONFIG="${SCRIPT_DIR}/cloudbuild-service.yaml"
+
 for service in "${SERVICES[@]}"; do
     echo -e "${BLUE}Building ${service}...${NC}"
-    IMAGE_NAME="gcr.io/${PROJECT_ID}/${service}"
-    gcloud builds submit --tag ${IMAGE_NAME} --timeout=20m . &
+    DOCKERFILE="./services/${service}/Dockerfile"
+    
+    if [ ! -f "${DOCKERFILE}" ]; then
+        echo -e "${RED}Error: Dockerfile not found at ${DOCKERFILE}${NC}"
+        exit 1
+    fi
+    
+    gcloud builds submit \
+        --config=${CLOUDBUILD_CONFIG} \
+        --substitutions=_SERVICE_NAME=${service} \
+        --timeout=20m \
+        .
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Failed to build ${service}${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}${service} built successfully!${NC}"
 done
 
-# Wait for all builds to complete
-wait
 echo -e "${GREEN}All images built successfully!${NC}"
 
 # Deploy to all regions
