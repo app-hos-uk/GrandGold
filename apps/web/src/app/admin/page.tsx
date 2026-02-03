@@ -138,12 +138,19 @@ export default function AdminDashboard() {
     { label: 'Low Stock', count: stats?.lowStockCount ?? 0, href: '/admin/products?status=low_stock', icon: AlertTriangle, color: 'bg-red-100 text-red-800' },
   ];
 
-  const statCards = stats
+  const statCards: Array<{
+    name: string;
+    value: string;
+    change: string;
+    trend: 'up' | 'down';
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+  }> = stats
     ? [
-        { name: 'Total Revenue', value: formatCurrency(stats.totalRevenue), change: `${stats.revenueChange >= 0 ? '+' : ''}${stats.revenueChange}%`, trend: (stats.revenueChange >= 0 ? 'up' : 'down') as const, icon: DollarSign, color: 'bg-green-500' },
-        { name: 'Total Orders', value: stats.totalOrders.toLocaleString(), change: `${stats.ordersChange >= 0 ? '+' : ''}${stats.ordersChange}%`, trend: (stats.ordersChange >= 0 ? 'up' : 'down') as const, icon: ShoppingCart, color: 'bg-blue-500' },
-        { name: 'Total Users', value: stats.totalUsers.toLocaleString(), change: '+0%', trend: 'up' as const, icon: Users, color: 'bg-purple-500' },
-        { name: 'Active Products', value: stats.totalProducts.toLocaleString(), change: stats.lowStockCount > 0 ? `${stats.lowStockCount} low stock` : 'OK', trend: (stats.lowStockCount > 0 ? 'down' : 'up') as const, icon: Package, color: 'bg-orange-500' },
+        { name: 'Total Revenue', value: formatCurrency(stats.totalRevenue), change: `${stats.revenueChange >= 0 ? '+' : ''}${stats.revenueChange}%`, trend: stats.revenueChange >= 0 ? 'up' : 'down', icon: DollarSign, color: 'bg-green-500' },
+        { name: 'Total Orders', value: stats.totalOrders.toLocaleString(), change: `${stats.ordersChange >= 0 ? '+' : ''}${stats.ordersChange}%`, trend: stats.ordersChange >= 0 ? 'up' : 'down', icon: ShoppingCart, color: 'bg-blue-500' },
+        { name: 'Total Users', value: stats.totalUsers.toLocaleString(), change: '+0%', trend: 'up', icon: Users, color: 'bg-purple-500' },
+        { name: 'Active Products', value: stats.totalProducts.toLocaleString(), change: stats.lowStockCount > 0 ? `${stats.lowStockCount} low stock` : 'OK', trend: stats.lowStockCount > 0 ? 'down' : 'up', icon: Package, color: 'bg-orange-500' },
       ]
     : [];
 
