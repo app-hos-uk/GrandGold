@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ReceiptRefund, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Receipt, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { adminApi, ApiError } from '@/lib/api';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { useToast } from '@/components/admin/toast';
@@ -102,7 +102,7 @@ export default function AdminRefundsPage() {
           </div>
         ) : refunds.length === 0 ? (
           <div className="p-12 text-center text-gray-500">
-            <ReceiptRefund className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+            <Receipt className="w-12 h-12 mx-auto mb-2 text-gray-300" />
             <p>No pending refund requests.</p>
           </div>
         ) : (

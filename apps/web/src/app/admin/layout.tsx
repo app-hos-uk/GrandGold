@@ -20,7 +20,7 @@ import {
   ChevronDown,
   Sparkles,
   ShieldCheck,
-  ReceiptRefund,
+  Receipt,
   UserPlus,
 } from 'lucide-react';
 import { adminApi, type CurrentUserProfile } from '@/lib/api';
@@ -32,7 +32,7 @@ const ALL_NAV = [
   { name: 'Products', href: '/admin/products', icon: Package, roles: ['super_admin', 'country_admin'] },
   { name: 'Sellers', href: '/admin/sellers', icon: Store, roles: ['super_admin', 'country_admin'] },
   { name: 'KYC', href: '/admin/kyc', icon: ShieldCheck, roles: ['super_admin', 'country_admin'] },
-  { name: 'Refunds', href: '/admin/refunds', icon: ReceiptRefund, roles: ['super_admin', 'country_admin'] },
+  { name: 'Refunds', href: '/admin/refunds', icon: Receipt, roles: ['super_admin', 'country_admin'] },
   { name: 'Onboarding', href: '/admin/onboarding', icon: UserPlus, roles: ['super_admin', 'country_admin'] },
   { name: 'Reports', href: '/admin/reports', icon: BarChart3, roles: ['super_admin', 'country_admin'] },
   { name: 'Settings', href: '/admin/settings', icon: Settings, roles: ['super_admin'] },

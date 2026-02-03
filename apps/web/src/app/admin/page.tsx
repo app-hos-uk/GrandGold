@@ -13,7 +13,7 @@ import {
   ArrowDownRight,
   MoreHorizontal,
   ShieldCheck,
-  ReceiptRefund,
+  Receipt,
   UserPlus,
   AlertTriangle,
 } from 'lucide-react';
@@ -133,7 +133,7 @@ export default function AdminDashboard() {
 
   const quickActions = [
     { label: 'Pending KYC', count: stats?.pendingKyc ?? 0, href: '/admin/kyc', icon: ShieldCheck, color: 'bg-amber-100 text-amber-800' },
-    { label: 'Refund Requests', count: stats?.pendingRefunds ?? 0, href: '/admin/refunds', icon: ReceiptRefund, color: 'bg-blue-100 text-blue-800' },
+    { label: 'Refund Requests', count: stats?.pendingRefunds ?? 0, href: '/admin/refunds', icon: Receipt, color: 'bg-blue-100 text-blue-800' },
     { label: 'Seller Onboarding', count: stats?.pendingOnboarding ?? 0, href: '/admin/onboarding', icon: UserPlus, color: 'bg-purple-100 text-purple-800' },
     { label: 'Low Stock', count: stats?.lowStockCount ?? 0, href: '/admin/products?status=low_stock', icon: AlertTriangle, color: 'bg-red-100 text-red-800' },
   ];
