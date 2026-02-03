@@ -57,7 +57,7 @@ router.get('/:refundId', authenticate, async (req: Request, res: Response, next:
 
 /**
  * GET /api/payments/refunds
- * Get user's refunds
+ * Get user's refunds (or admin: get all pending when ?admin=1)
  */
 router.get('/', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -67,6 +67,16 @@ router.get('/', authenticate, async (req: Request, res: Response, next: NextFunc
     
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
+    const isAdmin = req.query.admin === '1' || req.query.admin === 'true';
+    const role = (req.user as { role?: string }).role;
+    
+    if (isAdmin && (role === 'super_admin' || role === 'country_admin')) {
+      const result = await refundService.getPendingRefundsForAdmin({ page, limit });
+      return res.json({
+        success: true,
+        data: result,
+      });
+    }
     
     const refunds = await refundService.getUserRefunds(req.user.sub, { page, limit });
     

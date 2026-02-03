@@ -80,7 +80,7 @@ export default function HomePage() {
                 Premium Collection 2025
               </span>
               
-              <h1 className="font-display text-5xl lg:text-7xl font-semibold text-gray-900 mb-6 leading-tight">
+              <h1 className="font-display text-5xl lg:text-7xl font-semibold text-gray-900 mb-6 leading-tight tracking-wide">
                 {content.heroTitle}
               </h1>
               
@@ -218,7 +218,7 @@ export default function HomePage() {
       <section className="py-20 bg-cream-50">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="font-display text-4xl font-semibold mb-4">
+            <h2 className="font-display text-4xl font-semibold mb-4 tracking-wide">
               Curated Collections
             </h2>
             <p className="text-gray-600 max-w-2xl mx-auto">

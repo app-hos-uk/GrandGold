@@ -217,11 +217,13 @@ router.get(
         throw new Error('User not authenticated');
       }
       
-      const country = req.query.country as string;
+      let country = req.query.country as string | undefined;
       const tier = req.query.tier as string;
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
-      
+      if (req.user.role === 'country_admin' && req.user.country) {
+        country = req.user.country;
+      }
       const applications = await kycService.getPendingApplications({
         country,
         tier,

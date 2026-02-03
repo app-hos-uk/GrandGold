@@ -2,7 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { ValidationError, passwordSchema } from '@grandgold/utils';
 import { UserService } from '../services/user.service';
 import { authenticate, authorize } from '../middleware/auth';
-import { listUsers } from '@grandgold/database';
+import { listUsers, findUserById, updateUser } from '@grandgold/database';
+import type { UserRole, Country } from '@grandgold/types';
 
 const router = Router();
 const userService = new UserService();
@@ -21,9 +22,14 @@ router.get(
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
-      const country = req.query.country as string;
+      let country = req.query.country as string | undefined;
       const role = req.query.role as string;
       const search = req.query.search as string;
+
+      // Country admin can only see users in their country
+      if (req.user?.role === 'country_admin' && req.user?.country) {
+        country = req.user.country;
+      }
 
       const { users: userList, total } = await listUsers({ page, limit, country, role, search });
 
@@ -43,6 +49,55 @@ router.get(
       res.json({
         success: true,
         data: { users: data, total },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+const ALLOWED_ADMIN_ROLES: UserRole[] = ['super_admin', 'country_admin', 'manager', 'staff', 'seller', 'customer'];
+const COUNTRY_VALUES: Country[] = ['IN', 'AE', 'UK'];
+
+/**
+ * PATCH /api/user/admin/:userId/role
+ * Set user role (and country for country_admin). Super admin only.
+ */
+router.patch(
+  '/admin/:userId/role',
+  authorize('super_admin'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId } = req.params;
+      const { role, country } = req.body as { role?: UserRole; country?: Country };
+
+      if (!role || !ALLOWED_ADMIN_ROLES.includes(role)) {
+        throw new ValidationError('Valid role is required');
+      }
+      const updateData: { role: UserRole; country?: Country } = { role };
+      if (role === 'country_admin') {
+        if (!country || !COUNTRY_VALUES.includes(country)) {
+          throw new ValidationError('country_admin requires country: IN, AE, or UK');
+        }
+        updateData.country = country;
+      }
+      const user = await findUserById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+      }
+      const updated = await updateUser(userId, updateData);
+      if (!updated) {
+        return res.status(500).json({ success: false, error: { code: 'UPDATE_FAILED', message: 'Failed to update user' } });
+      }
+      res.json({
+        success: true,
+        data: {
+          id: updated.id,
+          email: updated.email,
+          role: updated.role,
+          country: updated.country,
+        },
+        message: 'User role updated',
       });
     } catch (error) {
       next(error);

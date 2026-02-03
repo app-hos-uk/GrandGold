@@ -5,12 +5,14 @@ interface FooterProps {
   country: 'in' | 'ae' | 'uk';
 }
 
+const BRAND_TAGLINE = 'Timeless Beauty. Inspired Craftsmanship. Perpetual Value.';
+
 const countryInfo = {
   in: {
-    company: 'GrandGold India Pvt. Ltd.',
-    address: 'Mumbai, Maharashtra, India',
-    phone: '+91 22 1234 5678',
-    email: 'support@thegrandgold.com',
+    company: 'The Grand Gold and Diamonds LLP',
+    address: '1st Floor, Dale Nest Building, Mini Bypass Road, Arayidathupalam, Kozhikode, Kerala - 673004',
+    phone: '+91 9567455916',
+    email: 'Info@thegrandgold.com',
   },
   ae: {
     company: 'GrandGold DMCC',
@@ -75,12 +77,20 @@ export function Footer({ country }: FooterProps) {
   ];
 
   return (
-    <footer className="bg-gray-900 text-white">
+    <footer className="bg-[#0F0F0F] text-white">
+      {/* Brand tagline */}
+      <div className="border-b border-white/10">
+        <div className="container mx-auto px-4 py-6">
+          <p className="text-center font-display text-lg text-gold-400/90 tracking-wide">
+            {BRAND_TAGLINE}
+          </p>
+        </div>
+      </div>
       {/* Newsletter */}
-      <div className="border-b border-gray-800">
+      <div className="border-b border-white/10">
         <div className="container mx-auto px-4 py-12">
           <div className="max-w-xl mx-auto text-center">
-            <h3 className="text-2xl font-serif mb-2">Stay Updated</h3>
+            <h3 className="text-2xl font-display font-semibold mb-2">Stay Updated</h3>
             <p className="text-gray-400 mb-6">
               Subscribe for exclusive offers, new arrivals, and gold price alerts.
             </p>
@@ -158,11 +168,11 @@ export function Footer({ country }: FooterProps) {
       </div>
 
       {/* Bottom bar */}
-      <div className="border-t border-gray-800">
+      <div className="border-t border-white/10">
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-gray-400 text-sm">
-              © {new Date().getFullYear()} GrandGold. All rights reserved.
+              © {new Date().getFullYear()} The Grand Gold. All rights reserved.
             </p>
             <div className="flex items-center gap-6 text-sm">
               <Link

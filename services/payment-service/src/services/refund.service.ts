@@ -62,6 +62,19 @@ export class RefundService {
   }
 
   /**
+   * Get all pending refunds (Admin)
+   */
+  async getPendingRefundsForAdmin(options: { page: number; limit: number }): Promise<{ data: any[]; total: number }> {
+    const refunds = Array.from(refundStore.values())
+      .filter((r) => r.status === 'pending')
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const total = refunds.length;
+    const start = (options.page - 1) * options.limit;
+    const paginatedData = refunds.slice(start, start + options.limit);
+    return { data: paginatedData, total };
+  }
+
+  /**
    * Get user's refunds
    */
   async getUserRefunds(

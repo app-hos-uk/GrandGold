@@ -16,10 +16,10 @@ import {
 
 const contactInfo = {
   in: {
-    phone: '+91 22 1234 5678',
-    whatsapp: '+91 98765 43210',
-    email: 'support@thegrandgold.com',
-    address: 'Linking Road, Bandra West, Mumbai 400050, India',
+    phone: '+91 9567455916',
+    whatsapp: '+919567455916',
+    email: 'Info@thegrandgold.com',
+    address: '1st Floor, Dale Nest Building, Mini Bypass Road, Arayidathupalam, Kozhikode, Kerala - 673004',
     hours: 'Mon-Sat: 10:00 AM - 7:00 PM IST',
   },
   ae: {

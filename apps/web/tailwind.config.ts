@@ -43,14 +43,14 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        // GrandGold brand colors (based on thegrandgold.com)
+        // The Grand Gold brand (thegrandgold.com)
         gold: {
           50: '#FFF9E6',
           100: '#FFF0C2',
           200: '#FFE699',
           300: '#FFD966',
-          400: '#FFCC33',
-          500: '#D4AF37', // Primary gold
+          400: '#E5B800',
+          500: '#C9A227', // Primary gold - richer antique tone
           600: '#B8960F',
           700: '#8B7500',
           800: '#5C4D00',
@@ -59,14 +59,14 @@ const config: Config = {
         burgundy: {
           50: '#FCE8EC',
           100: '#F8D0D9',
-          200: '#F1A1B3',
-          300: '#EA728D',
-          400: '#E34367',
-          500: '#722F37', // Primary burgundy
-          600: '#5B262C',
-          700: '#441D21',
-          800: '#2D1316',
-          900: '#160A0B',
+          200: '#E8A0B0',
+          300: '#D87088',
+          400: '#A02040',
+          500: '#800020', // Classic burgundy / maroon
+          600: '#66001A',
+          700: '#4D0014',
+          800: '#33000D',
+          900: '#1A0007',
         },
         cream: {
           50: '#FFFDFB',
@@ -88,7 +88,7 @@ const config: Config = {
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-gold': 'linear-gradient(135deg, #D4AF37 0%, #B8960F 50%, #8B7500 100%)',
+        'gradient-gold': 'linear-gradient(135deg, #C9A227 0%, #B8960F 50%, #8B7500 100%)',
         'gradient-luxury': 'linear-gradient(180deg, #FAEBD7 0%, #FFF9F5 50%, #FFFFFF 100%)',
       },
       borderRadius: {
@@ -97,7 +97,7 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       boxShadow: {
-        'gold': '0 4px 14px 0 rgba(212, 175, 55, 0.25)',
+        'gold': '0 4px 14px 0 rgba(201, 162, 39, 0.28)',
         'luxury': '0 10px 40px -10px rgba(0, 0, 0, 0.1)',
       },
       animation: {

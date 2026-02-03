@@ -13,6 +13,7 @@ SERVICES=(
     "fintech-service"
     "order-service"
     "payment-service"
+    "product-service"
 )
 
 # Colors for output

@@ -1,0 +1,6 @@
+FROM getmeili/meilisearch:v1.6
+
+# Cloud Run expects PORT 8080
+ENV MEILI_HTTP_ADDR=0.0.0.0:8080
+ENV MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-grandgold_search_key}
+EXPOSE 8080

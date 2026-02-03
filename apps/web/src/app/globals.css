@@ -11,9 +11,9 @@
     --card-foreground: 0 0% 10%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 10%;
-    --primary: 45 70% 52%; /* gold-500 */
+    --primary: 45 67% 48%; /* gold-500 #C9A227 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 350 40% 32%; /* burgundy-500 */
+    --secondary: 348 60% 25%; /* burgundy-500 #800020 */
     --secondary-foreground: 0 0% 100%;
     --muted: 30 60% 86%; /* cream-400 */
     --muted-foreground: 30 25% 31%;
@@ -23,7 +23,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 30 50% 81%; /* cream-500 */
     --input: 30 50% 81%;
-    --ring: 45 70% 52%;
+    --ring: 45 67% 48%;
     --radius: 0.5rem;
   }
 
@@ -34,7 +34,7 @@
     --card-foreground: 30 80% 90%;
     --popover: 0 0% 15%;
     --popover-foreground: 30 80% 90%;
-    --primary: 45 70% 52%;
+    --primary: 45 67% 48%;
     --primary-foreground: 0 0% 10%;
     --secondary: 350 60% 68%;
     --secondary-foreground: 0 0% 10%;
@@ -46,7 +46,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 0 0% 25%;
     --input: 0 0% 25%;
-    --ring: 45 70% 52%;
+    --ring: 45 67% 48%;
   }
 }
 
@@ -83,7 +83,7 @@
     background: linear-gradient(
       90deg,
       transparent,
-      rgba(212, 175, 55, 0.2),
+      rgba(201, 162, 39, 0.22),
       transparent
     );
     background-size: 200% 100%;
@@ -117,10 +117,12 @@
   /* Luxury card */
   .card-luxury {
     @apply bg-white rounded-xl shadow-luxury border border-cream-200 overflow-hidden transition-all duration-300;
+    border-color: rgba(201, 162, 39, 0.2);
   }
 
   .card-luxury:hover {
     @apply shadow-xl -translate-y-1;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 14px 0 rgba(201, 162, 39, 0.15);
   }
 
   /* Price ticker */
