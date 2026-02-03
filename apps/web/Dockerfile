@@ -1,19 +1,20 @@
 # Next.js Frontend Dockerfile (Cloud Run)
 FROM node:20-alpine AS base
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm (pin for reproducible installs)
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 # Dependencies stage
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy workspace config
+# Copy workspace config (include all packages referenced in lockfile)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY turbo.json ./
 COPY packages/types/package.json ./packages/types/
 COPY packages/utils/package.json ./packages/utils/
+COPY packages/database/package.json ./packages/database/
 COPY apps/web/package.json ./apps/web/
 
 RUN pnpm install --frozen-lockfile
@@ -28,8 +29,9 @@ COPY apps/web ./apps/web
 COPY tsconfig.base.json ./
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
-# Build packages and web app
+# Build packages and web app (types, utils only; web does not depend on database)
 RUN pnpm turbo run build --filter=@grandgold/web
 
 # Production stage

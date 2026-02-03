@@ -1,8 +1,8 @@
 # Auth Service Dockerfile
 FROM node:20-alpine AS base
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm (pin for reproducible installs)
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 # Dependencies stage
 FROM base AS deps

@@ -1,0 +1,44 @@
+# Dependencies and caches (reinstalled in container)
+node_modules
+.pnpm-store
+.turbo
+.next
+out
+dist
+build
+*.tsbuildinfo
+
+# Git and IDE
+.git
+.gitignore
+.idea
+.vscode
+*.md
+!README.md
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+
+# Tests and coverage (not needed for production image)
+coverage
+.nyc_output
+**/*.test.ts
+**/*.spec.ts
+**/__tests__
+**/e2e
+**/playwright.config.*
+**/.playwright
+
+# Docs and misc
+docs
+*.log
+.DS_Store
+docker-compose*.yml
+.gcloud
+*-service-account.json
+.strapi
+.vercel
+.grandgold
+
