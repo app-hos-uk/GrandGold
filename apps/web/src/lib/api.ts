@@ -193,8 +193,27 @@ export const pushApi = {
     api.post<unknown>('/api/push/subscribe', subscription),
 };
 
+// Current user profile (role, country for admin checks)
+export interface CurrentUserProfile {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  role: string;
+  country: string;
+  kycStatus?: string;
+  kycTier?: number;
+  preferences?: Record<string, unknown>;
+  addresses?: unknown[];
+}
+
 // Admin API (requires admin role JWT)
 export const adminApi = {
+  getMe: (): Promise<CurrentUserProfile> =>
+    api.get<CurrentUserProfile>('/api/user/me').then((d: unknown) => (d as { data?: CurrentUserProfile }).data ?? (d as CurrentUserProfile)),
+  setUserRole: (userId: string, role: string, country?: string) =>
+    api.patch<unknown>(`/api/user/admin/${userId}/role`, { role, country }),
   getProducts: (params?: { page?: number; limit?: number; category?: string; status?: string }) => {
     const q = new URLSearchParams();
     if (params?.page) q.set('page', String(params.page));
@@ -222,6 +241,41 @@ export const adminApi = {
     if (params?.search) q.set('search', params.search);
     return api.get<{ users: unknown[]; total: number }>(`/api/user/admin/list?${q.toString()}`);
   },
+  // KYC (admin)
+  getKycPending: (params?: { page?: number; limit?: number; country?: string; tier?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.country) q.set('country', params.country);
+    if (params?.tier) q.set('tier', params.tier);
+    return api.get<{ applications: unknown[]; total: number }>(`/api/kyc/pending?${q.toString()}`);
+  },
+  approveKyc: (userId: string, tier: number, notes?: string) =>
+    api.post<unknown>(`/api/kyc/${userId}/approve`, { tier, notes }),
+  rejectKyc: (userId: string, tier: number, reason: string) =>
+    api.post<unknown>(`/api/kyc/${userId}/reject`, { tier, reason }),
+  // Refunds (admin)
+  getRefundsPending: (params?: { page?: number; limit?: number }) => {
+    const q = new URLSearchParams({ admin: '1' });
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    return api.get<{ data: unknown[]; total: number }>(`/api/payments/refunds?${q.toString()}`);
+  },
+  approveRefund: (refundId: string) => api.post<unknown>(`/api/payments/refunds/${refundId}/approve`, {}),
+  rejectRefund: (refundId: string, reason: string) =>
+    api.post<unknown>(`/api/payments/refunds/${refundId}/reject`, { reason }),
+  // Seller onboarding (admin)
+  getOnboardingPending: (params?: { page?: number; limit?: number; country?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.country) q.set('country', params.country);
+    return api.get<{ data: unknown[]; total: number }>(`/api/sellers/onboarding/pending?${q.toString()}`);
+  },
+  approveOnboarding: (onboardingId: string) =>
+    api.post<unknown>(`/api/sellers/onboarding/${onboardingId}/approve`, {}),
+  rejectOnboarding: (onboardingId: string, reason: string) =>
+    api.post<unknown>(`/api/sellers/onboarding/${onboardingId}/reject`, { reason }),
 };
 
 // Auth API

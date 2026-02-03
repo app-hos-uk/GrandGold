@@ -7,7 +7,6 @@ import {
   Search,
   Filter,
   Plus,
-  MoreHorizontal,
   Eye,
   Edit,
   Trash2,
@@ -17,6 +16,9 @@ import {
   Upload,
   Sparkles,
 } from 'lucide-react';
+import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
+import { formatCurrency } from '@/lib/format';
+import { TableRowSkeleton, StatCardSkeleton } from '@/components/admin/skeleton';
 
 const FALLBACK: ProductRow[] = [
   { id: '1', name: 'Traditional Kundan Necklace Set', sku: 'GG-NK-001', category: 'Necklaces', price: 185000, stock: 12, status: 'active' },
@@ -47,6 +49,8 @@ interface ProductRow {
   stock?: number;
   status?: string;
   sellerId?: string;
+  imageUrl?: string;
+  image?: string;
 }
 
 export default function ProductsPage() {
@@ -57,6 +61,8 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState<{ total: number; active: number; out_of_stock: number; low_stock: number } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
@@ -72,6 +78,18 @@ export default function ProductsPage() {
       .finally(() => setLoading(false));
   }, [page, categoryFilter, statusFilter]);
 
+  useEffect(() => {
+    Promise.all([
+      adminApi.getProducts({ limit: 1 }).then((r: unknown) => (r as { total?: number }).total ?? 0),
+      adminApi.getProducts({ limit: 1, status: 'active' }).then((r: unknown) => (r as { total?: number }).total ?? 0),
+      adminApi.getProducts({ limit: 1, status: 'out_of_stock' }).then((r: unknown) => (r as { total?: number }).total ?? 0),
+      adminApi.getProducts({ limit: 1, status: 'low_stock' }).then((r: unknown) => (r as { total?: number }).total ?? 0),
+    ])
+      .then(([totalCount, active, out_of_stock, low_stock]) => setStats({ total: totalCount, active, out_of_stock, low_stock }))
+      .catch(() => {})
+      .finally(() => setStatsLoading(false));
+  }, []);
+
   const filteredProducts = products.filter((product) => {
     if (statusFilter !== 'all' && product.status !== statusFilter) return false;
     if (categoryFilter !== 'all' && product.category !== categoryFilter) return false;
@@ -82,43 +100,50 @@ export default function ProductsPage() {
 
   return (
     <div>
+      <AdminBreadcrumbs items={[{ label: 'Products' }]} />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Products</h1>
           <p className="text-gray-600">Manage your product catalog</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
             <Upload className="w-4 h-4" />
             Import
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
             <Download className="w-4 h-4" />
             Export
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors">
+          <button type="button" className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors">
             <Plus className="w-4 h-4" />
             Add Product
           </button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        {[
-          { label: 'Total Products', value: '856', change: '+12 this week' },
-          { label: 'Active', value: '742', color: 'text-green-600' },
-          { label: 'Out of Stock', value: '28', color: 'text-red-600' },
-          { label: 'Low Stock', value: '45', color: 'text-yellow-600' },
-        ].map((stat) => (
-          <div key={stat.label} className="bg-white rounded-xl p-4 shadow-sm">
-            <p className="text-sm text-gray-500">{stat.label}</p>
-            <div className="flex items-end justify-between mt-1">
-              <span className={`text-2xl font-bold ${stat.color || 'text-gray-900'}`}>{stat.value}</span>
-              {stat.change && <span className="text-sm text-gray-500">{stat.change}</span>}
-            </div>
-          </div>
-        ))}
+      {/* Stats - clickable */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {statsLoading ? (
+          Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
+        ) : (
+          [
+            { key: 'all', label: 'Total Products', value: stats?.total ?? 0, color: 'text-gray-900' },
+            { key: 'active', label: 'Active', value: stats?.active ?? 0, color: 'text-green-600' },
+            { key: 'out_of_stock', label: 'Out of Stock', value: stats?.out_of_stock ?? 0, color: 'text-red-600' },
+            { key: 'low_stock', label: 'Low Stock', value: stats?.low_stock ?? 0, color: 'text-yellow-600' },
+          ].map((stat) => (
+            <button
+              key={stat.key}
+              type="button"
+              onClick={() => { setStatusFilter(stat.key === 'all' ? 'all' : stat.key); setPage(1); }}
+              className="bg-white rounded-xl p-4 shadow-sm text-left hover:ring-2 hover:ring-gold-200 transition"
+            >
+              <p className="text-sm text-gray-500">{stat.label}</p>
+              <span className={`text-2xl font-bold ${stat.color}`}>{stat.value.toLocaleString()}</span>
+            </button>
+          ))
+        )}
       </div>
 
       {/* Filters */}
@@ -157,7 +182,7 @@ export default function ProductsPage() {
               <option value="out_of_stock">Out of Stock</option>
               <option value="low_stock">Low Stock</option>
             </select>
-            <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50" aria-label="More filters">
               <Filter className="w-4 h-4" />
               More Filters
             </button>
@@ -183,51 +208,61 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product) => (
+              {loading ? (
+                Array.from({ length: 8 }).map((_, i) => <TableRowSkeleton key={i} cols={9} />)
+              ) : filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-6 py-12 text-center text-gray-500">No products found.</td>
+                </tr>
+              ) : filteredProducts.map((product) => (
                 <motion.tr
                   key={product.id}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="border-b border-gray-50 hover:bg-gray-50"
+                  className={`border-b border-gray-50 hover:bg-gray-50 ${(product.stock ?? 0) < 10 ? 'bg-amber-50/50' : ''}`}
                 >
                   <td className="px-6 py-4">
                     <input type="checkbox" className="rounded" />
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-cream-100 to-cream-200 rounded-lg flex items-center justify-center">
-                        <Sparkles className="w-6 h-6 text-gold-400" />
-                      </div>
+                      {(product.imageUrl || product.image) ? (
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                          <img src={product.imageUrl || product.image || ''} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="w-12 h-12 bg-gradient-to-br from-cream-100 to-cream-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Sparkles className="w-6 h-6 text-gold-400" />
+                        </div>
+                      )}
                       <span className="font-medium text-gray-900">{product.name}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-gray-600 font-mono text-sm">{product.sku}</td>
-                  <td className="px-6 py-4 text-gray-600">{product.category}</td>
-                  <td className="px-6 py-4 font-semibold text-gray-900">
-                    ₹{(product.price ?? 0).toLocaleString()}
-                  </td>
+                  <td className="px-6 py-4 text-gray-600 font-mono text-sm">{product.sku ?? '—'}</td>
+                  <td className="px-6 py-4 text-gray-600">{product.category ?? '—'}</td>
+                  <td className="px-6 py-4 font-semibold text-gray-900">{formatCurrency(product.price ?? 0)}</td>
                   <td className="px-6 py-4">
-                    <span className={(product.stock ?? 0) === 0 ? 'text-red-600' : (product.stock ?? 0) < 10 ? 'text-yellow-600' : 'text-gray-900'}>
+                    <span className={(product.stock ?? 0) === 0 ? 'text-red-600 font-medium' : (product.stock ?? 0) < 10 ? 'text-yellow-600 font-medium' : 'text-gray-900'}>
                       {product.stock ?? 0}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                      statusColors[product.status as keyof typeof statusColors]
+                      statusColors[product.status as keyof typeof statusColors] ?? 'bg-gray-100 text-gray-700'
                     }`}>
-                      {statusLabels[product.status as keyof typeof statusLabels]}
+                      {statusLabels[product.status as keyof typeof statusLabels] ?? product.status ?? '—'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">{product.sellerId || '–'}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1">
-                      <button className="p-2 hover:bg-gray-100 rounded-lg" title="View">
+                      <button type="button" className="p-2 hover:bg-gray-100 rounded-lg" title="View">
                         <Eye className="w-4 h-4 text-gray-500" />
                       </button>
-                      <button className="p-2 hover:bg-gray-100 rounded-lg" title="Edit">
+                      <button type="button" className="p-2 hover:bg-gray-100 rounded-lg" title="Edit">
                         <Edit className="w-4 h-4 text-gray-500" />
                       </button>
-                      <button className="p-2 hover:bg-gray-100 rounded-lg" title="Delete">
+                      <button type="button" className="p-2 hover:bg-gray-100 rounded-lg" title="Delete">
                         <Trash2 className="w-4 h-4 text-gray-500" />
                       </button>
                     </div>
@@ -244,13 +279,11 @@ export default function ProductsPage() {
             {loading ? 'Loading...' : `Showing ${filteredProducts.length} of ${total} products`}
           </p>
           <div className="flex items-center gap-2">
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+            <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <button className="px-3 py-1 bg-gold-500 text-white rounded-lg">1</button>
-            <button className="px-3 py-1 hover:bg-gray-100 rounded-lg">2</button>
-            <button className="px-3 py-1 hover:bg-gray-100 rounded-lg">3</button>
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <span className="text-sm text-gray-600">Page {page}</span>
+            <button type="button" disabled={page * 20 >= total} onClick={() => setPage((p) => p + 1)} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>

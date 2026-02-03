@@ -78,8 +78,10 @@ const nextConfig = {
     const productUrl = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL || 'http://localhost:4007';
     const inventoryUrl = process.env.NEXT_PUBLIC_INVENTORY_SERVICE_URL || 'http://localhost:4008';
     const aiUrl = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:4009';
+    const kycUrl = process.env.NEXT_PUBLIC_KYC_SERVICE_URL || 'http://localhost:4006';
     return [
       { source: '/api/auth/:path*', destination: `${authUrl}/api/auth/:path*` },
+      { source: '/api/kyc/:path*', destination: `${kycUrl}/api/kyc/:path*` },
       { source: '/api/user/:path*', destination: `${authUrl}/api/user/:path*` },
       { source: '/api/sessions/:path*', destination: `${authUrl}/api/sessions/:path*` },
       { source: '/api/mfa/:path*', destination: `${authUrl}/api/mfa/:path*` },

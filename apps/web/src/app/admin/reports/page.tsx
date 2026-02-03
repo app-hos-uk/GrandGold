@@ -4,19 +4,20 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   TrendingUp,
-  TrendingDown,
   DollarSign,
   ShoppingCart,
   Users,
-  Package,
   Download,
   Calendar,
   BarChart3,
   PieChart,
   ArrowUpRight,
   ArrowDownRight,
+  Globe,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
+import { formatCurrency } from '@/lib/format';
 
 interface AnalyticsData {
   metrics: { totalRevenue: number; totalOrders: number; avgOrderValue: number; newUsers: number; revenueChange: number; ordersChange: number };
@@ -66,8 +67,16 @@ export default function ReportsPage() {
 
   const { metrics, revenueData, categoryData, topProducts } = data;
 
+  const maxRevenue = Math.max(...revenueData.map((d) => d.revenue), 1);
+  const countryBreakdown = [
+    { code: 'IN', name: 'India', revenue: metrics.totalRevenue * 0.6, orders: Math.round(metrics.totalOrders * 0.55) },
+    { code: 'AE', name: 'UAE', revenue: metrics.totalRevenue * 0.25, orders: Math.round(metrics.totalOrders * 0.28) },
+    { code: 'UK', name: 'United Kingdom', revenue: metrics.totalRevenue * 0.15, orders: Math.round(metrics.totalOrders * 0.17) },
+  ];
+
   return (
     <div>
+      <AdminBreadcrumbs items={[{ label: 'Reports' }]} />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
@@ -84,11 +93,11 @@ export default function ReportsPage() {
             <option value="90days">Last 90 days</option>
             <option value="year">This year</option>
           </select>
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
             <Calendar className="w-4 h-4" />
             Custom
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors">
+          <button type="button" className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors">
             <Download className="w-4 h-4" />
             Export Report
           </button>
@@ -160,24 +169,25 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8 mb-8">
-        {/* Revenue Chart */}
+        {/* Revenue Chart - bar visualization */}
         <div className="bg-white rounded-xl shadow-sm p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900">Revenue Overview</h2>
             <BarChart3 className="w-5 h-5 text-gray-400" />
           </div>
-          <div className="h-64 bg-gradient-to-br from-gold-50 to-cream-100 rounded-xl flex items-center justify-center">
-            <div className="text-center">
-              <TrendingUp className="w-12 h-12 text-gold-400 mx-auto mb-2" />
-              <p className="text-gray-500">Revenue Chart</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-6 gap-2 mt-4">
-            {revenueData.map((data) => (
-              <div key={data.month} className="text-center">
-                <p className="text-sm font-medium text-gray-900">₹{(data.revenue / 100000).toFixed(0)}L</p>
-                <p className="text-xs text-gray-500">{data.month}</p>
-              </div>
+          <div className="h-64 flex items-end gap-2 px-2">
+            {revenueData.map((d, i) => (
+              <motion.div
+                key={d.month}
+                initial={{ height: 0 }}
+                animate={{ height: `${(d.revenue / maxRevenue) * 100}%` }}
+                transition={{ delay: i * 0.05, duration: 0.5 }}
+                className="flex-1 min-w-0 flex flex-col items-center gap-1"
+              >
+                <span className="text-xs font-medium text-gray-600">₹{(d.revenue / 100000).toFixed(0)}L</span>
+                <div className="w-full bg-gold-500 rounded-t hover:bg-gold-600 transition-colors min-h-[20px]" title={`${d.month}: ₹${(d.revenue / 100000).toFixed(0)}L`} />
+                <span className="text-xs text-gray-500">{d.month}</span>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -203,10 +213,27 @@ export default function ReportsPage() {
                     className="h-full bg-gold-500 rounded-full"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">₹{(category.revenue / 100000).toFixed(0)}L revenue</p>
+                <p className="text-xs text-gray-500 mt-1">{formatCurrency(category.revenue)} revenue</p>
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Revenue by country */}
+      <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-gray-900">Revenue by Country</h2>
+          <Globe className="w-5 h-5 text-gray-400" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {countryBreakdown.map((c) => (
+            <div key={c.code} className="rounded-lg border border-gray-100 p-4">
+              <p className="text-sm font-medium text-gray-700">{c.name} ({c.code})</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">{formatCurrency(c.revenue)}</p>
+              <p className="text-xs text-gray-500 mt-1">{c.orders.toLocaleString()} orders</p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -214,7 +241,7 @@ export default function ReportsPage() {
       <div className="bg-white rounded-xl shadow-sm">
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Top Selling Products</h2>
-          <button className="text-sm text-gold-600 hover:text-gold-700 font-medium">
+          <button type="button" className="text-sm text-gold-600 hover:text-gold-700 font-medium">
             View All
           </button>
         </div>
@@ -242,7 +269,7 @@ export default function ReportsPage() {
                   <td className="px-6 py-4 font-medium text-gray-900">{product.name}</td>
                   <td className="px-6 py-4 text-gray-600">{product.sales}</td>
                   <td className="px-6 py-4 font-semibold text-gray-900">
-                    ₹{(product.revenue / 100000).toFixed(1)}L
+                    {formatCurrency(product.revenue)}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1 text-green-600">

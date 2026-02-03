@@ -58,11 +58,12 @@ export default function SellersPage() {
           <p className="text-gray-600">Manage marketplace sellers</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
             <Download className="w-4 h-4" />
             Export
           </button>
           <button
+            type="button"
             onClick={() => setAddSellerOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors"
           >
@@ -111,7 +112,7 @@ export default function SellersPage() {
               <option value="pending">Pending</option>
               <option value="rejected">Rejected</option>
             </select>
-            <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
               <Filter className="w-4 h-4" />
               More Filters
             </button>
@@ -138,7 +139,8 @@ export default function SellersPage() {
             </thead>
             <tbody>
               {filteredSellers.map((seller) => {
-                const StatusIcon = statusConfig[seller.status as keyof typeof statusConfig].icon;
+                const statusEntry = statusConfig[seller.status as keyof typeof statusConfig] ?? statusConfig.pending;
+                const StatusIcon = statusEntry.icon;
                 return (
                   <motion.tr
                     key={seller.id}
@@ -177,19 +179,19 @@ export default function SellersPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium capitalize ${
-                        statusConfig[seller.status as keyof typeof statusConfig].color
+                        statusEntry.color
                       }`}>
                         <StatusIcon className="w-3 h-3" />
-                        {seller.status}
+                        {seller.status ?? 'unknown'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">{seller.joined}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-2 hover:bg-gray-100 rounded-lg" title="View">
+                        <button type="button" className="p-2 hover:bg-gray-100 rounded-lg" title="View">
                           <Eye className="w-4 h-4 text-gray-500" />
                         </button>
-                        <button className="p-2 hover:bg-gray-100 rounded-lg" title="More">
+                        <button type="button" className="p-2 hover:bg-gray-100 rounded-lg" title="More">
                           <MoreHorizontal className="w-4 h-4 text-gray-500" />
                         </button>
                       </div>
@@ -207,13 +209,13 @@ export default function SellersPage() {
             Showing {filteredSellers.length} of {sellers.length} sellers
           </p>
           <div className="flex items-center gap-2">
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+            <button type="button" className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <button className="px-3 py-1 bg-gold-500 text-white rounded-lg">1</button>
-            <button className="px-3 py-1 hover:bg-gray-100 rounded-lg">2</button>
-            <button className="px-3 py-1 hover:bg-gray-100 rounded-lg">3</button>
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <button type="button" className="px-3 py-1 bg-gold-500 text-white rounded-lg">1</button>
+            <button type="button" className="px-3 py-1 hover:bg-gray-100 rounded-lg">2</button>
+            <button type="button" className="px-3 py-1 hover:bg-gray-100 rounded-lg">3</button>
+            <button type="button" className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -299,7 +301,7 @@ function AddSellerModal({
       >
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Invite Seller</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+          <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>

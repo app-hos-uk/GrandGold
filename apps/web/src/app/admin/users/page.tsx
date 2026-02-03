@@ -18,6 +18,9 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { authApi, adminApi, ApiError } from '@/lib/api';
+import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
+import { formatRelativeDate } from '@/lib/format';
+import { useToast } from '@/components/admin/toast';
 
 interface UserRow {
   id: string;
@@ -27,12 +30,23 @@ interface UserRow {
   email?: string;
   phone?: string;
   role?: string;
+  country?: string;
   status?: string;
   orders?: number;
   spent?: number;
   createdAt?: string;
   joined?: string;
+  kycStatus?: string;
 }
+
+const roleBadgeColors: Record<string, string> = {
+  super_admin: 'bg-purple-100 text-purple-800',
+  country_admin: 'bg-blue-100 text-blue-800',
+  manager: 'bg-indigo-100 text-indigo-800',
+  staff: 'bg-slate-100 text-slate-800',
+  seller: 'bg-gold-100 text-gold-800',
+  customer: 'bg-gray-100 text-gray-700',
+};
 
 const FALLBACK_USERS: UserRow[] = [
   { id: '1', name: 'Priya Sharma', firstName: 'Priya', lastName: 'Sharma', email: 'priya@email.com', phone: '+91 98765 43210', status: 'active', orders: 12, spent: 485000, joined: '15 Jan 2024' },
@@ -45,9 +59,13 @@ const statusColors = {
   blocked: 'bg-red-100 text-red-700',
 };
 
+const COUNTRIES = ['IN', 'AE', 'UK'] as const;
+
 export default function UsersPage() {
+  const toast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [countryFilter, setCountryFilter] = useState<string>('');
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -56,20 +74,45 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [adminCountry, setAdminCountry] = useState<string | null>(null);
+  const [roleActioning, setRoleActioning] = useState<string | null>(null);
+
+  useEffect(() => {
+    adminApi
+      .getMe()
+      .then((u) => {
+        if (u?.role) setCurrentUserRole(u.role);
+        if (u?.country) setAdminCountry(u.country);
+        if (u?.role === 'country_admin' && u?.country) setCountryFilter(u.country);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     adminApi
-      .getUsers({ page, limit: 20, role: statusFilter !== 'all' ? statusFilter : undefined, search: searchQuery || undefined })
+      .getUsers({
+        page,
+        limit: 20,
+        role: statusFilter !== 'all' ? statusFilter : undefined,
+        country: countryFilter || undefined,
+        search: searchQuery || undefined,
+      })
       .then((res) => {
         const d = res as { users?: UserRow[]; total?: number };
         const list = Array.isArray(d?.users) ? d.users : [];
-        setUsers(list.map((u) => ({ ...u, name: u.name ?? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim(), status: u.status ?? (u.role === 'customer' ? 'active' : u.role) })));
+        setUsers(list.map((u) => ({
+          ...u,
+          name: u.name ?? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim(),
+          status: u.status ?? (u.role === 'customer' ? 'active' : u.role),
+          joined: u.createdAt ? formatRelativeDate(u.createdAt) : u.joined,
+        })));
         setTotal(d?.total ?? list.length);
       })
       .catch(() => setUsers(FALLBACK_USERS))
       .finally(() => setLoading(false));
-  }, [page, statusFilter, searchQuery]);
+  }, [page, statusFilter, countryFilter, searchQuery]);
 
   const filteredUsers = users.filter((user) => {
     if (statusFilter !== 'all' && user.status !== statusFilter && user.role !== statusFilter) return false;
@@ -80,17 +123,19 @@ export default function UsersPage() {
 
   return (
     <div>
+      <AdminBreadcrumbs items={[{ label: 'Users' }]} />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Users</h1>
           <p className="text-gray-600">Manage your customer accounts</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
             <Download className="w-4 h-4" />
             Export
           </button>
           <button
+            type="button"
             onClick={() => { setAddUserOpen(true); setError(null); setSuccess(null); }}
             className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors"
           >
@@ -131,7 +176,25 @@ export default function UsersPage() {
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {currentUserRole === 'super_admin' && (
+              <select
+                value={countryFilter}
+                onChange={(e) => setCountryFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                aria-label="Filter by country"
+              >
+                <option value="">All Countries</option>
+                {COUNTRIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            )}
+            {currentUserRole === 'country_admin' && adminCountry && (
+              <span className="px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 text-sm" title="Country Admin scope">
+                Country: {adminCountry}
+              </span>
+            )}
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -142,7 +205,7 @@ export default function UsersPage() {
               <option value="inactive">Inactive</option>
               <option value="blocked">Blocked</option>
             </select>
-            <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
               <Filter className="w-4 h-4" />
               More Filters
             </button>
@@ -161,8 +224,11 @@ export default function UsersPage() {
                 <th className="px-6 py-4 font-medium">Contact</th>
                 <th className="px-6 py-4 font-medium">Orders</th>
                 <th className="px-6 py-4 font-medium">Total Spent</th>
+                <th className="px-6 py-4 font-medium">Role</th>
+                <th className="px-6 py-4 font-medium">Country</th>
                 <th className="px-6 py-4 font-medium">Status</th>
                 <th className="px-6 py-4 font-medium">Joined</th>
+                <th className="px-6 py-4 font-medium">KYC</th>
                 <th className="px-6 py-4"></th>
               </tr>
             </thead>
@@ -207,19 +273,55 @@ export default function UsersPage() {
                     ₹{(user.spent ?? 0).toLocaleString()}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${
-                      statusColors[user.status as keyof typeof statusColors]
-                    }`}>
-                      {user.status}
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${roleBadgeColors[user.role ?? 'customer'] ?? 'bg-gray-100 text-gray-700'}`}>
+                      {user.role ?? 'customer'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{user.joined}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{user.country ?? '—'}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${
+                      statusColors[user.status as keyof typeof statusColors] ?? 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {user.status ?? '—'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {user.joined ?? (user.createdAt ? formatRelativeDate(user.createdAt) : '—')}
+                  </td>
+                  <td className="px-6 py-4 text-sm">
+                    {user.kycStatus === 'verified' || user.kycStatus === 'approved' ? (
+                      <span className="text-green-600" title="KYC Verified">✓ Verified</span>
+                    ) : user.kycStatus ? (
+                      <span className="text-amber-600" title="KYC Pending">⏳ {user.kycStatus}</span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1">
-                      <button className="p-2 hover:bg-gray-100 rounded-lg" title="View">
+                      {currentUserRole === 'super_admin' && user.role !== 'super_admin' && (
+                        <button
+                          type="button"
+                          disabled={!!roleActioning}
+                          onClick={() => {
+                            const country = window.prompt('Assign as Country Admin. Enter country (IN, AE, UK):');
+                            if (!country || !COUNTRIES.includes(country as typeof COUNTRIES[number])) return;
+                            setRoleActioning(user.id);
+                            setError(null);
+                            adminApi.setUserRole(user.id, 'country_admin', country)
+                              .then(() => { toast.success('Role updated'); setSuccess('Role updated'); setPage(1); })
+                              .catch((e: unknown) => setError(e instanceof ApiError ? e.message : 'Failed to update role'))
+                              .finally(() => setRoleActioning(null));
+                          }}
+                          className="text-xs px-2 py-1 rounded bg-gold-100 text-gold-800 hover:bg-gold-200 disabled:opacity-50"
+                        >
+                          {roleActioning === user.id ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Set country admin'}
+                        </button>
+                      )}
+                      <button type="button" className="p-2 hover:bg-gray-100 rounded-lg" title="View">
                         <Eye className="w-4 h-4 text-gray-500" />
                       </button>
-                      <button className="p-2 hover:bg-gray-100 rounded-lg" title="More">
+                      <button type="button" className="p-2 hover:bg-gray-100 rounded-lg" title="More">
                         <MoreHorizontal className="w-4 h-4 text-gray-500" />
                       </button>
                     </div>
@@ -236,13 +338,13 @@ export default function UsersPage() {
             {loading ? 'Loading...' : `Showing ${filteredUsers.length} of ${total} users`}
           </p>
           <div className="flex items-center gap-2">
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+            <button type="button" className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <button className="px-3 py-1 bg-gold-500 text-white rounded-lg">1</button>
-            <button className="px-3 py-1 hover:bg-gray-100 rounded-lg">2</button>
-            <button className="px-3 py-1 hover:bg-gray-100 rounded-lg">3</button>
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <button type="button" className="px-3 py-1 bg-gold-500 text-white rounded-lg">1</button>
+            <button type="button" className="px-3 py-1 hover:bg-gray-100 rounded-lg">2</button>
+            <button type="button" className="px-3 py-1 hover:bg-gray-100 rounded-lg">3</button>
+            <button type="button" className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -315,7 +417,7 @@ function AddUserModal({
       >
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Add User</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+          <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>

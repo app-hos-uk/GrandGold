@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { ToastProvider } from '@/components/admin/toast';
 import {
   LayoutDashboard,
   Users,
@@ -18,17 +19,28 @@ import {
   Search,
   ChevronDown,
   Sparkles,
+  ShieldCheck,
+  ReceiptRefund,
+  UserPlus,
 } from 'lucide-react';
+import { adminApi, type CurrentUserProfile } from '@/lib/api';
 
-const navigation = [
-  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { name: 'Users', href: '/admin/users', icon: Users },
-  { name: 'Orders', href: '/admin/orders', icon: ShoppingCart },
-  { name: 'Products', href: '/admin/products', icon: Package },
-  { name: 'Sellers', href: '/admin/sellers', icon: Store },
-  { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
-  { name: 'Settings', href: '/admin/settings', icon: Settings },
+const ALL_NAV = [
+  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, roles: ['super_admin', 'country_admin'] },
+  { name: 'Users', href: '/admin/users', icon: Users, roles: ['super_admin', 'country_admin'] },
+  { name: 'Orders', href: '/admin/orders', icon: ShoppingCart, roles: ['super_admin', 'country_admin'] },
+  { name: 'Products', href: '/admin/products', icon: Package, roles: ['super_admin', 'country_admin'] },
+  { name: 'Sellers', href: '/admin/sellers', icon: Store, roles: ['super_admin', 'country_admin'] },
+  { name: 'KYC', href: '/admin/kyc', icon: ShieldCheck, roles: ['super_admin', 'country_admin'] },
+  { name: 'Refunds', href: '/admin/refunds', icon: ReceiptRefund, roles: ['super_admin', 'country_admin'] },
+  { name: 'Onboarding', href: '/admin/onboarding', icon: UserPlus, roles: ['super_admin', 'country_admin'] },
+  { name: 'Reports', href: '/admin/reports', icon: BarChart3, roles: ['super_admin', 'country_admin'] },
+  { name: 'Settings', href: '/admin/settings', icon: Settings, roles: ['super_admin'] },
 ];
+
+function getNavigation(role: string) {
+  return ALL_NAV.filter((item) => item.roles.includes(role));
+}
 
 export default function AdminLayout({
   children,
@@ -36,11 +48,62 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
+        : null;
+    if (!token) {
+      router.replace('/in');
+      return;
+    }
+    adminApi
+      .getMe()
+      .then((user) => {
+        const role = user?.role;
+        if (role !== 'super_admin' && role !== 'country_admin') {
+          router.replace('/in');
+          return;
+        }
+        setProfile(user);
+      })
+      .catch(() => {
+        router.replace('/in');
+      })
+      .finally(() => setLoading(false));
+  }, [router]);
+
+  const navigation = profile ? getNavigation(profile.role) : [];
+  const roleLabel =
+    profile?.role === 'super_admin'
+      ? 'Super Admin'
+      : profile?.role === 'country_admin' && profile?.country
+        ? `Country Admin (${profile.country})`
+        : 'Admin';
+  const initial = profile?.firstName?.[0] || profile?.email?.[0]?.toUpperCase() || 'A';
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="w-12 h-12 bg-gold-200 rounded-xl" />
+          <p className="text-gray-500">Loading admin...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
@@ -48,7 +111,6 @@ export default function AdminLayout({
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 transform transition-transform lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -77,8 +139,8 @@ export default function AdminLayout({
           </p>
           <nav className="space-y-1">
             {navigation.map((item) => {
-              const isActive = pathname === item.href || 
-                (item.href !== '/admin' && pathname.startsWith(item.href));
+              const isActive =
+                pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
               return (
                 <Link
                   key={item.name}
@@ -98,26 +160,32 @@ export default function AdminLayout({
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-800">
-          <button className="flex items-center gap-3 w-full px-3 py-2.5 text-gray-400 hover:bg-gray-800 hover:text-white rounded-lg transition-colors">
+          <button
+            type="button"
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-gray-400 hover:bg-gray-800 hover:text-white rounded-lg transition-colors"
+            onClick={() => {
+              localStorage.removeItem('grandgold_token');
+              localStorage.removeItem('accessToken');
+              router.replace('/in');
+            }}
+          >
             <LogOut className="w-5 h-5" />
             <span className="font-medium">Sign Out</span>
           </button>
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="lg:pl-64">
-        {/* Top header */}
         <header className="sticky top-0 z-30 bg-white border-b border-gray-200">
           <div className="flex items-center justify-between h-16 px-4 lg:px-8">
             <div className="flex items-center gap-4">
               <button
+                type="button"
                 className="lg:hidden p-2 text-gray-500 hover:text-gray-700"
                 onClick={() => setSidebarOpen(true)}
               >
                 <Menu className="w-6 h-6" />
               </button>
-              
               <div className="hidden md:flex items-center gap-2 bg-gray-100 rounded-lg px-4 py-2 w-80">
                 <Search className="w-5 h-5 text-gray-400" />
                 <input
@@ -126,21 +194,27 @@ export default function AdminLayout({
                   className="bg-transparent border-none outline-none flex-1 text-sm"
                 />
               </div>
+              {profile.role === 'country_admin' && profile.country && (
+                <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                  Viewing: {profile.country}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-4">
-              <button className="relative p-2 text-gray-500 hover:text-gray-700">
+              <button type="button" className="relative p-2 text-gray-500 hover:text-gray-700">
                 <Bell className="w-6 h-6" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
               </button>
-              
               <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
                 <div className="w-9 h-9 bg-gold-100 rounded-full flex items-center justify-center">
-                  <span className="text-gold-600 font-semibold">A</span>
+                  <span className="text-gold-600 font-semibold">{initial}</span>
                 </div>
                 <div className="hidden sm:block">
-                  <p className="text-sm font-medium text-gray-900">Admin User</p>
-                  <p className="text-xs text-gray-500">Super Admin</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {profile.firstName ? `${profile.firstName} ${profile.lastName || ''}`.trim() : profile.email}
+                  </p>
+                  <p className="text-xs text-gray-500">{roleLabel}</p>
                 </div>
                 <ChevronDown className="w-4 h-4 text-gray-400" />
               </div>
@@ -148,9 +222,10 @@ export default function AdminLayout({
           </div>
         </header>
 
-        {/* Page content */}
         <main className="p-4 lg:p-8">
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </main>
       </div>
     </div>

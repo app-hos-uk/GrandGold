@@ -173,7 +173,7 @@ export default function SettingsPage() {
                     <p className="font-medium text-gray-900">Enable AR Try-On</p>
                     <p className="text-sm text-gray-500">Allow customers to try jewellery virtually</p>
                   </div>
-                  <button className="relative w-12 h-6 bg-gold-500 rounded-full">
+                  <button type="button" className="relative w-12 h-6 bg-gold-500 rounded-full">
                     <span className="absolute top-1 left-7 w-4 h-4 bg-white rounded-full" />
                   </button>
                 </div>
@@ -276,7 +276,7 @@ export default function SettingsPage() {
                     <p className="font-medium text-gray-900">Insurance</p>
                     <p className="text-sm text-gray-500">Auto-insure all shipments</p>
                   </div>
-                  <button className="relative w-12 h-6 bg-gold-500 rounded-full">
+                  <button type="button" className="relative w-12 h-6 bg-gold-500 rounded-full">
                     <span className="absolute top-1 left-7 w-4 h-4 bg-white rounded-full" />
                   </button>
                 </div>
@@ -305,7 +305,7 @@ export default function SettingsPage() {
                       <p className="font-medium text-gray-900">{item.label}</p>
                       <p className="text-sm text-gray-500">{item.desc}</p>
                     </div>
-                    <button className="relative w-12 h-6 bg-gold-500 rounded-full">
+                    <button type="button" className="relative w-12 h-6 bg-gold-500 rounded-full">
                       <span className="absolute top-1 left-7 w-4 h-4 bg-white rounded-full" />
                     </button>
                   </div>
@@ -328,7 +328,7 @@ export default function SettingsPage() {
                     <span className="font-medium text-green-800">Two-Factor Authentication</span>
                   </div>
                   <p className="text-sm text-green-700 mb-3">2FA is enabled for all admin accounts</p>
-                  <button className="text-sm text-green-700 font-medium underline">Manage 2FA</button>
+                  <button type="button" className="text-sm text-green-700 font-medium underline">Manage 2FA</button>
                 </div>
                 
                 <div>
@@ -457,7 +457,7 @@ function ApiConfigModal({
           <h2 className="text-lg font-semibold text-gray-900">
             Configure {provider === 'razorpay' ? 'Razorpay' : 'Stripe'}
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+          <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
