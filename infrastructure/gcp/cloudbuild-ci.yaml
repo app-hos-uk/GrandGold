@@ -35,7 +35,7 @@ steps:
       - '.'
     id: 'build-order'
 
-  # Build web
+  # Build web (with production backend URLs so /api/cart, /api/auth, etc. proxy correctly)
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -43,6 +43,24 @@ steps:
       - 'gcr.io/$PROJECT_ID/web:$SHORT_SHA'
       - '-f'
       - './apps/web/Dockerfile'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_ORDER_SERVICE_URL=https://order-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_PRODUCT_SERVICE_URL=https://product-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_KYC_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_SELLER_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_FINTECH_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_PAYMENT_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_INVENTORY_SERVICE_URL=https://product-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_AI_SERVICE_URL=https://product-service-484382472654.asia-south1.run.app'
       - '.'
     id: 'build-web'
 

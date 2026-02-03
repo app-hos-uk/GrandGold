@@ -46,6 +46,10 @@ See `env.example` and [Deployment Guide – Environment Configuration](../DEPLOY
 - AI: `GET /health` (4009)
 - All backend services expose `GET /health`
 
+## Web app – API proxy (cart, auth, etc.)
+
+The web app proxies `/api/cart`, `/api/auth`, etc. to backend Cloud Run services. **Backend URLs are baked at build time** via Docker build-args in `infrastructure/gcp/cloudbuild-ci.yaml`. If you add new backend services or change Cloud Run URLs, update the web build step’s `--build-arg` entries and the project number (`484382472654`) if your project changes.
+
 ## Cloud Build failures – how to get logs
 
 If deployments fail in Cloud Build:

@@ -344,7 +344,7 @@ export default function CheckoutPage() {
             <h1 className="text-2xl font-semibold text-gray-900 mb-2">Sign in to checkout</h1>
             <p className="text-gray-600 mb-8">Please sign in or create an account to complete your purchase.</p>
             <Link
-              href={`/${country}/account?redirect=/${country}/checkout`}
+              href={`/${country}/login?redirect=${encodeURIComponent(`/${country}/checkout`)}`}
               className="inline-flex items-center gap-2 px-8 py-3 bg-gold-500 hover:bg-gold-600 text-white font-medium rounded-lg transition-colors"
             >
               Sign In

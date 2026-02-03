@@ -5,38 +5,38 @@
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FFFDFB",
-  "theme_color": "#D4AF37",
+  "theme_color": "#C9A227",
   "orientation": "portrait-primary",
   "scope": "/",
   "lang": "en",
   "categories": ["shopping", "lifestyle"],
   "icons": [
     {
-      "src": "/icons/icon-72x72.png",
+      "src": "/icons/icon-192x192.png",
       "sizes": "72x72",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-96x96.png",
+      "src": "/icons/icon-192x192.png",
       "sizes": "96x96",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-128x128.png",
+      "src": "/icons/icon-192x192.png",
       "sizes": "128x128",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-144x144.png",
+      "src": "/icons/icon-192x192.png",
       "sizes": "144x144",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-152x152.png",
+      "src": "/icons/icon-192x192.png",
       "sizes": "152x152",
       "type": "image/png",
       "purpose": "any"
@@ -48,19 +48,19 @@
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-384x384.png",
+      "src": "/icons/icon-192x192.png",
       "sizes": "384x384",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "/icons/icon-192x192.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-maskable-512x512.png",
+      "src": "/icons/icon-192x192.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -88,14 +88,14 @@
       "short_name": "AR Try-On",
       "description": "Try jewelry virtually using AR",
       "url": "/ar-tryon",
-      "icons": [{ "src": "/icons/ar-shortcut.png", "sizes": "96x96" }]
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "96x96" }]
     },
     {
       "name": "Gold Prices",
       "short_name": "Gold Prices",
       "description": "Check live gold prices",
       "url": "/gold-prices",
-      "icons": [{ "src": "/icons/price-shortcut.png", "sizes": "96x96" }]
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "96x96" }]
     }
   ],
   "related_applications": [],

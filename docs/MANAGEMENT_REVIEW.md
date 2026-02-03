@@ -34,8 +34,49 @@ gcloud run services list --region=asia-south1 --project=grandmarketplace --forma
 
 - **Storefront (customers):** `https://<WEB_URL>/in`, `/ae`, `/uk`
 - **Admin panel:** `https://<WEB_URL>/admin` (requires admin login)
+- **Admin login:** `https://<WEB_URL>/admin/login` (Super Admin / Country Admin only)
 - **Seller dashboard:** `https://<WEB_URL>/seller` (requires seller login)
-- **Login/Register:** `https://<WEB_URL>/in` (or `/ae`, `/uk`) → Sign In
+- **Seller login:** `https://<WEB_URL>/seller/login`
+- **Customer login:** `https://<WEB_URL>/in/login` (or `/ae/login`, `/uk/login`)
+- **Customer register:** `https://<WEB_URL>/in/register` (or `/ae/register`, `/uk/register`)
+
+### Super Admin (first-time setup)
+
+The **Super Admin** is the application owner with **global access** to all countries (IN, AE, UK). They are NOT restricted to any single country and can:
+
+- View and manage data across **all countries**
+- Create and assign **Country Admins** for specific countries
+- Access all admin features without geographic limits
+- Manage users, orders, products, KYC, refunds, seller onboarding globally
+
+To create the Super Admin user in the database (run once, e.g. after first deploy):
+
+```bash
+# Set your production or staging DATABASE_URL, then:
+DATABASE_URL="postgresql://..." pnpm db:seed
+```
+
+**Super Admin credentials (after seed):**
+
+| Field | Value |
+|-------|--------|
+| Email | `mail@jsabu.com` |
+| Password | `Admin@1234` |
+| Role | `super_admin` (Global Access) |
+
+Use these to sign in at `/admin/login`. The header will show **"Global Access"** badge and role as **"Super Admin (Global)"**.
+
+### Country Admins
+
+The Super Admin can assign Country Admins from the Users page:
+
+1. Go to `/admin/users`
+2. Find a user (or create one via storefront registration first)
+3. Click **"Set country admin"** button (visible only to Super Admin)
+4. Enter the country code (IN, AE, or UK)
+5. The user now becomes a Country Admin scoped to that country
+
+Country Admins only see data for their assigned country.
 
 ---
 

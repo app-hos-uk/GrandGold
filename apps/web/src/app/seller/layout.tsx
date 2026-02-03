@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Package,
@@ -21,6 +21,7 @@ import {
   HelpCircle,
   FileCheck,
 } from 'lucide-react';
+import { authApi, getStoredToken } from '@/lib/api';
 
 const navigation = [
   { name: 'Dashboard', href: '/seller', icon: LayoutDashboard },
@@ -38,7 +39,48 @@ export default function SellerLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [authChecked, setAuthChecked] = useState(pathname === '/seller/login');
+
+  useEffect(() => {
+    if (pathname === '/seller/login') {
+      setAuthChecked(true);
+      return;
+    }
+    const token = getStoredToken();
+    if (!token) {
+      router.replace('/seller/login');
+      return;
+    }
+    authApi
+      .getMe()
+      .then((user) => {
+        if (user.role !== 'seller') {
+          router.replace('/seller/login');
+          return;
+        }
+        setAuthChecked(true);
+      })
+      .catch(() => {
+        router.replace('/seller/login');
+      });
+  }, [pathname, router]);
+
+  if (pathname === '/seller/login') {
+    return <>{children}</>;
+  }
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="w-12 h-12 bg-gold-500 rounded-xl" />
+          <p className="text-gray-500 font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -120,7 +162,15 @@ export default function SellerLayout({
             <HelpCircle className="w-5 h-5" />
             <span className="font-medium">Help & Support</span>
           </Link>
-          <button className="flex items-center gap-3 w-full px-3 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+          <button
+            type="button"
+            onClick={() => {
+              authApi.logout();
+              router.push('/seller/login');
+              router.refresh();
+            }}
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
             <LogOut className="w-5 h-5" />
             <span className="font-medium">Sign Out</span>
           </button>

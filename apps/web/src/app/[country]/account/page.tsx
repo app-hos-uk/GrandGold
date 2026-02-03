@@ -1,6 +1,7 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
@@ -60,12 +61,37 @@ const countryConfig = {
 
 export default function AccountPage() {
   const params = useParams();
+  const router = useRouter();
   const country = (params.country as 'in' | 'ae' | 'uk') || 'in';
   const config = countryConfig[country];
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
+        : null;
+    if (!token) {
+      router.replace(`/${country}/login?redirect=${encodeURIComponent(`/${country}/account`)}`);
+      return;
+    }
+    setAuthChecked(true);
+  }, [country, router]);
 
   const formatPrice = (price: number) => {
     return `${config.currency}${price.toLocaleString()}`;
   };
+
+  if (!authChecked) {
+    return (
+      <main className="min-h-screen bg-cream-50 flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="w-12 h-12 bg-gold-500 rounded-xl" />
+          <p className="text-gray-500 font-medium">Loading...</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-cream-50">

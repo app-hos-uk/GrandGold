@@ -78,19 +78,22 @@ export function Footer({ country }: FooterProps) {
 
   return (
     <footer className="bg-[#0F0F0F] text-white">
+      {/* Burgundy accent bar */}
+      <div className="h-1 bg-gradient-to-r from-burgundy-900 via-burgundy-500 to-burgundy-900" />
       {/* Brand tagline */}
       <div className="border-b border-white/10">
         <div className="container mx-auto px-4 py-6">
           <p className="text-center font-display text-lg text-gold-400/90 tracking-wide">
             {BRAND_TAGLINE}
           </p>
+          <p className="text-center text-burgundy-300/80 text-sm mt-1 tracking-wide">Luxury &amp; Trust</p>
         </div>
       </div>
       {/* Newsletter */}
       <div className="border-b border-white/10">
         <div className="container mx-auto px-4 py-12">
           <div className="max-w-xl mx-auto text-center">
-            <h3 className="text-2xl font-display font-semibold mb-2">Stay Updated</h3>
+            <h3 className="text-2xl font-display font-semibold mb-2 text-burgundy-200">Stay Updated</h3>
             <p className="text-gray-400 mb-6">
               Subscribe for exclusive offers, new arrivals, and gold price alerts.
             </p>
@@ -131,16 +134,16 @@ export function Footer({ country }: FooterProps) {
               {info.address}
             </p>
             <div className="flex gap-4">
-              <a href="#" className="text-gray-400 hover:text-gold-400 transition-colors">
+              <a href="#" className="text-gray-400 hover:text-burgundy-300 transition-colors">
                 <Facebook className="w-5 h-5" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-gold-400 transition-colors">
+              <a href="#" className="text-gray-400 hover:text-burgundy-300 transition-colors">
                 <Instagram className="w-5 h-5" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-gold-400 transition-colors">
+              <a href="#" className="text-gray-400 hover:text-burgundy-300 transition-colors">
                 <Youtube className="w-5 h-5" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-gold-400 transition-colors">
+              <a href="#" className="text-gray-400 hover:text-burgundy-300 transition-colors">
                 <Twitter className="w-5 h-5" />
               </a>
             </div>
@@ -155,7 +158,7 @@ export function Footer({ country }: FooterProps) {
                   <li key={link.name}>
                     <Link
                       href={link.href}
-                      className="text-gray-400 hover:text-gold-400 text-sm transition-colors"
+                      className="text-gray-400 hover:text-burgundy-300 text-sm transition-colors"
                     >
                       {link.name}
                     </Link>
@@ -177,19 +180,19 @@ export function Footer({ country }: FooterProps) {
             <div className="flex items-center gap-6 text-sm">
               <Link
                 href={`/${country}/privacy`}
-                className="text-gray-400 hover:text-gold-400 transition-colors"
+                className="text-gray-400 hover:text-burgundy-300 transition-colors"
               >
                 Privacy Policy
               </Link>
               <Link
                 href={`/${country}/terms`}
-                className="text-gray-400 hover:text-gold-400 transition-colors"
+                className="text-gray-400 hover:text-burgundy-300 transition-colors"
               >
                 Terms of Service
               </Link>
               <Link
                 href={`/${country}/cookies`}
-                className="text-gray-400 hover:text-gold-400 transition-colors"
+                className="text-gray-400 hover:text-burgundy-300 transition-colors"
               >
                 Cookie Policy
               </Link>

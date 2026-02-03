@@ -43,6 +43,8 @@ export function Header({ country }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-cream-200">
+      {/* Burgundy accent strip */}
+      <div className="h-0.5 bg-gradient-to-r from-burgundy-900 via-burgundy-500 to-burgundy-900" />
       {/* Top bar with gold price and country selector */}
       <div className="bg-gray-900 text-white text-sm py-2">
         <div className="container mx-auto px-4 flex items-center justify-between">

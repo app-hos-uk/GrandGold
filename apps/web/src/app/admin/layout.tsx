@@ -23,7 +23,7 @@ import {
   Receipt,
   UserPlus,
 } from 'lucide-react';
-import { adminApi, type CurrentUserProfile } from '@/lib/api';
+import { adminApi, authApi, type CurrentUserProfile } from '@/lib/api';
 
 const ALL_NAV = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, roles: ['super_admin', 'country_admin'] },
@@ -54,12 +54,16 @@ export default function AdminLayout({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (pathname === '/admin/login') {
+      setLoading(false);
+      return;
+    }
     const token =
       typeof window !== 'undefined'
         ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
         : null;
     if (!token) {
-      router.replace('/in');
+      router.replace('/admin/login');
       return;
     }
     adminApi
@@ -67,25 +71,29 @@ export default function AdminLayout({
       .then((user) => {
         const role = user?.role;
         if (role !== 'super_admin' && role !== 'country_admin') {
-          router.replace('/in');
+          router.replace('/admin/login');
           return;
         }
         setProfile(user);
       })
       .catch(() => {
-        router.replace('/in');
+        router.replace('/admin/login');
       })
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [router, pathname]);
 
   const navigation = profile ? getNavigation(profile.role) : [];
   const roleLabel =
     profile?.role === 'super_admin'
-      ? 'Super Admin'
+      ? 'Super Admin (Global)'
       : profile?.role === 'country_admin' && profile?.country
         ? `Country Admin (${profile.country})`
         : 'Admin';
   const initial = profile?.firstName?.[0] || profile?.email?.[0]?.toUpperCase() || 'A';
+
+  if (pathname === '/admin/login') {
+    return <>{children}</>;
+  }
 
   if (loading) {
     return (
@@ -165,9 +173,9 @@ export default function AdminLayout({
             type="button"
             className="flex items-center gap-3 w-full px-3 py-2.5 text-gray-400 hover:bg-white/10 hover:text-white rounded-lg transition-colors"
             onClick={() => {
-              localStorage.removeItem('grandgold_token');
-              localStorage.removeItem('accessToken');
-              router.replace('/in');
+              authApi.logout();
+              router.replace('/admin/login');
+              router.refresh();
             }}
           >
             <LogOut className="w-5 h-5" />
@@ -195,9 +203,14 @@ export default function AdminLayout({
                   className="bg-transparent border-none outline-none flex-1 text-sm"
                 />
               </div>
+              {profile.role === 'super_admin' && (
+                <span className="text-sm text-green-700 bg-green-100 px-2 py-1 rounded font-medium">
+                  Global Access
+                </span>
+              )}
               {profile.role === 'country_admin' && profile.country && (
                 <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                  Viewing: {profile.country}
+                  Country: {profile.country}
                 </span>
               )}
             </div>

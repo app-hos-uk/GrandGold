@@ -279,7 +279,65 @@ export const adminApi = {
 };
 
 // Auth API
+export interface LoginResponse {
+  user: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    country: string;
+    mfaEnabled?: boolean;
+  };
+  tokens: {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+  };
+}
+
+const AUTH_TOKEN_KEY = 'grandgold_token';
+const AUTH_REFRESH_KEY = 'grandgold_refresh';
+
+export function getStoredToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem('accessToken');
+}
+
+export function setStoredTokens(accessToken: string, refreshToken?: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(AUTH_TOKEN_KEY, accessToken);
+  localStorage.setItem('accessToken', accessToken); // legacy
+  if (refreshToken) localStorage.setItem(AUTH_REFRESH_KEY, refreshToken);
+}
+
+export function clearStoredAuth(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem(AUTH_REFRESH_KEY);
+}
+
 export const authApi = {
+  login: async (email: string, password: string): Promise<LoginResponse> => {
+    const res = await api.post<{ user: LoginResponse['user']; tokens: LoginResponse['tokens']; requiresMfa?: boolean; mfaToken?: string }>(
+      '/api/auth/login',
+      { email: email.trim().toLowerCase(), password }
+    );
+    if (res.requiresMfa) {
+      throw new ApiError('MFA verification required', 200, 'MFA_REQUIRED', { mfaToken: res.mfaToken });
+    }
+    if (res.user && res.tokens?.accessToken) {
+      setStoredTokens(res.tokens.accessToken, res.tokens.refreshToken);
+      return { user: res.user, tokens: res.tokens };
+    }
+    throw new ApiError('Invalid login response', 500);
+  },
+  getMe: (): Promise<CurrentUserProfile> =>
+    api.get<CurrentUserProfile>('/api/user/me').then((d: unknown) => (d as { data?: CurrentUserProfile }).data ?? (d as CurrentUserProfile)),
+  logout: (): void => {
+    clearStoredAuth();
+  },
   register: (data: {
     email: string;
     password: string;

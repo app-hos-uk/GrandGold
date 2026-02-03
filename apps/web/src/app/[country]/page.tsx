@@ -65,6 +65,7 @@ export default function HomePage() {
         {/* Decorative elements */}
         <div className="absolute inset-0 bg-[url('/patterns/gold-pattern.svg')] opacity-5" />
         <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-gold-500/10 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-burgundy-900/20 to-transparent pointer-events-none" />
         
         <div className="relative container mx-auto px-4 py-24 lg:py-32">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
@@ -75,7 +76,7 @@ export default function HomePage() {
               transition={{ duration: 0.6 }}
               className="text-center lg:text-left"
             >
-              <span className="inline-flex items-center gap-2 px-4 py-2 bg-gold-500/10 rounded-full text-gold-700 text-sm font-medium mb-6">
+              <span className="inline-flex items-center gap-2 px-4 py-2 bg-gold-500/10 rounded-full text-gold-700 text-sm font-medium mb-6 border border-burgundy-500/30">
                 <Sparkles className="w-4 h-4" />
                 Premium Collection 2025
               </span>
