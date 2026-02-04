@@ -1,7 +1,5 @@
 import type { Country } from '@grandgold/types';
-import Redis from 'ioredis';
-
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+import { getRedis } from '../lib/redis';
 
 const RECENTLY_VIEWED_PREFIX = 'recently_viewed:';
 const MAX_ITEMS = 20;
@@ -20,8 +18,16 @@ export class RecentlyViewedService {
     productId: string,
     country: Country
   ): Promise<void> {
+    const redis = getRedis();
+    if (!redis) return;
+    
     const key = this.getKey(userIdOrSessionId, country);
-    const data = await redis.get(key);
+    let data: string | null = null;
+    try {
+      data = await redis.get(key);
+    } catch {
+      return;
+    }
 
     let items: { productId: string; viewedAt: string }[] = data
       ? JSON.parse(data)
@@ -39,7 +45,11 @@ export class RecentlyViewedService {
     // Trim to max
     items = items.slice(0, MAX_ITEMS);
 
-    await redis.setex(key, TTL, JSON.stringify(items));
+    try {
+      await redis.setex(key, TTL, JSON.stringify(items));
+    } catch {
+      // Cache failed
+    }
   }
 
   /**
@@ -50,8 +60,16 @@ export class RecentlyViewedService {
     country: Country,
     limit: number = 10
   ): Promise<string[]> {
+    const redis = getRedis();
+    if (!redis) return [];
+    
     const key = this.getKey(userIdOrSessionId, country);
-    const data = await redis.get(key);
+    let data: string | null = null;
+    try {
+      data = await redis.get(key);
+    } catch {
+      return [];
+    }
 
     if (!data) return [];
 
@@ -66,7 +84,14 @@ export class RecentlyViewedService {
     userIdOrSessionId: string,
     country: Country
   ): Promise<void> {
+    const redis = getRedis();
+    if (!redis) return;
+    
     const key = this.getKey(userIdOrSessionId, country);
-    await redis.del(key);
+    try {
+      await redis.del(key);
+    } catch {
+      // Cache clear failed
+    }
   }
 }

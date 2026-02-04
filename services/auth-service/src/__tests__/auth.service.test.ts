@@ -84,7 +84,7 @@ describe('AuthService', () => {
 
   describe('register', () => {
     it('should register a new user successfully', async () => {
-      vi.mocked(findUserByEmail).mockResolvedValue(null);
+      vi.mocked(findUserByEmail).mockResolvedValue(undefined);
       vi.mocked(createUser).mockResolvedValue({
         id: 'user_123',
         email: 'test@example.com',
@@ -168,7 +168,7 @@ describe('AuthService', () => {
     });
 
     it('should throw AuthenticationError for non-existent user', async () => {
-      vi.mocked(findUserByEmail).mockResolvedValue(null);
+      vi.mocked(findUserByEmail).mockResolvedValue(undefined);
 
       await expect(
         authService.login(

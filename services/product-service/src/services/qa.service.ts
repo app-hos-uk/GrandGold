@@ -1,7 +1,26 @@
 import { generateId, NotFoundError, ValidationError } from '@grandgold/utils';
-import Redis from 'ioredis';
+import { getRedis } from '../lib/redis';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Helper function to get data from redis with graceful fallback
+async function redisGet(key: string): Promise<string | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    return await redis.get(key);
+  } catch {
+    return null;
+  }
+}
+
+async function redisSetex(key: string, ttl: number, value: string): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.setex(key, ttl, value);
+  } catch {
+    // Cache failed
+  }
+}
 const QA_PREFIX = 'product_qa:';
 const TTL = 60 * 60 * 24 * 365; // 1 year
 
@@ -48,10 +67,10 @@ export class ProductQAService {
     };
 
     const key = `${QA_PREFIX}${productId}`;
-    const existing = await redis.get(key);
+    const existing = await redisGet(key);
     const questions: Question[] = existing ? JSON.parse(existing) : [];
     questions.push(q);
-    await redis.setex(key, TTL, JSON.stringify(questions));
+    await redisSetex(key, TTL, JSON.stringify(questions));
 
     return q;
   }
@@ -67,7 +86,7 @@ export class ProductQAService {
     options?: { userName?: string; isSeller?: boolean }
   ): Promise<Answer> {
     const key = `${QA_PREFIX}${productId}`;
-    const data = await redis.get(key);
+    const data = await redisGet(key);
     if (!data) throw new NotFoundError('Question');
 
     const questions: Question[] = JSON.parse(data);
@@ -87,7 +106,7 @@ export class ProductQAService {
     };
 
     question.answers.push(ans);
-    await redis.setex(key, TTL, JSON.stringify(questions));
+    await redisSetex(key, TTL, JSON.stringify(questions));
 
     return ans;
   }
@@ -100,7 +119,7 @@ export class ProductQAService {
     options?: { page?: number; limit?: number }
   ): Promise<{ data: Question[]; total: number }> {
     const key = `${QA_PREFIX}${productId}`;
-    const data = await redis.get(key);
+    const data = await redisGet(key);
     const questions: Question[] = data ? JSON.parse(data) : [];
 
     const page = options?.page || 1;
@@ -116,7 +135,7 @@ export class ProductQAService {
    */
   async markHelpful(productId: string, questionId: string, answerId: string, userId: string): Promise<void> {
     const key = `${QA_PREFIX}${productId}`;
-    const data = await redis.get(key);
+    const data = await redisGet(key);
     if (!data) throw new NotFoundError('Question');
 
     const questions: Question[] = JSON.parse(data);
@@ -131,6 +150,6 @@ export class ProductQAService {
     (answer as any).helpfulBy.push(userId);
     answer.helpfulCount = (answer as any).helpfulBy.length;
 
-    await redis.setex(key, TTL, JSON.stringify(questions));
+    await redisSetex(key, TTL, JSON.stringify(questions));
   }
 }

@@ -27,8 +27,7 @@
       "cache": false
     },
     "db:seed": {
-      "cache": false,
-      "dependsOn": ["db:migrate"]
+      "cache": false
     }
   }
 }

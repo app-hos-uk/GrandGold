@@ -9,11 +9,13 @@ PROJECT_ID="${GCP_PROJECT_ID:-grandgold-prod}"
 REGIONS=("asia-south1" "europe-west2" "me-central1")
 SERVICES=(
     "auth-service"
+    "kyc-service"
     "seller-service"
     "fintech-service"
     "order-service"
     "payment-service"
     "product-service"
+    "inventory-service"
 )
 
 # Colors for output

@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Sparkles, Facebook, Instagram, Youtube, Twitter } from 'lucide-react';
+import { Facebook, Instagram, Youtube, Twitter } from 'lucide-react';
+import { Logo } from '@/components/brand/logo';
 
 interface FooterProps {
   country: 'in' | 'ae' | 'uk';
@@ -119,14 +120,9 @@ export function Footer({ country }: FooterProps) {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
-            <Link href={`/${country}`} className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-gradient-gold rounded-full flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-display text-xl font-semibold">
-                Grand<span className="text-gold-400">Gold</span>
-              </span>
-            </Link>
+            <div className="mb-4">
+              <Logo href={`/${country}`} className="h-10 w-auto" variant="dark" />
+            </div>
             <p className="text-gray-400 text-sm mb-4">
               {info.company}
             </p>

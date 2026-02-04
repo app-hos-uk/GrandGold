@@ -76,7 +76,7 @@ app.use('/api/notifications', notificationsRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-const PORT = parseInt(process.env.PORT || '4003');
+const PORT = parseInt(process.env.PORT || '4004');
 
 app.listen(PORT, () => {
   logger.info(`Order service started on port ${PORT}`);

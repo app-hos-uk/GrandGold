@@ -77,7 +77,7 @@ app.use('/api/payments/refunds', refundRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-const PORT = parseInt(process.env.PORT || '4004');
+const PORT = parseInt(process.env.PORT || '4005');
 
 app.listen(PORT, () => {
   logger.info(`Payment service started on port ${PORT}`);

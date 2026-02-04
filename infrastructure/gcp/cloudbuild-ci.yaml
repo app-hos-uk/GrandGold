@@ -13,6 +13,50 @@ steps:
       - '.'
     id: 'build-auth'
 
+  # Build kyc-service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/kyc-service:$SHORT_SHA'
+      - '-f'
+      - './services/kyc-service/Dockerfile'
+      - '.'
+    id: 'build-kyc'
+
+  # Build seller-service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/seller-service:$SHORT_SHA'
+      - '-f'
+      - './services/seller-service/Dockerfile'
+      - '.'
+    id: 'build-seller'
+
+  # Build fintech-service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/fintech-service:$SHORT_SHA'
+      - '-f'
+      - './services/fintech-service/Dockerfile'
+      - '.'
+    id: 'build-fintech'
+
+  # Build payment-service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/payment-service:$SHORT_SHA'
+      - '-f'
+      - './services/payment-service/Dockerfile'
+      - '.'
+    id: 'build-payment'
+
   # Build product-service
   - name: 'gcr.io/cloud-builders/docker'
     args:
@@ -35,6 +79,17 @@ steps:
       - '.'
     id: 'build-order'
 
+  # Build inventory-service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/inventory-service:$SHORT_SHA'
+      - '-f'
+      - './services/inventory-service/Dockerfile'
+      - '.'
+    id: 'build-inventory'
+
   # Build web (with production backend URLs so /api/cart, /api/auth, etc. proxy correctly)
   - name: 'gcr.io/cloud-builders/docker'
     args:
@@ -46,29 +101,49 @@ steps:
       - '--build-arg'
       - 'NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app'
       - '--build-arg'
+      - 'NEXT_PUBLIC_KYC_SERVICE_URL=https://kyc-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_SELLER_SERVICE_URL=https://seller-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_FINTECH_SERVICE_URL=https://fintech-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
       - 'NEXT_PUBLIC_ORDER_SERVICE_URL=https://order-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_PAYMENT_SERVICE_URL=https://payment-service-484382472654.asia-south1.run.app'
       - '--build-arg'
       - 'NEXT_PUBLIC_PRODUCT_SERVICE_URL=https://product-service-484382472654.asia-south1.run.app'
       - '--build-arg'
-      - 'NEXT_PUBLIC_KYC_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app'
-      - '--build-arg'
-      - 'NEXT_PUBLIC_SELLER_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app'
-      - '--build-arg'
-      - 'NEXT_PUBLIC_FINTECH_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app'
-      - '--build-arg'
-      - 'NEXT_PUBLIC_PAYMENT_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app'
-      - '--build-arg'
-      - 'NEXT_PUBLIC_INVENTORY_SERVICE_URL=https://product-service-484382472654.asia-south1.run.app'
+      - 'NEXT_PUBLIC_INVENTORY_SERVICE_URL=https://inventory-service-484382472654.asia-south1.run.app'
       - '--build-arg'
       - 'NEXT_PUBLIC_AI_SERVICE_URL=https://product-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_PROMOTION_SERVICE_URL=https://promotion-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_NOTIFICATION_SERVICE_URL=https://notification-service-484382472654.asia-south1.run.app'
       - '.'
     id: 'build-web'
 
-  # Push images
+  # Push images (in parallel)
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/auth-service:$SHORT_SHA']
     id: 'push-auth'
     waitFor: ['build-auth']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/kyc-service:$SHORT_SHA']
+    id: 'push-kyc'
+    waitFor: ['build-kyc']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/seller-service:$SHORT_SHA']
+    id: 'push-seller'
+    waitFor: ['build-seller']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/fintech-service:$SHORT_SHA']
+    id: 'push-fintech'
+    waitFor: ['build-fintech']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/payment-service:$SHORT_SHA']
+    id: 'push-payment'
+    waitFor: ['build-payment']
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/product-service:$SHORT_SHA']
     id: 'push-product'
@@ -78,31 +153,45 @@ steps:
     id: 'push-order'
     waitFor: ['build-order']
   - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/inventory-service:$SHORT_SHA']
+    id: 'push-inventory'
+    waitFor: ['build-inventory']
+  - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/web:$SHORT_SHA']
     id: 'push-web'
     waitFor: ['build-web']
 
-  # Deploy to asia-south1
+  # Deploy all services to asia-south1
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        gcloud run deploy auth-service --image gcr.io/$PROJECT_ID/auth-service:$SHORT_SHA --region asia-south1 --platform managed --quiet
-        gcloud run deploy product-service --image gcr.io/$PROJECT_ID/product-service:$SHORT_SHA --region asia-south1 --platform managed --quiet
-        gcloud run deploy order-service --image gcr.io/$PROJECT_ID/order-service:$SHORT_SHA --region asia-south1 --platform managed --quiet
-        gcloud run deploy web --image gcr.io/$PROJECT_ID/web:$SHORT_SHA --region asia-south1 --platform managed --quiet
+        gcloud run deploy auth-service --image gcr.io/$PROJECT_ID/auth-service:$SHORT_SHA --region asia-south1 --platform managed --allow-unauthenticated --quiet
+        gcloud run deploy kyc-service --image gcr.io/$PROJECT_ID/kyc-service:$SHORT_SHA --region asia-south1 --platform managed --allow-unauthenticated --quiet
+        gcloud run deploy seller-service --image gcr.io/$PROJECT_ID/seller-service:$SHORT_SHA --region asia-south1 --platform managed --allow-unauthenticated --quiet
+        gcloud run deploy fintech-service --image gcr.io/$PROJECT_ID/fintech-service:$SHORT_SHA --region asia-south1 --platform managed --allow-unauthenticated --quiet
+        gcloud run deploy payment-service --image gcr.io/$PROJECT_ID/payment-service:$SHORT_SHA --region asia-south1 --platform managed --allow-unauthenticated --quiet
+        gcloud run deploy product-service --image gcr.io/$PROJECT_ID/product-service:$SHORT_SHA --region asia-south1 --platform managed --allow-unauthenticated --quiet
+        gcloud run deploy order-service --image gcr.io/$PROJECT_ID/order-service:$SHORT_SHA --region asia-south1 --platform managed --allow-unauthenticated --quiet
+        gcloud run deploy inventory-service --image gcr.io/$PROJECT_ID/inventory-service:$SHORT_SHA --region asia-south1 --platform managed --allow-unauthenticated --quiet
+        gcloud run deploy web --image gcr.io/$PROJECT_ID/web:$SHORT_SHA --region asia-south1 --platform managed --allow-unauthenticated --quiet
     id: 'deploy'
-    waitFor: ['push-auth', 'push-product', 'push-order', 'push-web']
+    waitFor: ['push-auth', 'push-kyc', 'push-seller', 'push-fintech', 'push-payment', 'push-product', 'push-order', 'push-inventory', 'push-web']
 
 images:
   - 'gcr.io/$PROJECT_ID/auth-service:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/kyc-service:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/seller-service:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/fintech-service:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/payment-service:$SHORT_SHA'
   - 'gcr.io/$PROJECT_ID/product-service:$SHORT_SHA'
   - 'gcr.io/$PROJECT_ID/order-service:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/inventory-service:$SHORT_SHA'
   - 'gcr.io/$PROJECT_ID/web:$SHORT_SHA'
 
 options:
   logging: CLOUD_LOGGING_ONLY
   machineType: 'E2_HIGHCPU_8'
 
-timeout: '2400s'
+timeout: '3600s'

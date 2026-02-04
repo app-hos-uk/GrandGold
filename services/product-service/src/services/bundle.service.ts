@@ -1,9 +1,48 @@
 import { generateId, NotFoundError, ValidationError } from '@grandgold/utils';
 import type { Country } from '@grandgold/types';
-import Redis from 'ioredis';
+import { getRedis } from '../lib/redis';
 import { ProductService } from './product.service';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Helper functions for graceful Redis operations
+async function redisGet(key: string): Promise<string | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    return await redis.get(key);
+  } catch {
+    return null;
+  }
+}
+
+async function redisSetex(key: string, ttl: number, value: string): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.setex(key, ttl, value);
+  } catch {
+    // Cache failed
+  }
+}
+
+async function redisSadd(key: string, member: string): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.sadd(key, member);
+  } catch {
+    // Cache failed
+  }
+}
+
+async function redisKeys(pattern: string): Promise<string[]> {
+  const redis = getRedis();
+  if (!redis) return [];
+  try {
+    return await redis.keys(pattern);
+  } catch {
+    return [];
+  }
+}
 const BUNDLE_PREFIX = 'product_bundle:';
 const TTL = 60 * 60 * 24 * 365;
 const productService = new ProductService();
@@ -57,8 +96,8 @@ export class BundleService {
       updatedAt: new Date().toISOString(),
     };
 
-    await redis.setex(`${BUNDLE_PREFIX}${id}`, TTL, JSON.stringify(bundle));
-    await redis.sadd(`bundles:${input.sellerId}`, id);
+    await redisSetex(`${BUNDLE_PREFIX}${id}`, TTL, JSON.stringify(bundle));
+    await redisSadd(`bundles:${input.sellerId}`, id);
 
     return bundle;
   }
@@ -67,7 +106,7 @@ export class BundleService {
    * Get bundle with products
    */
   async getBundle(bundleId: string, country?: Country): Promise<any> {
-    const data = await redis.get(`${BUNDLE_PREFIX}${bundleId}`);
+    const data = await redisGet(`${BUNDLE_PREFIX}${bundleId}`);
     if (!data) throw new NotFoundError('Bundle');
 
     const bundle = JSON.parse(data);
@@ -103,11 +142,11 @@ export class BundleService {
    * Get bundles for product
    */
   async getBundlesForProduct(productId: string, country?: Country): Promise<ProductBundle[]> {
-    const keys = await redis.keys(`${BUNDLE_PREFIX}*`);
+    const keys = await redisKeys(`${BUNDLE_PREFIX}*`);
     const bundles: ProductBundle[] = [];
 
     for (const key of keys) {
-      const data = await redis.get(key);
+      const data = await redisGet(key);
       if (data) {
         const b = JSON.parse(data);
         if (b.productIds.includes(productId) && b.isActive) {
@@ -129,7 +168,7 @@ export class BundleService {
     sellerId: string,
     updates: Partial<ProductBundle>
   ): Promise<ProductBundle> {
-    const data = await redis.get(`${BUNDLE_PREFIX}${bundleId}`);
+    const data = await redisGet(`${BUNDLE_PREFIX}${bundleId}`);
     if (!data) throw new NotFoundError('Bundle');
 
     const bundle = JSON.parse(data);
@@ -138,7 +177,7 @@ export class BundleService {
     }
 
     const updated = { ...bundle, ...updates, updatedAt: new Date().toISOString() };
-    await redis.setex(`${BUNDLE_PREFIX}${bundleId}`, TTL, JSON.stringify(updated));
+    await redisSetex(`${BUNDLE_PREFIX}${bundleId}`, TTL, JSON.stringify(updated));
 
     return updated;
   }

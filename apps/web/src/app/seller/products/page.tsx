@@ -61,6 +61,13 @@ export default function SellerProductsPage() {
           <p className="text-gray-600">Manage your product listings</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/seller/products/bulk"
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Bulk Upload
+          </Link>
           <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
             <Download className="w-4 h-4" />
             Export

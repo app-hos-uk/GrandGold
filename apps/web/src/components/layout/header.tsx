@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { MiniCart } from '@/components/cart/mini-cart';
 import { useWishlist } from '@/contexts/wishlist-context';
+import { Logo } from '@/components/brand/logo';
 
 interface HeaderProps {
   country: 'in' | 'ae' | 'uk';
@@ -82,14 +83,7 @@ export function Header({ country }: HeaderProps) {
           </button>
 
           {/* Logo */}
-          <Link href={`/${country}`} className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-gold rounded-full flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-display text-2xl font-semibold text-gray-900">
-              Grand<span className="text-gold-500">Gold</span>
-            </span>
-          </Link>
+          <Logo href={`/${country}`} className="h-10 w-auto" variant="light" />
 
           {/* Desktop navigation */}
           <nav className="hidden lg:flex items-center gap-8">

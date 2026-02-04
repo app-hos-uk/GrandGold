@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Mail, Lock, Loader2, Sparkles, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { authApi, ApiError } from '@/lib/api';
+import { Logo } from '@/components/brand/logo';
 
 const ADMIN_ROLES = ['super_admin', 'country_admin'];
 
@@ -54,8 +55,8 @@ export default function AdminLoginPage() {
       >
         <div className="bg-white rounded-2xl shadow-lg border border-cream-200 overflow-hidden">
           <div className="bg-[#0F0F0F] px-6 py-8 text-center">
-            <div className="w-14 h-14 bg-gradient-gold rounded-xl flex items-center justify-center mx-auto mb-4 shadow-gold">
-              <ShieldCheck className="w-7 h-7 text-white" />
+            <div className="flex justify-center mb-4">
+              <Logo className="h-14 w-auto" variant="dark" />
             </div>
             <h1 className="text-2xl font-display font-semibold text-white">Admin sign in</h1>
             <p className="text-gray-400 mt-1">GrandGold Admin Panel</p>

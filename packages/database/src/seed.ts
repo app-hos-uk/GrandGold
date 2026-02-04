@@ -14,9 +14,30 @@
  *   - Access all admin features without geographic limits
  */
 
-import { hashPassword, generateId } from '@grandgold/utils';
+import bcrypt from 'bcryptjs';
+import { nanoid } from 'nanoid';
 import { createUser, findUserByEmail } from './queries/users';
 import { closeDatabaseConnection } from './client';
+
+const SALT_ROUNDS = 12;
+async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, SALT_ROUNDS);
+}
+function generateId(prefix?: string): string {
+  const id = nanoid();
+  return prefix ? `${prefix}_${id}` : id;
+}
+
+const PLACEHOLDER_PATTERNS = /\.\.\.|@(HOST|USER|PASSWORD|DATABASE)([:/]|$)/i;
+function requireRealDatabaseUrl(): void {
+  const url = process.env.DATABASE_URL;
+  if (!url || PLACEHOLDER_PATTERNS.test(url)) {
+    console.error('DATABASE_URL must be your real PostgreSQL connection string.');
+    console.error('Do not use placeholders like "...", "HOST", "USER", "PASSWORD", or "DATABASE".');
+    console.error('Example (local): DATABASE_URL="postgresql://postgres:password@localhost:5432/grandgold_dev" pnpm db:seed');
+    process.exit(1);
+  }
+}
 
 const SUPER_ADMIN_EMAIL = 'mail@jsabu.com';
 const SUPER_ADMIN_PASSWORD = 'Admin@1234';
@@ -24,6 +45,7 @@ const SUPER_ADMIN_FIRST_NAME = 'Sabuj';
 const SUPER_ADMIN_LAST_NAME = 'Anchuparayil';
 
 async function seedSuperAdmin(): Promise<void> {
+  requireRealDatabaseUrl();
   const existing = await findUserByEmail(SUPER_ADMIN_EMAIL);
   if (existing) {
     console.log(`Super admin already exists: ${SUPER_ADMIN_EMAIL}`);

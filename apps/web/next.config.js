@@ -76,6 +76,8 @@ const nextConfig = {
     const orderUrl = process.env.NEXT_PUBLIC_ORDER_SERVICE_URL || 'http://localhost:4004';
     const paymentUrl = process.env.NEXT_PUBLIC_PAYMENT_SERVICE_URL || 'http://localhost:4005';
     const productUrl = process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL || 'http://localhost:4007';
+    const promotionUrl = process.env.NEXT_PUBLIC_PROMOTION_SERVICE_URL || 'http://localhost:4010';
+    const notificationSendUrl = process.env.NEXT_PUBLIC_NOTIFICATION_SERVICE_URL || 'http://localhost:4011';
     const inventoryUrl = process.env.NEXT_PUBLIC_INVENTORY_SERVICE_URL || 'http://localhost:4008';
     const aiUrl = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:4009';
     const kycUrl = process.env.NEXT_PUBLIC_KYC_SERVICE_URL || 'http://localhost:4006';
@@ -100,6 +102,7 @@ const nextConfig = {
       { source: '/api/products', destination: `${productUrl}/api/products` },
       { source: '/api/collections/:path*', destination: `${productUrl}/api/collections/:path*` },
       { source: '/api/search/:path*', destination: `${productUrl}/api/search/:path*` },
+      { source: '/api/influencers', destination: `${productUrl}/api/influencers` },
       { source: '/api/influencers/:path*', destination: `${productUrl}/api/influencers/:path*` },
       { source: '/api/wishlist/:path*', destination: `${productUrl}/api/wishlist/:path*` },
       { source: '/api/wishlist', destination: `${productUrl}/api/wishlist` },
@@ -110,6 +113,9 @@ const nextConfig = {
       { source: '/api/payments/:path*', destination: `${paymentUrl}/api/payments/:path*` },
       { source: '/api/ai/:path*', destination: `${aiUrl}/api/ai/:path*` },
       { source: '/api/ai', destination: `${aiUrl}/api/ai` },
+      { source: '/api/promotions/:path*', destination: `${promotionUrl}/api/promotions/:path*` },
+      { source: '/api/promotions', destination: `${promotionUrl}/api/promotions` },
+      { source: '/api/notify/:path*', destination: `${notificationSendUrl}/api/notifications/:path*` },
     ];
   },
 };

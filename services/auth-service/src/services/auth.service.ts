@@ -20,7 +20,7 @@ import {
   verifyEmail as verifyUserEmail,
   verifyPhone as verifyUserPhone,
 } from '@grandgold/database';
-import type { RegisterRequest, LoginRequest, MfaVerifyRequest, LoginResponse, TokenPair, JwtPayload, Country } from '@grandgold/types';
+import type { RegisterRequest, LoginRequest, MfaVerifyRequest, LoginResponse, TokenPair, JwtPayload, Country, UserRole, KycStatus } from '@grandgold/types';
 import { SessionService } from './session.service';
 import { RedisService } from './redis.service';
 
@@ -336,7 +336,7 @@ export class AuthService {
 
   // Private helper methods
 
-  private async createSessionAndTokens(user: { id: string; email: string; role: string; tenantId?: string; country: Country }, context: LoginContext): Promise<TokenPair> {
+  private async createSessionAndTokens(user: { id: string; email: string; role: UserRole; tenantId?: string | null; country: Country }, context: LoginContext): Promise<TokenPair> {
     const tokens = generateTokenPair({
       sub: user.id,
       email: user.email,
@@ -362,35 +362,41 @@ export class AuthService {
     email: string;
     firstName: string;
     lastName: string;
-    phone: string;
-    avatar?: string;
-    role: string;
+    phone: string | null;
+    avatar?: string | null;
+    role: UserRole;
     country: Country;
-    tenantId?: string;
+    tenantId?: string | null;
     mfaEnabled: boolean;
     emailVerified: boolean;
     phoneVerified: boolean;
-    kycStatus?: string;
+    kycStatus?: string | null;
   }) {
+    // Map kycStatus to valid KycStatus type, defaulting to 'none'
+    const validKycStatuses: KycStatus[] = ['none', 'pending', 'tier1', 'tier2', 'rejected', 'verified', 'not_started'];
+    const kycStatus: KycStatus = validKycStatuses.includes(user.kycStatus as KycStatus)
+      ? (user.kycStatus as KycStatus)
+      : 'none';
+
     return {
       id: user.id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      phone: user.phone,
-      avatar: user.avatar,
+      phone: user.phone ?? undefined,
+      avatar: user.avatar ?? undefined,
       role: user.role,
       country: user.country,
-      tenantId: user.tenantId,
+      tenantId: user.tenantId ?? undefined,
       permissions: this.getUserPermissions(user.role),
       mfaEnabled: user.mfaEnabled,
       emailVerified: user.emailVerified,
       phoneVerified: user.phoneVerified,
-      kycStatus: user.kycStatus,
+      kycStatus,
     };
   }
 
-  private getUserPermissions(role: string): string[] {
+  private getUserPermissions(role: UserRole): string[] {
     const permissionsByRole: Record<string, string[]> = {
       super_admin: ['*'],
       country_admin: ['users:read', 'users:write', 'orders:*', 'products:*', 'sellers:*'],

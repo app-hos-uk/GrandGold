@@ -60,7 +60,7 @@ app.use('/api/kyc/aml', amlRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-const PORT = parseInt(process.env.PORT || '4005');
+const PORT = parseInt(process.env.PORT || '4006');
 
 app.listen(PORT, () => {
   logger.info(`KYC service started on port ${PORT}`);

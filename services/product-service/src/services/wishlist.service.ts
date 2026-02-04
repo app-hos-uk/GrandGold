@@ -1,13 +1,11 @@
 import type { Country } from '@grandgold/types';
-import Redis from 'ioredis';
+import { getRedis } from '../lib/redis';
 import type { Product, WishlistWithProducts } from '../types/product.types';
 
 interface WishlistItem {
   productId: string;
   addedAt: string;
 }
-
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 const WISHLIST_PREFIX = 'wishlist:';
 const WISHLIST_TTL = 60 * 60 * 24 * 365; // 1 year
@@ -25,8 +23,16 @@ export class WishlistService {
     country: Country,
     productDetails?: (productIds: string[]) => Promise<Product[]>
   ): Promise<WishlistWithProducts> {
+    const redis = getRedis();
+    if (!redis) return { items: [] };
+    
     const key = this.getKey(userId, country);
-    const data = await redis.get(key);
+    let data: string | null = null;
+    try {
+      data = await redis.get(key);
+    } catch {
+      return { items: [] };
+    }
 
     if (!data) {
       return { items: [] };
@@ -51,8 +57,16 @@ export class WishlistService {
     productId: string,
     country: Country
   ): Promise<{ added: boolean; count: number }> {
+    const redis = getRedis();
+    if (!redis) return { added: false, count: 0 };
+    
     const key = this.getKey(userId, country);
-    const data = await redis.get(key);
+    let data: string | null = null;
+    try {
+      data = await redis.get(key);
+    } catch {
+      // Redis unavailable
+    }
     const items: WishlistItem[] = data ? JSON.parse(data) : [];
 
     const exists = items.some((i) => i.productId === productId);
@@ -65,7 +79,11 @@ export class WishlistService {
       addedAt: new Date().toISOString(),
     });
 
-    await redis.setex(key, WISHLIST_TTL, JSON.stringify(items));
+    try {
+      await redis.setex(key, WISHLIST_TTL, JSON.stringify(items));
+    } catch {
+      // Cache failed
+    }
     return { added: true, count: items.length };
   }
 
@@ -77,8 +95,16 @@ export class WishlistService {
     productId: string,
     country: Country
   ): Promise<{ removed: boolean; count: number }> {
+    const redis = getRedis();
+    if (!redis) return { removed: false, count: 0 };
+    
     const key = this.getKey(userId, country);
-    const data = await redis.get(key);
+    let data: string | null = null;
+    try {
+      data = await redis.get(key);
+    } catch {
+      return { removed: false, count: 0 };
+    }
 
     if (!data) {
       return { removed: false, count: 0 };
@@ -92,12 +118,16 @@ export class WishlistService {
       return { removed: false, count: initialCount };
     }
 
-    if (filtered.length === 0) {
-      await redis.del(key);
-      return { removed: true, count: 0 };
-    }
+    try {
+      if (filtered.length === 0) {
+        await redis.del(key);
+        return { removed: true, count: 0 };
+      }
 
-    await redis.setex(key, WISHLIST_TTL, JSON.stringify(filtered));
+      await redis.setex(key, WISHLIST_TTL, JSON.stringify(filtered));
+    } catch {
+      // Cache operation failed
+    }
     return { removed: true, count: filtered.length };
   }
 
@@ -109,8 +139,16 @@ export class WishlistService {
     productId: string,
     country: Country
   ): Promise<boolean> {
+    const redis = getRedis();
+    if (!redis) return false;
+    
     const key = this.getKey(userId, country);
-    const data = await redis.get(key);
+    let data: string | null = null;
+    try {
+      data = await redis.get(key);
+    } catch {
+      return false;
+    }
 
     if (!data) return false;
 
@@ -134,8 +172,16 @@ export class WishlistService {
     productIds: string[],
     country: Country
   ): Promise<{ added: number; count: number }> {
+    const redis = getRedis();
+    if (!redis) return { added: 0, count: 0 };
+    
     const key = this.getKey(userId, country);
-    const data = await redis.get(key);
+    let data: string | null = null;
+    try {
+      data = await redis.get(key);
+    } catch {
+      // Redis unavailable
+    }
     const items: WishlistItem[] = data ? JSON.parse(data) : [];
     const existingIds = new Set(items.map((i) => i.productId));
 
@@ -152,7 +198,11 @@ export class WishlistService {
     }
 
     if (added > 0) {
-      await redis.setex(key, WISHLIST_TTL, JSON.stringify(items));
+      try {
+        await redis.setex(key, WISHLIST_TTL, JSON.stringify(items));
+      } catch {
+        // Cache failed
+      }
     }
 
     return { added, count: items.length };

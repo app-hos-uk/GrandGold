@@ -2,7 +2,64 @@ import { generateId, NotFoundError, ValidationError } from '@grandgold/utils';
 import type { Country } from '@grandgold/types';
 import Redis from 'ioredis';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+let redisClient: Redis | null = null;
+
+/** Lazy Redis client so startup is not blocked if Redis is unavailable (e.g. Cloud Run without REDIS_URL). */
+function getRedis(): Redis | null {
+  if (redisClient) return redisClient;
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  try {
+    redisClient = new Redis(url, {
+      maxRetriesPerRequest: 2,
+      retryStrategy: (times) => (times <= 2 ? 500 : null),
+      lazyConnect: true,
+    });
+  } catch {
+    return null;
+  }
+  return redisClient;
+}
+
+async function redisGet(key: string): Promise<string | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    return await redis.get(key);
+  } catch {
+    return null;
+  }
+}
+
+async function redisSetex(key: string, ttl: number, value: string): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.setex(key, ttl, value);
+  } catch {
+    // no-op
+  }
+}
+
+async function redisDel(key: string): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.del(key);
+  } catch {
+    // no-op
+  }
+}
+
+async function redisKeys(pattern: string): Promise<string[]> {
+  const redis = getRedis();
+  if (!redis) return [];
+  try {
+    return await redis.keys(pattern);
+  } catch {
+    return [];
+  }
+}
 
 const STOCK_PREFIX = 'stock:';
 const RESERVATION_PREFIX = 'stock_reservation:';
@@ -36,7 +93,7 @@ export class InventoryService {
    * Get stock for product
    */
   async getStock(productId: string): Promise<StockRecord | null> {
-    const data = await redis.get(`${STOCK_PREFIX}${productId}`);
+    const data = await redisGet(`${STOCK_PREFIX}${productId}`);
     return data ? JSON.parse(data) : null;
   }
 
@@ -65,7 +122,7 @@ export class InventoryService {
       updatedAt: new Date().toISOString(),
     };
 
-    await redis.setex(
+    await redisSetex(
       `${STOCK_PREFIX}${productId}`,
       TTL,
       JSON.stringify(record)
@@ -109,7 +166,7 @@ export class InventoryService {
       expiresAt: expiresAt.toISOString(),
     };
 
-    await redis.setex(
+    await redisSetex(
       `${RESERVATION_PREFIX}${reservationId}`,
       15 * 60,
       JSON.stringify(reservation)
@@ -117,7 +174,7 @@ export class InventoryService {
 
     stock.reservedQuantity += quantity;
     stock.updatedAt = new Date().toISOString();
-    await redis.setex(
+    await redisSetex(
       `${STOCK_PREFIX}${productId}`,
       TTL,
       JSON.stringify(stock)
@@ -130,7 +187,7 @@ export class InventoryService {
    * Release reservation
    */
   async releaseReservation(reservationId: string): Promise<void> {
-    const data = await redis.get(`${RESERVATION_PREFIX}${reservationId}`);
+    const data = await redisGet(`${RESERVATION_PREFIX}${reservationId}`);
     if (!data) return;
 
     const reservation: StockReservation = JSON.parse(data);
@@ -142,14 +199,14 @@ export class InventoryService {
         stock.reservedQuantity - reservation.quantity
       );
       stock.updatedAt = new Date().toISOString();
-      await redis.setex(
+      await redisSetex(
         `${STOCK_PREFIX}${reservation.productId}`,
         TTL,
         JSON.stringify(stock)
       );
     }
 
-    await redis.del(`${RESERVATION_PREFIX}${reservationId}`);
+    await redisDel(`${RESERVATION_PREFIX}${reservationId}`);
   }
 
   /**
@@ -162,7 +219,7 @@ export class InventoryService {
     const available = stock.quantity - stock.reservedQuantity;
     if (available <= stock.lowStockThreshold && available >= 0) {
       const alertKey = `${ALERT_PREFIX}${productId}`;
-      await redis.setex(
+      await redisSetex(
         alertKey,
         TTL,
         JSON.stringify({
@@ -180,10 +237,10 @@ export class InventoryService {
    * Get low stock alerts for seller
    */
   async getLowStockAlerts(sellerId: string): Promise<any[]> {
-    const keys = await redis.keys(`${ALERT_PREFIX}*`);
+    const keys = await redisKeys(`${ALERT_PREFIX}*`);
     const alerts = [];
     for (const key of keys) {
-      const data = await redis.get(key);
+      const data = await redisGet(key);
       if (data) {
         const alert = JSON.parse(data);
         if (alert.sellerId === sellerId) {

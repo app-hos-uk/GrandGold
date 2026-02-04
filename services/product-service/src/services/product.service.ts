@@ -10,7 +10,35 @@ import type {
   PaginatedResult,
 } from '../types/product.types';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Lazy Redis initialization to prevent startup errors in Cloud Run
+let redisClient: Redis | null = null;
+let redisInitialized = false;
+
+function getRedis(): Redis | null {
+  if (redisInitialized) return redisClient;
+  redisInitialized = true;
+  
+  const url = process.env.REDIS_URL;
+  if (!url || url.includes('localhost') || url.includes('127.0.0.1')) {
+    console.warn('[product-service] Redis not configured. Product caching disabled.');
+    return null;
+  }
+  
+  try {
+    redisClient = new Redis(url, {
+      maxRetriesPerRequest: 2,
+      retryStrategy: (times) => (times <= 2 ? 500 : null),
+      lazyConnect: true,
+      enableOfflineQueue: false,
+    });
+    redisClient.on('error', (err) => {
+      console.error('[product-service] Redis error:', err.message);
+    });
+  } catch {
+    redisClient = null;
+  }
+  return redisClient;
+}
 
 // Initialize Meilisearch
 const meilisearch = new MeiliSearch({
@@ -52,8 +80,15 @@ export class ProductService {
       updatedAt: new Date(),
     };
 
-    // Store in Redis
-    await redis.hset('products', productId, JSON.stringify(product));
+    // Store in Redis (optional caching)
+    const redis = getRedis();
+    if (redis) {
+      try {
+        await redis.hset('products', productId, JSON.stringify(product));
+      } catch {
+        // Caching failed, continue without cache
+      }
+    }
 
     // Index in Meilisearch
     await productIndex.addDocuments([product]);
@@ -65,9 +100,27 @@ export class ProductService {
    * Get product by ID
    */
   async getProduct(productId: string, country?: Country): Promise<any> {
-    const data = await redis.hget('products', productId);
+    const redis = getRedis();
+    let data: string | null = null;
+    
+    if (redis) {
+      try {
+        data = await redis.hget('products', productId);
+      } catch {
+        // Redis unavailable, will try Meilisearch
+      }
+    }
 
+    // Fallback to Meilisearch if Redis miss or unavailable
     if (!data) {
+      try {
+        const doc = await productIndex.getDocument(productId);
+        if (doc) {
+          return doc;
+        }
+      } catch {
+        // Not found in Meilisearch either
+      }
       throw new NotFoundError('Product');
     }
 
@@ -97,7 +150,14 @@ export class ProductService {
       updatedAt: new Date(),
     };
 
-    await redis.hset('products', productId, JSON.stringify(updated));
+    const redis = getRedis();
+    if (redis) {
+      try {
+        await redis.hset('products', productId, JSON.stringify(updated));
+      } catch {
+        // Caching failed, continue
+      }
+    }
     await productIndex.updateDocuments([updated]);
 
     return updated;
@@ -113,7 +173,14 @@ export class ProductService {
       throw new ValidationError('Unauthorized');
     }
 
-    await redis.hdel('products', productId);
+    const redis = getRedis();
+    if (redis) {
+      try {
+        await redis.hdel('products', productId);
+      } catch {
+        // Cache deletion failed, continue
+      }
+    }
     await productIndex.deleteDocument(productId);
   }
 
@@ -202,22 +269,26 @@ export class ProductService {
   }
 
   /**
-   * List all products (Admin) - no country filter
+   * List all products (Admin) - no country filter. Returns empty on MeiliSearch/network error.
    */
   async listAllProducts(options: ProductListOptions = { page: 1, limit: 50 }): Promise<PaginatedResult<Product>> {
-    const filters: string[] = [];
-    if (options.category) filters.push(`category = ${options.category}`);
-    if (options.status) filters.push(`status = ${options.status}`);
+    try {
+      const filters: string[] = [];
+      if (options.category) filters.push(`category = ${options.category}`);
+      if (options.status) filters.push(`status = ${options.status}`);
 
-    const results = await productIndex.search('', {
-      filter: filters.length > 0 ? filters.join(' AND ') : undefined,
-      limit: options.limit,
-      offset: (options.page - 1) * options.limit,
-    });
+      const results = await productIndex.search('', {
+        filter: filters.length > 0 ? filters.join(' AND ') : undefined,
+        limit: options.limit,
+        offset: (options.page - 1) * options.limit,
+      });
 
-    return {
-      data: results.hits as Product[],
-      total: results.estimatedTotalHits || 0,
-    };
+      return {
+        data: (results.hits || []) as Product[],
+        total: results.estimatedTotalHits || 0,
+      };
+    } catch {
+      return { data: [], total: 0 };
+    }
   }
 }

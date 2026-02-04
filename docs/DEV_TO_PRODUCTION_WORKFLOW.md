@@ -25,6 +25,120 @@ This guide walks you through: developing on **Sabuanchuparayil** GitHub, doing *
 
 ---
 
+## Install and run new services (CLI)
+
+From the repo root (`~/Desktop/GG` or your project path):
+
+### 1. Install dependencies (including promotion & notification services)
+
+```bash
+pnpm install --no-frozen-lockfile
+```
+
+Use `--no-frozen-lockfile` when the lockfile is out of date (e.g. after adding new services).
+
+### 2. Build the new services
+
+```bash
+pnpm build:promotion
+pnpm build:notification
+```
+
+### 3. Run in development (watch mode)
+
+**Promotion service** (port **4010**):
+
+```bash
+pnpm dev:promotion
+```
+
+**Notification service** (port **4011**):
+
+```bash
+pnpm dev:notification
+```
+
+Run each in a separate terminal, or run in the background.
+
+**Expected behavior:** After you see `Promotion service started on port 4010` (or the same for the notification service), the terminal will show **no further output** unless you change code (watch mode) or hit the service. That is normal—the process is running. To confirm, run `curl http://localhost:4010/health` in another terminal.
+
+**If a command seems stuck (e.g. build or install):**
+- **Builds** (`pnpm build:promotion`, `pnpm build:notification`) usually finish in under a minute. If there’s no output for 2–3 minutes, press `Ctrl+C` and run again so you see any TypeScript or compile errors.
+- **Install** (`pnpm install`) can take several minutes on first run; let it run. If it hangs with no output for 10+ minutes, check your network or try `pnpm install --no-frozen-lockfile 2>&1` to capture all output.
+
+### 4. Run built services (production mode)
+
+After `pnpm build:promotion` and `pnpm build:notification`, run **one command per terminal** (do not paste comments after the command—the shell will pass them as arguments and break the script):
+
+**Terminal 1** (promotion, port 4010):
+
+```bash
+pnpm start:promotion
+```
+
+**Terminal 2** (notification, port 4011):
+
+```bash
+pnpm start:notification
+```
+
+You should see one line per terminal (`Promotion service started on port 4010` / `Notification service started on port 4011`). The terminal will then show no further output and stay “busy”—that means the process is running. Do not close those terminals while you need the services. To verify, open a **third** terminal and run the health checks below.
+
+### 5. Health checks
+
+```bash
+curl http://localhost:4010/health
+curl http://localhost:4011/health
+```
+
+### 6. Run the web app (and order service for cart)
+
+The web app proxies several backend services. If you only run the web app, you may see **`ECONNREFUSED`** for `/api/cart/session` because the **order service** (port **4004**) is not running. To fix:
+
+**Start the order service** in another terminal (cart, checkout, orders):
+
+```bash
+pnpm dev:order
+```
+
+Or after building: `pnpm start:order`. Then (re)load the site at http://localhost:3000. For full storefront (auth, products, cart, etc.) you may need more services (auth 4001, product 4007, etc.); run `pnpm dev` from the repo root to start all apps and services, or start only the ones you need.
+
+### 8. Web app proxy
+
+Ensure `apps/web` has rewrites for the new services (already in `next.config.js`):
+
+- `/api/promotions/*` → promotion service (default `http://localhost:4010`)
+- `/api/notify/*` → notification service (default `http://localhost:4011`)
+
+Set in `.env.local` if using different hosts/ports:
+
+```bash
+NEXT_PUBLIC_PROMOTION_SERVICE_URL=http://localhost:4010
+NEXT_PUBLIC_NOTIFICATION_SERVICE_URL=http://localhost:4011
+```
+
+### 9. Port already in use (EADDRINUSE)
+
+If you see `Error: listen EADDRINUSE: address already in use :::4010` (or 4011), a previous run is still using the port. Free both ports in one go:
+
+```bash
+kill $(lsof -t -i :4010 -i :4011) 2>/dev/null; echo "Ports 4010 and 4011 freed."
+```
+
+Then run **only** (no text after the command):
+
+```bash
+pnpm start:promotion
+```
+
+and in another terminal:
+
+```bash
+pnpm start:notification
+```
+
+---
+
 ## Phase 1: Use Sabuanchuparayil GitHub for Development
 
 ### Option A: Create a new repo under your account (recommended)
@@ -111,9 +225,14 @@ This builds and deploys auth, seller, fintech, order, payment services to Cloud 
 
 ### 2.5 Deploy the web app (for full live test)
 
+The web app **rewrites** `/api/*` to backend services. Those URLs are **baked in at build time**. So you must build the web with the correct backend URLs (e.g. use `infrastructure/gcp/cloudbuild-web.yaml`), and deploy all backend services first. Otherwise production will show **401** (auth), **404** (wrong or missing backend), or **500** (backend error). See [runbooks/09-production-401-404-500.md](runbooks/09-production-401-404-500.md).
+
 ```bash
-# Build and push web image
-gcloud builds submit --tag gcr.io/$GCP_PROJECT_ID/web --timeout=20m .
+# Build web with production backend URLs (recommended)
+gcloud builds submit --config=./infrastructure/gcp/cloudbuild-web.yaml --timeout=20m .
+
+# Or build and push web image only (uses default localhost URLs if no build-args!)
+# gcloud builds submit --tag gcr.io/$GCP_PROJECT_ID/web --timeout=20m .
 
 # Deploy to Cloud Run (pick one region, e.g. asia-south1)
 gcloud run deploy web \

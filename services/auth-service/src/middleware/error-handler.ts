@@ -10,11 +10,20 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  // Log error
+  // Log error (include stack for 500s so GCP logs show root cause)
   if (isOperationalError(err)) {
     logger.warn({ err, path: req.path }, 'Operational error');
   } else {
-    logger.error({ err, path: req.path }, 'Unexpected error');
+    logger.error(
+      {
+        path: req.path,
+        method: req.method,
+        message: err.message,
+        stack: err.stack,
+        name: err.name,
+      },
+      'Unexpected error'
+    );
   }
 
   // Determine status code

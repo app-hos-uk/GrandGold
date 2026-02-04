@@ -14,11 +14,24 @@ interface RefundRow {
   orderId: string;
   userId: string;
   reason: string;
+  reasonCategory?: 'defective' | 'wrong_item' | 'not_as_described' | 'changed_mind' | 'other';
   amount?: number;
+  requestedAmount?: number;
   status: string;
   createdAt?: string;
   customerEmail?: string;
+  preferredResolution?: 'refund' | 'exchange' | 'store_credit';
+  qcStatus?: 'pending' | 'approved' | 'rejected';
+  internalNotes?: string;
 }
+
+const RETURN_REASON_LABELS: Record<string, string> = {
+  defective: 'Defective',
+  wrong_item: 'Wrong item received',
+  not_as_described: 'Not as described',
+  changed_mind: 'Changed mind',
+  other: 'Other',
+};
 
 export default function AdminRefundsPage() {
   const toast = useToast();
@@ -29,6 +42,9 @@ export default function AdminRefundsPage() {
   const [page, setPage] = useState(1);
   const [actioning, setActioning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [approveModal, setApproveModal] = useState<RefundRow | null>(null);
+  const [partialAmount, setPartialAmount] = useState<string>('');
+  const [internalNotes, setInternalNotes] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -49,15 +65,39 @@ export default function AdminRefundsPage() {
     load();
   }, [page]);
 
+  const openApproveModal = (r: RefundRow) => {
+    setApproveModal(r);
+    setPartialAmount(r.amount != null ? String(r.amount) : '');
+    setInternalNotes(r.internalNotes ?? '');
+  };
+
   const handleApprove = async (refundId: string) => {
-    const ok = await confirm({ title: 'Approve refund', message: 'Approve this refund request?', confirmLabel: 'Approve', variant: 'default' });
-    if (!ok) return;
+    const amount = partialAmount ? parseFloat(partialAmount) : undefined;
     setActioning(refundId);
     adminApi
-      .approveRefund(refundId)
-      .then(() => { toast.success('Refund approved'); load(); })
+      .approveRefund(refundId, {
+        partialAmount: amount,
+        internalNotes: internalNotes || undefined,
+      })
+      .then(() => {
+        toast.success(amount != null ? 'Partial refund approved' : 'Refund approved');
+        setApproveModal(null);
+        load();
+      })
       .catch((e: unknown) => setError(e instanceof ApiError ? e.message : 'Approve failed'))
       .finally(() => setActioning(null));
+  };
+
+  const confirmApprove = () => {
+    if (!approveModal) return;
+    const ok = partialAmount
+      ? !isNaN(parseFloat(partialAmount)) && parseFloat(partialAmount) >= 0
+      : true;
+    if (!ok) {
+      toast.error('Enter a valid refund amount');
+      return;
+    }
+    handleApprove(approveModal.id);
   };
 
   const handleReject = async (refundId: string) => {
@@ -131,12 +171,17 @@ export default function AdminRefundsPage() {
                   </td>
                   <td className="px-6 py-4">{r.amount != null ? formatCurrency(Number(r.amount)) : '—'}</td>
                   <td className="px-6 py-4 text-sm text-gray-500">{r.createdAt ? formatRelativeDate(r.createdAt) : '—'}</td>
-                  <td className="px-6 py-4 max-w-xs truncate">{r.reason}</td>
+                  <td className="px-6 py-4">
+                    <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                      {RETURN_REASON_LABELS[r.reasonCategory as keyof typeof RETURN_REASON_LABELS] || r.reasonCategory || 'Other'}
+                    </span>
+                    {r.reason && <p className="text-xs text-gray-500 mt-1 truncate max-w-xs">{r.reason}</p>}
+                  </td>
                   <td className="px-6 py-4 flex gap-2">
                     <button
                       type="button"
                       disabled={!!actioning}
-                      onClick={() => handleApprove(r.id)}
+                      onClick={() => openApproveModal(r)}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded bg-green-100 text-green-700 text-sm hover:bg-green-200 disabled:opacity-50"
                     >
                       {actioning === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
@@ -168,6 +213,48 @@ export default function AdminRefundsPage() {
         )}
       </div>
       {dialog}
+
+      {/* Approve refund modal - partial refund & QC notes */}
+      {approveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setApproveModal(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Approve refund</h3>
+            <p className="text-sm text-gray-500 mb-2">Order: {approveModal.orderId}</p>
+            <p className="text-sm text-gray-500 mb-4">Requested: {approveModal.amount != null ? formatCurrency(Number(approveModal.amount)) : 'Full'}</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Refund amount (₹) — leave empty for full</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={partialAmount}
+                  onChange={(e) => setPartialAmount(e.target.value)}
+                  placeholder={String(approveModal.amount ?? '')}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Internal notes (QC / reason)</label>
+                <textarea
+                  value={internalNotes}
+                  onChange={(e) => setInternalNotes(e.target.value)}
+                  rows={2}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+                  placeholder="Optional"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button type="button" onClick={() => setApproveModal(null)} className="flex-1 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={confirmApprove} disabled={!!actioning} className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center justify-center gap-2">
+                {actioning === approveModal.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

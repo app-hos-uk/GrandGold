@@ -52,6 +52,35 @@ const FALLBACK: AnalyticsData = {
   ],
 };
 
+function exportToCSV(data: AnalyticsData, dateRange: string) {
+  const rows: string[][] = [
+    ['Report', 'Analytics Export', dateRange],
+    [],
+    ['Metric', 'Value'],
+    ['Total Revenue', `₹${(data.metrics.totalRevenue / 10000000).toFixed(2)} Cr`],
+    ['Total Orders', String(data.metrics.totalOrders)],
+    ['Avg Order Value', `₹${data.metrics.avgOrderValue.toLocaleString()}`],
+    ['New Users', String(data.metrics.newUsers)],
+    [],
+    ['Revenue by Month', 'Revenue', 'Orders'],
+    ...data.revenueData.map((d) => [d.month, String(d.revenue), String(d.orders)]),
+    [],
+    ['Category', 'Share %', 'Revenue'],
+    ...data.categoryData.map((d) => [d.name, `${d.value}%`, String(d.revenue)]),
+    [],
+    ['Top Products', 'Sales', 'Revenue'],
+    ...data.topProducts.map((d) => [d.name, String(d.sales), String(d.revenue)]),
+  ];
+  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `analytics-report-${dateRange}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function ReportsPage() {
   const [dateRange, setDateRange] = useState('30days');
   const [data, setData] = useState<AnalyticsData>(FALLBACK);
@@ -97,9 +126,13 @@ export default function ReportsPage() {
             <Calendar className="w-4 h-4" />
             Custom
           </button>
-          <button type="button" className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors">
+          <button
+            type="button"
+            onClick={() => exportToCSV(data, dateRange)}
+            className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors"
+          >
             <Download className="w-4 h-4" />
-            Export Report
+            Export CSV
           </button>
         </div>
       </div>

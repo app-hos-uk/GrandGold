@@ -1,7 +1,26 @@
 import { generateId, NotFoundError, ValidationError } from '@grandgold/utils';
-import Redis from 'ioredis';
+import { getRedis } from '../lib/redis';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Helper functions for graceful Redis operations
+async function redisGet(key: string): Promise<string | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    return await redis.get(key);
+  } catch {
+    return null;
+  }
+}
+
+async function redisSetex(key: string, ttl: number, value: string): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.setex(key, ttl, value);
+  } catch {
+    // Cache failed
+  }
+}
 
 const REVIEW_PREFIX = 'review:';
 const PRODUCT_REVIEWS_PREFIX = 'product_reviews:';
@@ -55,7 +74,7 @@ export class ReviewService {
       createdAt: new Date().toISOString(),
     };
 
-    await redis.setex(
+    await redisSetex(
       `${REVIEW_PREFIX}${reviewId}`,
       REVIEW_TTL,
       JSON.stringify(review)
@@ -63,10 +82,10 @@ export class ReviewService {
 
     // Add to product's review list
     const productKey = `${PRODUCT_REVIEWS_PREFIX}${input.productId}`;
-    const existingData = await redis.get(productKey);
+    const existingData = await redisGet(productKey);
     const reviewIds: string[] = existingData ? JSON.parse(existingData) : [];
     reviewIds.push(reviewId);
-    await redis.setex(
+    await redisSetex(
       productKey,
       REVIEW_TTL,
       JSON.stringify(reviewIds)
@@ -87,7 +106,7 @@ export class ReviewService {
   ): Promise<{ reviews: Review[]; total: number; averageRating: number }> {
     const { page = 1, limit = 10, approvedOnly = true } = options;
     const productKey = `${PRODUCT_REVIEWS_PREFIX}${productId}`;
-    const reviewIdsData = await redis.get(productKey);
+    const reviewIdsData = await redisGet(productKey);
 
     if (!reviewIdsData) {
       const stats = await this.getProductReviewStats(productId);
@@ -98,7 +117,7 @@ export class ReviewService {
     const allReviews: Review[] = [];
 
     for (const id of reviewIds) {
-      const data = await redis.get(`${REVIEW_PREFIX}${id}`);
+      const data = await redisGet(`${REVIEW_PREFIX}${id}`);
       if (data) {
         const review = JSON.parse(data);
         if (!approvedOnly || review.isApproved) {
@@ -138,13 +157,13 @@ export class ReviewService {
   }> {
     const productKey = `${PRODUCT_REVIEWS_PREFIX}${productId}`;
     const statsKey = `product_review_stats:${productId}`;
-    const cached = await redis.get(statsKey);
+    const cached = await redisGet(statsKey);
 
     if (cached) {
       return JSON.parse(cached);
     }
 
-    const reviewIdsData = await redis.get(productKey);
+    const reviewIdsData = await redisGet(productKey);
     if (!reviewIdsData) {
       return {
         averageRating: 0,
@@ -159,7 +178,7 @@ export class ReviewService {
     let count = 0;
 
     for (const id of reviewIds) {
-      const data = await redis.get(`${REVIEW_PREFIX}${id}`);
+      const data = await redisGet(`${REVIEW_PREFIX}${id}`);
       if (data) {
         const review = JSON.parse(data);
         if (review.isApproved) {
@@ -176,7 +195,7 @@ export class ReviewService {
       ratingDistribution: distribution,
     };
 
-    await redis.setex(statsKey, 60 * 60, JSON.stringify(stats)); // Cache 1 hour
+    await redisSetex(statsKey, 60 * 60, JSON.stringify(stats)); // Cache 1 hour
     return stats;
   }
 
@@ -184,19 +203,19 @@ export class ReviewService {
    * Mark review as helpful
    */
   async markHelpful(reviewId: string, userId: string): Promise<{ helpfulCount: number }> {
-    const data = await redis.get(`${REVIEW_PREFIX}${reviewId}`);
+    const data = await redisGet(`${REVIEW_PREFIX}${reviewId}`);
     if (!data) {
       throw new NotFoundError('Review');
     }
 
     const review = JSON.parse(data);
     const helpfulKey = `review_helpful:${reviewId}:${userId}`;
-    const alreadyMarked = await redis.get(helpfulKey);
+    const alreadyMarked = await redisGet(helpfulKey);
 
     if (!alreadyMarked) {
       review.helpfulCount = (review.helpfulCount || 0) + 1;
-      await redis.setex(`${REVIEW_PREFIX}${reviewId}`, REVIEW_TTL, JSON.stringify(review));
-      await redis.setex(helpfulKey, REVIEW_TTL, '1');
+      await redisSetex(`${REVIEW_PREFIX}${reviewId}`, REVIEW_TTL, JSON.stringify(review));
+      await redisSetex(helpfulKey, REVIEW_TTL, '1');
     }
 
     return { helpfulCount: review.helpfulCount };
@@ -205,7 +224,7 @@ export class ReviewService {
   private async updateProductRating(productId: string): Promise<void> {
     const stats = await this.getProductReviewStats(productId);
     const ratingKey = `product_rating:${productId}`;
-    await redis.setex(
+    await redisSetex(
       ratingKey,
       60 * 60,
       JSON.stringify({

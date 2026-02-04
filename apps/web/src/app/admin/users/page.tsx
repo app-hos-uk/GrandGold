@@ -21,6 +21,7 @@ import { authApi, adminApi, ApiError } from '@/lib/api';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { formatRelativeDate } from '@/lib/format';
 import { useToast } from '@/components/admin/toast';
+import { UserDetailModal } from '@/components/admin/user-detail-modal';
 
 interface UserRow {
   id: string;
@@ -77,6 +78,7 @@ export default function UsersPage() {
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [adminCountry, setAdminCountry] = useState<string | null>(null);
   const [roleActioning, setRoleActioning] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
 
   useEffect(() => {
     adminApi
@@ -318,9 +320,14 @@ export default function UsersPage() {
                           {roleActioning === user.id ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Set country admin'}
                         </button>
                       )}
-                      <button type="button" className="p-2 hover:bg-gray-100 rounded-lg" title="View">
-                        <Eye className="w-4 h-4 text-gray-500" />
-                      </button>
+                      <button
+                          type="button"
+                          onClick={() => setSelectedUser(user)}
+                          className="p-2 hover:bg-gray-100 rounded-lg"
+                          title="View"
+                        >
+                          <Eye className="w-4 h-4 text-gray-500" />
+                        </button>
                       <button type="button" className="p-2 hover:bg-gray-100 rounded-lg" title="More">
                         <MoreHorizontal className="w-4 h-4 text-gray-500" />
                       </button>
@@ -351,6 +358,23 @@ export default function UsersPage() {
         </div>
       </div>
 
+      {/* User Detail Modal */}
+      <AnimatePresence>
+        {selectedUser && (
+          <UserDetailModal
+            key="user-detail-modal"
+            user={selectedUser}
+            onClose={() => setSelectedUser(null)}
+            currentUserRole={currentUserRole ?? undefined}
+            onRoleChange={async (userId, role, country) => {
+              await adminApi.setUserRole(userId, role, country);
+              toast.success('Role updated');
+              setPage(1); // refresh list
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Add User Modal */}
       <AnimatePresence>
         {addUserOpen && (
@@ -362,11 +386,19 @@ export default function UsersPage() {
               setError(null);
               setSuccess(null);
               try {
-                await authApi.register({
-                  ...data,
+                const res = await authApi.register({
+                  email: data.email,
+                  password: data.password,
+                  firstName: data.firstName,
+                  lastName: data.lastName,
+                  phone: data.phone,
                   country: data.country as 'IN' | 'AE' | 'UK',
                   acceptedTerms: true,
-                });
+                }) as { data?: { userId?: string; user?: { id?: string } }; userId?: string };
+                const userId = res?.data?.userId ?? res?.data?.user?.id ?? (res as { userId?: string }).userId;
+                if (data.role && data.role !== 'customer' && userId) {
+                  await adminApi.setUserRole(userId, data.role, data.country);
+                }
                 setSuccess('User created successfully. They will receive a verification email.');
                 setTimeout(() => { setAddUserOpen(false); setSuccess(null); }, 2000);
               } catch (err) {
@@ -385,6 +417,14 @@ export default function UsersPage() {
   );
 }
 
+const ADD_USER_ROLES = [
+  { value: 'customer', label: 'Customer' },
+  { value: 'seller', label: 'Seller' },
+  { value: 'staff', label: 'Staff' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'country_admin', label: 'Country Admin' },
+] as const;
+
 function AddUserModal({
   onClose,
   onSubmit,
@@ -393,12 +433,12 @@ function AddUserModal({
   error,
 }: {
   onClose: () => void;
-  onSubmit: (data: { email: string; password: string; firstName: string; lastName: string; phone: string; country: string }) => Promise<void>;
+  onSubmit: (data: { email: string; password: string; firstName: string; lastName: string; phone: string; country: string; role: string }) => Promise<void>;
   submitting: boolean;
   success: string | null;
   error: string | null;
 }) {
-  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', phone: '', country: 'IN' });
+  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', phone: '', country: 'IN', role: 'customer' });
 
   return (
     <motion.div
@@ -453,6 +493,20 @@ function AddUserModal({
                 className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
               />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+            <select
+              value={form.role}
+              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+              aria-label="Select user role"
+            >
+              {ADD_USER_ROLES.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">Assign role for this user. Customer is default.</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>

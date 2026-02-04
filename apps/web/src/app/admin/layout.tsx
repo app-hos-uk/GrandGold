@@ -18,23 +18,43 @@ import {
   Bell,
   Search,
   ChevronDown,
-  Sparkles,
   ShieldCheck,
   Receipt,
   UserPlus,
+  Shield,
+  Boxes,
+  FolderTree,
+  FileText,
+  Wallet,
+  Headphones,
+  Tag,
+  Mail,
+  Truck,
+  Sparkles,
 } from 'lucide-react';
 import { adminApi, authApi, type CurrentUserProfile } from '@/lib/api';
+import { Logo } from '@/components/brand/logo';
 
 const ALL_NAV = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, roles: ['super_admin', 'country_admin'] },
   { name: 'Users', href: '/admin/users', icon: Users, roles: ['super_admin', 'country_admin'] },
+  { name: 'Roles', href: '/admin/roles', icon: Shield, roles: ['super_admin'] },
   { name: 'Orders', href: '/admin/orders', icon: ShoppingCart, roles: ['super_admin', 'country_admin'] },
   { name: 'Products', href: '/admin/products', icon: Package, roles: ['super_admin', 'country_admin'] },
+  { name: 'Categories', href: '/admin/categories', icon: FolderTree, roles: ['super_admin', 'country_admin'] },
+  { name: 'Inventory', href: '/admin/inventory', icon: Boxes, roles: ['super_admin', 'country_admin'] },
   { name: 'Sellers', href: '/admin/sellers', icon: Store, roles: ['super_admin', 'country_admin'] },
+  { name: 'Finance', href: '/admin/finance', icon: Wallet, roles: ['super_admin', 'country_admin'] },
+  { name: 'Promotions', href: '/admin/promotions', icon: Tag, roles: ['super_admin', 'country_admin'] },
+  { name: 'Marketing', href: '/admin/marketing', icon: Mail, roles: ['super_admin', 'country_admin'] },
+  { name: 'Influencer Marketing', href: '/admin/influencers', icon: Sparkles, roles: ['super_admin', 'country_admin'] },
+  { name: 'Support', href: '/admin/support', icon: Headphones, roles: ['super_admin', 'country_admin'] },
   { name: 'KYC', href: '/admin/kyc', icon: ShieldCheck, roles: ['super_admin', 'country_admin'] },
   { name: 'Refunds', href: '/admin/refunds', icon: Receipt, roles: ['super_admin', 'country_admin'] },
   { name: 'Onboarding', href: '/admin/onboarding', icon: UserPlus, roles: ['super_admin', 'country_admin'] },
   { name: 'Reports', href: '/admin/reports', icon: BarChart3, roles: ['super_admin', 'country_admin'] },
+  { name: 'Shipping', href: '/admin/shipping', icon: Truck, roles: ['super_admin', 'country_admin'] },
+  { name: 'Audit Logs', href: '/admin/audit-logs', icon: FileText, roles: ['super_admin'] },
   { name: 'Settings', href: '/admin/settings', icon: Settings, roles: ['super_admin'] },
 ];
 
@@ -120,19 +140,12 @@ export default function AdminLayout({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0F0F0F] transform transition-transform lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0F0F0F] transform transition-transform lg:translate-x-0 flex flex-col ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex items-center justify-between h-16 px-6 border-b border-white/10">
-          <Link href="/admin" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-gold rounded-lg flex items-center justify-center shadow-gold">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-lg font-semibold text-white font-display tracking-wide">
-              Grand<span className="text-gold-400">Gold</span>
-            </span>
-          </Link>
+        <div className="flex items-center justify-between h-16 px-6 border-b border-white/10 flex-shrink-0">
+          <Logo href="/admin" className="h-8 w-auto" variant="dark" />
             <button
             type="button"
             className="lg:hidden text-gray-400 hover:text-white"
@@ -142,11 +155,11 @@ export default function AdminLayout({
           </button>
         </div>
 
-        <div className="px-3 py-4">
-          <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+        <div className="px-3 py-4 flex-1 min-h-0 flex flex-col overflow-hidden">
+          <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex-shrink-0">
             Admin Panel
           </p>
-          <nav className="space-y-1">
+          <nav className="space-y-1 overflow-y-auto flex-1 min-h-0" aria-label="Admin navigation">
             {navigation.map((item) => {
               const isActive =
                 pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
@@ -168,7 +181,7 @@ export default function AdminLayout({
           </nav>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
+        <div className="p-4 border-t border-white/10 flex-shrink-0">
           <button
             type="button"
             className="flex items-center gap-3 w-full px-3 py-2.5 text-gray-400 hover:bg-white/10 hover:text-white rounded-lg transition-colors"

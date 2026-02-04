@@ -82,6 +82,12 @@ app.use(errorHandler);
 // Start server
 const PORT = parseInt(process.env.PORT || '4001');
 
+// In production, DATABASE_URL must be set (e.g. from Secret Manager). Otherwise DB calls fail with 500.
+const dbUrl = process.env.DATABASE_URL || '';
+if (process.env.NODE_ENV === 'production' && (!dbUrl || dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1'))) {
+  logger.warn('DATABASE_URL is not set or points to localhost. Login and other DB operations will fail with 500. Set DATABASE_URL on Cloud Run (e.g. from Secret Manager).');
+}
+
 app.listen(PORT, () => {
   logger.info(`Auth service started on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);

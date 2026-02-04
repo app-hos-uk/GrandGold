@@ -85,6 +85,21 @@ export const api = {
     return handleResponse<T>(res);
   },
 
+  async put<T>(path: string, body: unknown, options?: RequestInit): Promise<T> {
+    const res = await fetch(`${getBaseUrl()}${path}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+        ...(options?.headers as Record<string, string>),
+      },
+      body: JSON.stringify(body),
+      credentials: 'include',
+      ...options,
+    });
+    return handleResponse<T>(res);
+  },
+
   async get<T>(path: string, options?: RequestInit): Promise<T> {
     const res = await fetch(`${getBaseUrl()}${path}`, {
       method: 'GET',
@@ -173,12 +188,30 @@ export const userApi = {
     api.patch<unknown>('/api/user/preferences', { notifications }),
 };
 
-// Influencer
+// Influencer (storefront + admin)
+export interface InfluencerRack {
+  slug: string;
+  name: string;
+  bio: string;
+  productIds?: string[];
+  commissionRate?: number;
+  products?: unknown[];
+}
+
 export const influencerApi = {
   getRack: (slug: string) =>
     api.get<{ data: { rack: { slug: string; name: string; bio: string; products: unknown[] } } }>(`/api/influencers/${slug}/rack`),
   getCommission: (slug: string) =>
     api.get<{ data: { total: number; pending: number; paid: number; orders: number } }>(`/api/influencers/${slug}/commission`),
+  /** List all influencer racks (admin) */
+  listRacks: (): Promise<InfluencerRack[]> =>
+    api.get<{ data: { racks: InfluencerRack[] } }>('/api/influencers').then((d) => d?.data?.racks ?? []),
+  /** Create influencer rack (admin) */
+  createRack: (body: { slug: string; name: string; bio?: string; productIds?: string[]; commissionRate?: number }): Promise<InfluencerRack> =>
+    api.post<{ data: { rack: InfluencerRack } }>('/api/influencers', body).then((d) => d?.data?.rack),
+  /** Update influencer rack (admin) */
+  updateRack: (slug: string, body: { name?: string; bio?: string; productIds?: string[]; commissionRate?: number }): Promise<InfluencerRack> =>
+    api.put<{ data: { rack: InfluencerRack } }>(`/api/influencers/${slug}`, body).then((d) => d?.data?.rack),
 };
 
 // Click & Collect
@@ -261,7 +294,8 @@ export const adminApi = {
     if (params?.limit) q.set('limit', String(params.limit));
     return api.get<{ data: unknown[]; total: number }>(`/api/payments/refunds?${q.toString()}`);
   },
-  approveRefund: (refundId: string) => api.post<unknown>(`/api/payments/refunds/${refundId}/approve`, {}),
+  approveRefund: (refundId: string, body?: { partialAmount?: number; internalNotes?: string }) =>
+    api.post<unknown>(`/api/payments/refunds/${refundId}/approve`, body ?? {}),
   rejectRefund: (refundId: string, reason: string) =>
     api.post<unknown>(`/api/payments/refunds/${refundId}/reject`, { reason }),
   // Seller onboarding (admin)

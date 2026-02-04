@@ -1,3 +1,5 @@
+# Web app build with production backend URLs (API rewrites)
+# Uses same URLs as cloudbuild-ci.yaml; replace 484382472654 with your GCP project number if different.
 steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
@@ -6,6 +8,28 @@ steps:
       - 'gcr.io/$PROJECT_ID/web'
       - '-f'
       - './apps/web/Dockerfile'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_ORDER_SERVICE_URL=https://order-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_PRODUCT_SERVICE_URL=https://product-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_KYC_SERVICE_URL=https://kyc-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_SELLER_SERVICE_URL=https://seller-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_FINTECH_SERVICE_URL=https://fintech-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_PAYMENT_SERVICE_URL=https://payment-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_INVENTORY_SERVICE_URL=https://inventory-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_AI_SERVICE_URL=https://product-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_PROMOTION_SERVICE_URL=https://promotion-service-484382472654.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_NOTIFICATION_SERVICE_URL=https://notification-service-484382472654.asia-south1.run.app'
       - '.'
 
 images:
@@ -13,3 +37,5 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+timeout: '1200s'

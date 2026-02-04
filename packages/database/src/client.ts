@@ -5,12 +5,64 @@ import * as schema from './schema';
 // Connection string from environment
 const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/grandgold_dev';
 
+// Cloud SQL connection name for Unix socket (e.g. project:region:instance)
+// When set, we connect via /cloudsql/PROJECT:REGION:INSTANCE socket
+const cloudSqlConnection = process.env.CLOUD_SQL_CONNECTION_NAME;
+
+// Cloud SQL (and some managed Postgres) may use certs that Node doesn't verify by default.
+// Set DATABASE_SSL_NO_VERIFY=1 only when needed (e.g. Cloud Run → Cloud SQL public IP).
+const sslOption = process.env.DATABASE_SSL_NO_VERIFY === '1' ? { rejectUnauthorized: false } : true;
+
+/**
+ * Parse DATABASE_URL to extract credentials (for Unix socket connections).
+ * Returns { username, password, database } or null if parsing fails.
+ */
+function parseConnectionString(url: string): { username: string; password: string; database: string } | null {
+  try {
+    // Format: postgresql://user:password@host:port/database
+    const match = url.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@[^/]+\/(.+)$/);
+    if (match) {
+      return { username: match[1], password: match[2], database: match[3].split('?')[0] };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Build postgres options
+function buildPostgresOptions(): postgres.Options<Record<string, postgres.PostgresType>> {
+  const isLocalhost = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
+  
+  const options: postgres.Options<Record<string, postgres.PostgresType>> = {
+    max: 10,
+    idle_timeout: 20,
+    connect_timeout: 30,
+    ssl: isLocalhost ? false : (cloudSqlConnection ? false : sslOption),
+  };
+  
+  // If Cloud SQL connection is set, use Unix socket with extracted credentials
+  if (cloudSqlConnection) {
+    const creds = parseConnectionString(connectionString);
+    if (creds) {
+      options.host = `/cloudsql/${cloudSqlConnection}`;
+      options.username = creds.username;
+      options.password = creds.password;
+      options.database = creds.database;
+      console.log(`[DB] Connecting via Cloud SQL socket: ${options.host} to database: ${creds.database}`);
+    } else {
+      console.warn('[DB] Could not parse DATABASE_URL for Cloud SQL socket connection');
+    }
+  }
+  
+  return options;
+}
+
 // Create postgres client
-const client = postgres(connectionString, {
-  max: 10, // connection pool size
-  idle_timeout: 20,
-  connect_timeout: 10,
-});
+// When using Cloud SQL Unix socket, pass empty string to avoid URL host conflict
+const client = cloudSqlConnection 
+  ? postgres(buildPostgresOptions())
+  : postgres(connectionString, buildPostgresOptions());
 
 // Create drizzle instance
 export const db = drizzle(client, { schema });

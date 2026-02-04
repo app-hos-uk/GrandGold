@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Mail, Lock, Loader2, Store, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { authApi, ApiError } from '@/lib/api';
+import { Logo } from '@/components/brand/logo';
 
 export default function SellerLoginPage() {
   const router = useRouter();
@@ -52,8 +53,8 @@ export default function SellerLoginPage() {
       >
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-br from-gold-500 to-gold-700 px-6 py-8 text-center">
-            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <Store className="w-7 h-7 text-white" />
+            <div className="flex justify-center mb-4">
+              <Logo className="h-14 w-auto" variant="dark" />
             </div>
             <h1 className="text-2xl font-display font-semibold text-white">Seller Hub</h1>
             <p className="text-gold-100 mt-1">Sign in to your seller account</p>

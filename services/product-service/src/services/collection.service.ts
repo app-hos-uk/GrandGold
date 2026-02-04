@@ -1,8 +1,7 @@
 import { NotFoundError } from '@grandgold/utils';
 import type { Country } from '@grandgold/types';
-import Redis from 'ioredis';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Note: This service doesn't use Redis currently, just in-memory data
 
 export class CollectionService {
   /**

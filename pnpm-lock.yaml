@@ -132,6 +132,9 @@ importers:
       postcss:
         specifier: ^8.4.33
         version: 8.5.6
+      sharp:
+        specifier: ^0.33.0
+        version: 0.33.5
       tailwindcss:
         specifier: ^3.4.1
         version: 3.4.19(tsx@4.21.0)
@@ -147,13 +150,22 @@ importers:
       '@grandgold/utils':
         specifier: workspace:*
         version: link:../utils
+      bcryptjs:
+        specifier: ^2.4.3
+        version: 2.4.3
       drizzle-orm:
         specifier: ^0.29.3
         version: 0.29.5(@types/react@18.3.27)(better-sqlite3@9.6.0)(knex@2.5.0(better-sqlite3@9.6.0)(pg@8.18.0))(pg@8.18.0)(postgres@3.4.8)(react@18.3.1)
+      nanoid:
+        specifier: ^5.0.4
+        version: 5.1.6
       postgres:
         specifier: ^3.4.3
         version: 3.4.8
     devDependencies:
+      '@types/bcryptjs':
+        specifier: ^2.4.6
+        version: 2.4.6
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.30
@@ -615,6 +627,46 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  services/notification-service:
+    dependencies:
+      '@grandgold/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.6
+      dotenv:
+        specifier: ^16.3.1
+        version: 16.6.1
+      express:
+        specifier: ^4.18.2
+        version: 4.22.1
+      express-rate-limit:
+        specifier: ^7.1.5
+        version: 7.5.1(express@4.22.1)
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      zod:
+        specifier: ^3.22.4
+        version: 3.25.76
+    devDependencies:
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.19
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      tsup:
+        specifier: ^8.0.1
+        version: 8.5.1(@swc/core@1.15.11)(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
   services/order-service:
     dependencies:
       '@grandgold/database':
@@ -833,6 +885,46 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@20.19.30)(jiti@1.21.7)(jsdom@24.1.3)(terser@5.46.0)(tsx@4.21.0)
+
+  services/promotion-service:
+    dependencies:
+      '@grandgold/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.6
+      dotenv:
+        specifier: ^16.3.1
+        version: 16.6.1
+      express:
+        specifier: ^4.18.2
+        version: 4.22.1
+      express-rate-limit:
+        specifier: ^7.1.5
+        version: 7.5.1(express@4.22.1)
+      helmet:
+        specifier: ^7.1.0
+        version: 7.2.0
+      zod:
+        specifier: ^3.22.4
+        version: 3.25.76
+    devDependencies:
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.19
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      tsup:
+        specifier: ^8.0.1
+        version: 8.5.1(@swc/core@1.15.11)(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
 
   services/seller-service:
     dependencies:

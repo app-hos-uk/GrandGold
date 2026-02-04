@@ -20,6 +20,7 @@ const tabs = [
   { id: 'store', label: 'Store', icon: Store },
   { id: 'payments', label: 'Payments', icon: CreditCard },
   { id: 'shipping', label: 'Shipping', icon: Truck },
+  { id: 'tax', label: 'Tax & Duties', icon: CreditCard },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'security', label: 'Security', icon: Shield },
 ];
@@ -279,6 +280,111 @@ export default function SettingsPage() {
                   <button type="button" className="relative w-12 h-6 bg-gold-500 rounded-full">
                     <span className="absolute top-1 left-7 w-4 h-4 bg-white rounded-full" />
                   </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'tax' && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-white rounded-xl shadow-sm p-6"
+            >
+              <h2 className="text-lg font-semibold mb-6">Tax & Duty Settings</h2>
+              <div className="space-y-6">
+                {/* India Tax Settings */}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-2xl">🇮🇳</span>
+                    <span className="font-semibold text-gray-900">India Tax Settings</span>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">GST Rate (%)</label>
+                      <input
+                        type="number"
+                        defaultValue="3"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Applied to all gold/jewellery sales</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Making Charges GST (%)</label>
+                      <input
+                        type="number"
+                        defaultValue="5"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* UAE Tax Settings */}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-2xl">🇦🇪</span>
+                    <span className="font-semibold text-gray-900">UAE Tax Settings</span>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">VAT Rate (%)</label>
+                      <input
+                        type="number"
+                        defaultValue="5"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Import Duty (%)</label>
+                      <input
+                        type="number"
+                        defaultValue="5"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* UK Tax Settings */}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-2xl">🇬🇧</span>
+                    <span className="font-semibold text-gray-900">UK Tax Settings</span>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">VAT Rate (%)</label>
+                      <input
+                        type="number"
+                        defaultValue="20"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Import Duty (%)</label>
+                      <input
+                        type="number"
+                        defaultValue="2.5"
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tax Calculation Options */}
+                <div className="pt-4 border-t border-gray-200">
+                  <h3 className="font-medium text-gray-900 mb-4">Tax Display Options</h3>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input type="radio" name="taxDisplay" defaultChecked className="text-gold-500" />
+                      <span className="text-sm text-gray-700">Display prices inclusive of tax</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input type="radio" name="taxDisplay" className="text-gold-500" />
+                      <span className="text-sm text-gray-700">Display prices exclusive of tax (add at checkout)</span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </motion.div>

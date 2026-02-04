@@ -1,3 +1,13 @@
+// Log startup errors to stderr for Cloud Run (before any other imports that might throw)
+process.on('uncaughtException', (err) => {
+  console.error('inventory-service uncaughtException:', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason, p) => {
+  console.error('inventory-service unhandledRejection:', reason, p);
+  process.exit(1);
+});
+
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -54,10 +64,11 @@ app.use('/api/inventory', inventoryRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-const PORT = parseInt(process.env.PORT || '4008');
+const PORT = parseInt(process.env.PORT || '4008', 10);
+const HOST = process.env.HOST || '0.0.0.0';
 
-app.listen(PORT, () => {
-  logger.info(`Inventory service started on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+  logger.info(`Inventory service started on ${HOST}:${PORT}`);
 });
 
 process.on('SIGTERM', () => {

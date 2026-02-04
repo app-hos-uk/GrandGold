@@ -49,12 +49,14 @@ The **Super Admin** is the application owner with **global access** to all count
 - Access all admin features without geographic limits
 - Manage users, orders, products, KYC, refunds, seller onboarding globally
 
-To create the Super Admin user in the database (run once, e.g. after first deploy):
+To create the Super Admin user in the database (run once per environment):
 
 ```bash
-# Set your production or staging DATABASE_URL, then:
-DATABASE_URL="postgresql://..." pnpm db:seed
+# Local dev (default DB)
+DATABASE_URL="postgresql://postgres:password@localhost:5432/grandgold_dev" pnpm db:seed
 ```
+
+For production, set `DATABASE_URL` to your real PostgreSQL connection string and run the same command. See [runbooks/05-super-admin-seed.md](runbooks/05-super-admin-seed.md).
 
 **Super Admin credentials (after seed):**
 

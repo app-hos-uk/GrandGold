@@ -64,3 +64,28 @@ export const optionalAuth = async (
     next();
   }
 };
+
+/**
+ * Authorize middleware - checks if user has one of the allowed roles
+ */
+export const authorize = (...allowedRoles: string[]) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'AUTHENTICATION_ERROR', message: 'Authentication required' },
+      });
+      return;
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      res.status(403).json({
+        success: false,
+        error: { code: 'AUTHORIZATION_ERROR', message: 'Insufficient permissions' },
+      });
+      return;
+    }
+
+    next();
+  };
+};

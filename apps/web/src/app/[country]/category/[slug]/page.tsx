@@ -23,6 +23,7 @@ import {
   RotateCcw,
   ZoomIn,
 } from 'lucide-react';
+import { ZeroResults } from '@/components/search/zero-results';
 
 interface Product {
   id: string;
@@ -411,15 +412,15 @@ export default function CategoryPage() {
               </div>
 
               {sortedProducts.length === 0 && (
-                <div className="text-center py-16">
-                  <Sparkles className="w-16 h-16 text-gold-300 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    No products found
-                  </h3>
-                  <p className="text-gray-600">
-                    Try adjusting your filters to find what you&apos;re looking for.
-                  </p>
-                </div>
+                <ZeroResults
+                  country={(params.country as string) || 'in'}
+                  suggestions={[
+                    'Try "22K gold"',
+                    'Try "diamond"',
+                    'Adjust price filter',
+                    'Browse other categories',
+                  ]}
+                />
               )}
             </div>
           </div>

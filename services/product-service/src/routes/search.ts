@@ -23,13 +23,18 @@ router.get('/admin', authenticate, async (req: Request, res: Response, next: Nex
     const status = req.query.status as string;
 
     const results = await productService.listAllProducts({ page, limit, category, status });
-
     res.json({
       success: true,
       data: results,
     });
   } catch (error) {
-    next(error);
+    // Return 503 with empty fallback data so admin dashboard degrades gracefully
+    // but still indicates the backend/MeiliSearch issue for debugging
+    res.status(503).json({
+      success: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Search service temporarily unavailable' },
+      data: { data: [], total: 0 },
+    });
   }
 });
 

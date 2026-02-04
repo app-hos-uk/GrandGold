@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Recommendations } from '@/components/product/recommendations';
 import { CompleteTheLook } from '@/components/product/complete-the-look';
+import { TrustBadges } from '@/components/product/trust-badges';
 
 interface Product {
   id: string;
@@ -426,6 +427,14 @@ export default function ProductPage() {
                   <span className="font-semibold">{product.sku}</span>
                 </div>
               </div>
+
+              <TrustBadges
+                bisHallmark={product.features?.some((f) => f.toLowerCase().includes('bis'))}
+                certificate={product.features?.find((f) => f.toLowerCase().includes('gia') || f.toLowerCase().includes('certified'))}
+                purity={product.purity}
+                verifiedSeller
+                className="mt-4"
+              />
 
               {/* Stock Status */}
               <div className="mt-6">

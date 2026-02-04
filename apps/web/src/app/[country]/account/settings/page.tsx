@@ -16,6 +16,9 @@ import {
   Check,
   Eye,
   EyeOff,
+  Download,
+  Trash2,
+  FileText,
 } from 'lucide-react';
 
 const user = {
@@ -55,6 +58,7 @@ export default function SettingsPage() {
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'preferences', label: 'Preferences', icon: Globe },
     { id: 'security', label: 'Security', icon: Shield },
+    { id: 'privacy', label: 'Privacy & Data', icon: FileText },
   ];
 
   return (
@@ -406,6 +410,66 @@ export default function SettingsPage() {
                         </p>
                         <button className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                           Delete Account
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Privacy & Data (GDPR) Tab */}
+                {activeTab === 'privacy' && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="bg-white rounded-2xl p-6"
+                  >
+                    <h2 className="text-lg font-semibold mb-6">Privacy & Data</h2>
+                    <p className="text-sm text-gray-500 mb-6">
+                      Under GDPR and similar regulations, you can request a copy of your data or delete your account.
+                    </p>
+                    <div className="space-y-6">
+                      <div className="p-4 bg-cream-50 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-gold-100 rounded-xl flex items-center justify-center">
+                            <Download className="w-6 h-6 text-gold-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">Download my data</p>
+                            <p className="text-sm text-gray-500">Export your profile, orders, and activity as a ZIP file</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // In production: api.get('/api/user/me/export').then(blob => download)
+                            alert('Data export will be sent to your email within 24 hours.');
+                          }}
+                          className="px-4 py-2 bg-gold-500 hover:bg-gold-600 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          Request export
+                        </button>
+                      </div>
+                      <div className="p-4 bg-red-50 rounded-xl flex items-center justify-between border border-red-100">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                            <Trash2 className="w-6 h-6 text-red-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">Delete my account</p>
+                            <p className="text-sm text-gray-500">Permanently delete your account and personal data. This cannot be undone.</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm('Are you sure? This will permanently delete your account and all data.')) {
+                              // In production: api.post('/api/user/me/delete')
+                              alert('Account deletion request submitted. You will receive an email to confirm.');
+                            }
+                          }}
+                          className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-100 text-sm font-medium rounded-lg transition-colors"
+                        >
+                          Delete account
                         </button>
                       </div>
                     </div>

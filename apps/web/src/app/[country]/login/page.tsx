@@ -4,8 +4,9 @@ import { Suspense, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Mail, Lock, Loader2, Sparkles, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { authApi, ApiError } from '@/lib/api';
+import { Logo } from '@/components/brand/logo';
 
 function LoginForm() {
   const params = useParams();
@@ -52,8 +53,8 @@ function LoginForm() {
         >
           <div className="bg-white rounded-2xl shadow-lg border border-cream-200 overflow-hidden">
             <div className="bg-gradient-luxury px-6 py-8 text-center">
-              <div className="w-14 h-14 bg-gradient-gold rounded-xl flex items-center justify-center mx-auto mb-4 shadow-gold">
-                <Sparkles className="w-7 h-7 text-white" />
+              <div className="flex justify-center mb-4">
+                <Logo className="h-14 w-auto" variant="light" />
               </div>
               <h1 className="text-2xl font-display font-semibold text-gray-900">Sign in</h1>
               <p className="text-gray-600 mt-1">Enter your GrandGold account details</p>
