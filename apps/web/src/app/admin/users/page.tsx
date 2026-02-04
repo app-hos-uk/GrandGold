@@ -407,7 +407,17 @@ export default function UsersPage() {
                   setRefreshKey((k) => k + 1); // Trigger user list refresh
                 }, 2000);
               } catch (err) {
-                setError(err instanceof ApiError ? err.message : 'Failed to create user');
+                let errorMsg = 'Failed to create user';
+                if (err instanceof ApiError) {
+                  errorMsg = err.message;
+                  // Extract specific validation error message if available
+                  const details = err.details as { errors?: Array<{ message?: string; path?: string[] }> } | undefined;
+                  if (details?.errors?.length) {
+                    const firstError = details.errors[0];
+                    errorMsg = firstError.message || err.message;
+                  }
+                }
+                setError(errorMsg);
               } finally {
                 setSubmitting(false);
               }
