@@ -61,8 +61,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API routes
-app.use('/api/payments', paymentRouter);
+// API routes - Order matters: more specific routes first
+app.use('/api/payments/refunds', refundRouter);
 app.use('/api/payments/stripe', stripeRouter);
 app.use('/api/payments/razorpay', razorpayRouter);
 app.use('/api/payments/webhook', webhookRouter);
@@ -71,7 +71,7 @@ app.use('/api/payments', savedPaymentRouter);
 app.use('/api/payments', paypalRouter);
 app.use('/api/payments', splitPaymentRouter);
 app.use('/api/payments', fraudRouter);
-app.use('/api/payments/refunds', refundRouter);
+app.use('/api/payments', paymentRouter);
 
 // Error handling
 app.use(notFoundHandler);
