@@ -13,6 +13,9 @@ const authService = new AuthService();
  */
 router.post('/register', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Log incoming request for debugging
+    console.log('[REGISTER] Incoming body keys:', Object.keys(req.body || {}));
+    
     const data = registerSchema.parse(req.body);
     const result = await authService.register(data);
     
@@ -23,8 +26,10 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.log('[REGISTER] Validation errors:', JSON.stringify(error.errors));
       next(new ValidationError('Validation failed', { errors: error.errors }));
     } else {
+      console.log('[REGISTER] Error:', error instanceof Error ? error.message : String(error));
       next(error);
     }
   }
