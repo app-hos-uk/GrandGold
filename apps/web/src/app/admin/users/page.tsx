@@ -133,7 +133,36 @@ export default function UsersPage() {
           <p className="text-gray-600">Manage your customer accounts</p>
         </div>
         <div className="flex items-center gap-3">
-          <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button 
+            type="button" 
+            onClick={() => {
+              const headers = ['ID', 'Name', 'Email', 'Phone', 'Role', 'Status', 'Country', 'Created'];
+              const csvRows = [headers.join(',')];
+              filteredUsers.forEach(u => {
+                const row = [
+                  u.id,
+                  `"${u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim()}"`,
+                  `"${u.email || ''}"`,
+                  `"${u.phone || ''}"`,
+                  u.role || '',
+                  u.status || '',
+                  u.country || '',
+                  u.createdAt || ''
+                ];
+                csvRows.push(row.join(','));
+              });
+              const csvContent = csvRows.join('\n');
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `users-export-${new Date().toISOString().split('T')[0]}.csv`;
+              link.click();
+              URL.revokeObjectURL(url);
+              toast.success('Users exported successfully');
+            }}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
             <Download className="w-4 h-4" />
             Export
           </button>

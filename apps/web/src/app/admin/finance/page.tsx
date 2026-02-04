@@ -24,6 +24,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
+import { useToast } from '@/components/admin/toast';
 import { formatCurrency } from '@/lib/format';
 import { adminApi, FinanceStats as ApiFinanceStats, TransactionRecord, Settlement } from '@/lib/api';
 
@@ -140,6 +141,7 @@ function mapPayout(s: Settlement): PendingPayout {
 }
 
 export default function FinanceDashboard() {
+  const toast = useToast();
   const [stats, setStats] = useState<FinanceStats>(MOCK_STATS);
   const [transactions, setTransactions] = useState<RecentTransaction[]>(MOCK_TRANSACTIONS);
   const [payouts, setPayouts] = useState<PendingPayout[]>(MOCK_PAYOUTS);
@@ -207,7 +209,42 @@ export default function FinanceDashboard() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600">
+          <button 
+            onClick={() => {
+              // Generate CSV from finance data
+              const headers = ['Type', 'ID', 'Description', 'Amount', 'Status', 'Country', 'Date'];
+              const csvRows = [headers.join(',')];
+              transactions.forEach(t => {
+                const row = [
+                  t.type,
+                  t.id,
+                  `"${t.description}"`,
+                  t.amount,
+                  t.status,
+                  t.country,
+                  t.date
+                ];
+                csvRows.push(row.join(','));
+              });
+              // Add summary
+              csvRows.push('');
+              csvRows.push(`Total Revenue,${stats.totalRevenue}`);
+              csvRows.push(`Total Transactions,${stats.totalTransactions}`);
+              csvRows.push(`Pending Payouts,${stats.pendingPayouts}`);
+              csvRows.push(`Total Commission,${stats.totalCommission}`);
+              
+              const csvContent = csvRows.join('\n');
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `finance-report-${new Date().toISOString().split('T')[0]}.csv`;
+              link.click();
+              URL.revokeObjectURL(url);
+              toast.success('Finance report exported successfully');
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600"
+          >
             <Download className="w-4 h-4" />
             Export
           </button>

@@ -348,13 +348,27 @@ export default function AdminPromotionsPage() {
         </AnimatePresence>
       )}
 
-      {/* Create/Edit Coupon modal - simplified; full form can be added later */}
+      {/* Create/Edit Coupon modal */}
       <AnimatePresence>
         {modal === 'coupon' && (
           <CouponModal
             onClose={() => { setModal(null); setEditingId(null); }}
             onSaved={() => { loadCoupons(); setModal(null); setEditingId(null); toast.success('Coupon saved'); }}
             editingCoupon={editingId ? coupons.find((c) => c.id === editingId) ?? undefined : undefined}
+          />
+        )}
+        {modal === 'auto' && (
+          <AutoDiscountModal
+            onClose={() => { setModal(null); setEditingId(null); }}
+            onSaved={() => { loadAuto(); setModal(null); setEditingId(null); toast.success('Automatic discount saved'); }}
+            editingDiscount={editingId ? autoDiscounts.find((d) => d.id === editingId) ?? undefined : undefined}
+          />
+        )}
+        {modal === 'flash' && (
+          <FlashSaleModal
+            onClose={() => { setModal(null); setEditingId(null); }}
+            onSaved={() => { loadFlash(); setModal(null); setEditingId(null); toast.success('Flash sale saved'); }}
+            editingSale={editingId ? flashSales.find((f) => f.id === editingId) ?? undefined : undefined}
           />
         )}
       </AnimatePresence>
@@ -498,6 +512,353 @@ function CouponModal({
               </select>
             </div>
           )}
+          <div className="flex gap-2 pt-4">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 disabled:opacity-50 flex items-center justify-center gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function AutoDiscountModal({
+  onClose,
+  onSaved,
+  editingDiscount,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+  editingDiscount?: AutoDiscountRow;
+}) {
+  const [name, setName] = useState(editingDiscount?.name ?? '');
+  const [type, setType] = useState(editingDiscount?.type ?? 'percentage');
+  const [value, setValue] = useState(editingDiscount?.value ?? 10);
+  const [minOrderAmount, setMinOrderAmount] = useState(editingDiscount?.minOrderAmount ?? 10000);
+  const [priority, setPriority] = useState(editingDiscount?.priority ?? 1);
+  const [isActive, setIsActive] = useState(editingDiscount?.isActive ?? true);
+  const [startsAt, setStartsAt] = useState(editingDiscount?.startsAt ?? '');
+  const [endsAt, setEndsAt] = useState(editingDiscount?.endsAt ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const body = {
+        name: name.trim(),
+        type,
+        value: Number(value),
+        minOrderAmount: Number(minOrderAmount) || undefined,
+        priority: Number(priority),
+        isActive,
+        startsAt: startsAt || undefined,
+        endsAt: endsAt || undefined,
+        countries: ['IN', 'AE', 'UK'],
+      };
+      if (editingDiscount) {
+        await api.patch(`/api/promotions/automatic/${editingDiscount.id}`, body);
+      } else {
+        await api.post('/api/promotions/automatic', body);
+      }
+      onSaved();
+    } catch (err: unknown) {
+      const msg = err && typeof err === 'object' && 'message' in err ? String((err as { message: string }).message) : 'Failed to save';
+      alert(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95 }}
+        animate={{ scale: 1 }}
+        exit={{ scale: 0.95 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">{editingDiscount ? 'Edit Automatic Discount' : 'New Automatic Discount'}</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <input
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. First Order 10% Off"
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+              >
+                <option value="percentage">Percentage</option>
+                <option value="fixed">Fixed amount</option>
+                <option value="free_shipping">Free shipping</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Value</label>
+              <input
+                type="number"
+                min={0}
+                step={type === 'percentage' ? 1 : 100}
+                value={value}
+                onChange={(e) => setValue(Number(e.target.value))}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Min order (₹)</label>
+              <input
+                type="number"
+                min={0}
+                value={minOrderAmount}
+                onChange={(e) => setMinOrderAmount(Number(e.target.value))}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={priority}
+                onChange={(e) => setPriority(Number(e.target.value))}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Higher = applied first</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Starts at</label>
+              <input
+                type="datetime-local"
+                value={startsAt}
+                onChange={(e) => setStartsAt(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ends at</label>
+              <input
+                type="datetime-local"
+                value={endsAt}
+                onChange={(e) => setEndsAt(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="autoActive"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-gold-500 focus:ring-gold-500"
+            />
+            <label htmlFor="autoActive" className="text-sm text-gray-700">Active (apply automatically)</label>
+          </div>
+          <div className="flex gap-2 pt-4">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 disabled:opacity-50 flex items-center justify-center gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function FlashSaleModal({
+  onClose,
+  onSaved,
+  editingSale,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+  editingSale?: FlashSaleRow;
+}) {
+  const [name, setName] = useState(editingSale?.name ?? '');
+  const [description, setDescription] = useState(editingSale?.description ?? '');
+  const [discountType, setDiscountType] = useState(editingSale?.discountType ?? 'percentage');
+  const [discountValue, setDiscountValue] = useState(editingSale?.discountValue ?? 20);
+  const [productIds, setProductIds] = useState(editingSale?.productIds?.join(', ') ?? '');
+  const [startsAt, setStartsAt] = useState(editingSale?.startsAt ? new Date(editingSale.startsAt).toISOString().slice(0, 16) : '');
+  const [endsAt, setEndsAt] = useState(editingSale?.endsAt ? new Date(editingSale.endsAt).toISOString().slice(0, 16) : '');
+  const [isActive, setIsActive] = useState(editingSale?.isActive ?? true);
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!startsAt || !endsAt) {
+      alert('Please set start and end times for the flash sale');
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        discountType,
+        discountValue: Number(discountValue),
+        productIds: productIds.split(/[\s,]+/).map(id => id.trim()).filter(Boolean),
+        startsAt: new Date(startsAt).toISOString(),
+        endsAt: new Date(endsAt).toISOString(),
+        isActive,
+        countries: ['IN', 'AE', 'UK'],
+      };
+      if (editingSale) {
+        await api.patch(`/api/promotions/flash-sales/${editingSale.id}`, body);
+      } else {
+        await api.post('/api/promotions/flash-sales', body);
+      }
+      onSaved();
+    } catch (err: unknown) {
+      const msg = err && typeof err === 'object' && 'message' in err ? String((err as { message: string }).message) : 'Failed to save';
+      alert(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95 }}
+        animate={{ scale: 1 }}
+        exit={{ scale: 0.95 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">{editingSale ? 'Edit Flash Sale' : 'New Flash Sale'}</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sale Name</label>
+            <input
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Weekend Gold Rush"
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Brief description for customers"
+              rows={2}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500 resize-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Discount Type</label>
+              <select
+                value={discountType}
+                onChange={(e) => setDiscountType(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+              >
+                <option value="percentage">Percentage</option>
+                <option value="fixed">Fixed amount</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Discount Value</label>
+              <input
+                type="number"
+                min={0}
+                step={discountType === 'percentage' ? 1 : 100}
+                value={discountValue}
+                onChange={(e) => setDiscountValue(Number(e.target.value))}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Product IDs</label>
+            <input
+              value={productIds}
+              onChange={(e) => setProductIds(e.target.value)}
+              placeholder="e.g. prod_abc123, prod_xyz789"
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Comma-separated. Find IDs in <a href="/admin/products" target="_blank" className="text-gold-600 hover:underline">Products</a> page.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Starts at *</label>
+              <input
+                required
+                type="datetime-local"
+                value={startsAt}
+                onChange={(e) => setStartsAt(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ends at *</label>
+              <input
+                required
+                type="datetime-local"
+                value={endsAt}
+                onChange={(e) => setEndsAt(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="flashActive"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-gold-500 focus:ring-gold-500"
+            />
+            <label htmlFor="flashActive" className="text-sm text-gray-700">Active (visible to customers)</label>
+          </div>
           <div className="flex gap-2 pt-4">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
               Cancel

@@ -10,6 +10,7 @@ export interface InfluencerFormData {
   name: string;
   bio: string;
   commissionRate: number;
+  commissionType: 'total_price' | 'making_charge' | 'metal_value' | 'stone_value';
   productIds: string[];
 }
 
@@ -18,8 +19,16 @@ const defaultForm: InfluencerFormData = {
   name: '',
   bio: '',
   commissionRate: 5,
+  commissionType: 'total_price',
   productIds: [],
 };
+
+const COMMISSION_TYPES = [
+  { value: 'total_price', label: 'Total Product Price', description: 'Commission on the full sale price' },
+  { value: 'making_charge', label: 'Making Charge Only', description: 'Commission on making/labor charges only' },
+  { value: 'metal_value', label: 'Metal Value Only', description: 'Commission on gold/silver value only' },
+  { value: 'stone_value', label: 'Stone Value Only', description: 'Commission on diamond/gemstone value only' },
+] as const;
 
 function slugFromName(name: string): string {
   return name
@@ -59,6 +68,7 @@ export function InfluencerModal({
         name: initialRack.name,
         bio: initialRack.bio ?? '',
         commissionRate: initialRack.commissionRate ?? 5,
+        commissionType: (initialRack as InfluencerFormData).commissionType ?? 'total_price',
         productIds: initialRack.productIds ?? [],
       });
     } else {
@@ -159,7 +169,7 @@ export function InfluencerModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">URL Slug *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Storefront URL *</label>
             <input
               required
               type="text"
@@ -169,9 +179,9 @@ export function InfluencerModal({
               disabled={isEdit}
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500 disabled:bg-gray-100 disabled:text-gray-500"
             />
-            {isEdit && (
-              <p className="text-xs text-gray-500 mt-1">Slug cannot be changed when editing.</p>
-            )}
+            <p className="text-xs text-gray-500 mt-1">
+              {isEdit ? 'URL cannot be changed after creation.' : 'Storefront will be at: /in/influencer/' + (form.slug || 'your-url')}
+            </p>
           </div>
 
           <div>
@@ -185,29 +195,48 @@ export function InfluencerModal({
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Commission Rate (%)</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.5}
-              value={form.commissionRate}
-              onChange={(e) => setForm((prev) => ({ ...prev, commissionRate: Number(e.target.value) || 0 }))}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Commission Rate (%)</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.5}
+                value={form.commissionRate}
+                onChange={(e) => setForm((prev) => ({ ...prev, commissionRate: Number(e.target.value) || 0 }))}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Commission Based On</label>
+              <select
+                value={form.commissionType}
+                onChange={(e) => setForm((prev) => ({ ...prev, commissionType: e.target.value as InfluencerFormData['commissionType'] }))}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+              >
+                {COMMISSION_TYPES.map((ct) => (
+                  <option key={ct.value} value={ct.value}>{ct.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
+          <p className="text-xs text-gray-500 -mt-2">
+            {COMMISSION_TYPES.find(ct => ct.value === form.commissionType)?.description}
+          </p>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Product IDs (optional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Featured Products</label>
             <input
               type="text"
               value={productIdsStr}
               onChange={(e) => setProductIdsStr(e.target.value)}
-              placeholder="e.g. 1, 3, 5, 2"
+              placeholder="e.g. prod_abc123, prod_xyz789"
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
             />
-            <p className="text-xs text-gray-500 mt-1">Comma-separated product IDs to feature in this rack.</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Enter comma-separated Product IDs. Find IDs in <a href="/admin/products" target="_blank" className="text-gold-600 hover:underline">Products</a> page (shown in each product row).
+            </p>
           </div>
 
           <div className="flex gap-3 pt-4">

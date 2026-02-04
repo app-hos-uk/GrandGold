@@ -150,7 +150,37 @@ export default function OrdersPage() {
           <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
           <p className="text-gray-600">Manage and track all orders</p>
         </div>
-        <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+        <button 
+          type="button" 
+          onClick={() => {
+            // Generate CSV from orders
+            const headers = ['Order ID', 'Customer', 'Email', 'Items', 'Amount', 'Status', 'Payment', 'Date'];
+            const csvRows = [headers.join(',')];
+            orders.forEach(o => {
+              const row = [
+                o.id,
+                `"${o.customer || ''}"`,
+                `"${o.email || ''}"`,
+                o.items ?? 0,
+                o.amount ?? o.total ?? 0,
+                o.status || '',
+                o.paymentStatus || o.payment || '',
+                o.createdAt || o.date || ''
+              ];
+              csvRows.push(row.join(','));
+            });
+            const csvContent = csvRows.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `orders-export-${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            URL.revokeObjectURL(url);
+            toast.success('Orders exported successfully');
+          }}
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+        >
           <Download className="w-4 h-4" />
           Export
         </button>

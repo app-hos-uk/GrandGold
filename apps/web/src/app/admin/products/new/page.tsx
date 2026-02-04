@@ -45,6 +45,8 @@ export default function NewProductPage() {
     tags: '',
     countries: ['IN'],
   });
+  const [images, setImages] = useState<{ file?: File; url: string; type: 'main' | 'gallery' | '360' }[]>([]);
+  const [imageUrl, setImageUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -179,14 +181,15 @@ export default function NewProductPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Slug</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">URL Path</label>
             <input
               type="text"
               value={form.slug}
               onChange={(e) => handleChange('slug', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500 font-mono text-sm"
               placeholder="url-friendly-name"
             />
+            <p className="text-xs text-gray-500 mt-1">Auto-generated from name. Used in product URL: /product/[url-path]</p>
           </div>
 
           <div>
@@ -214,6 +217,124 @@ export default function NewProductPage() {
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
               placeholder="Product description..."
             />
+          </div>
+
+          {/* Product Images */}
+          <div className="border-t pt-5">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">Product Images</h2>
+            <p className="text-xs text-gray-500 mb-3">Add up to 4 gallery images and optionally a 360° view image</p>
+            
+            {/* Current Images */}
+            {images.length > 0 && (
+              <div className="flex flex-wrap gap-3 mb-4">
+                {images.map((img, idx) => (
+                  <div key={idx} className="relative group">
+                    <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+                      <img src={img.url} alt={`Product ${idx + 1}`} className="w-full h-full object-cover" />
+                    </div>
+                    <span className={`absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                      img.type === 'main' ? 'bg-gold-500 text-white' : 
+                      img.type === '360' ? 'bg-purple-500 text-white' : 'bg-gray-700 text-white'
+                    }`}>
+                      {img.type === 'main' ? 'Main' : img.type === '360' ? '360°' : `${idx + 1}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add Image by URL */}
+            <div className="flex gap-2 mb-3">
+              <input
+                type="url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="Enter image URL (https://...)"
+                className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500 text-sm"
+              />
+              <select
+                id="imageType"
+                className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500 text-sm"
+                defaultValue="gallery"
+              >
+                <option value="main">Main Image</option>
+                <option value="gallery">Gallery</option>
+                <option value="360">360° View</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!imageUrl.trim()) return;
+                  const select = document.getElementById('imageType') as HTMLSelectElement;
+                  const type = select.value as 'main' | 'gallery' | '360';
+                  // If adding main, remove existing main
+                  if (type === 'main') {
+                    setImages((prev) => [...prev.filter(i => i.type !== 'main'), { url: imageUrl.trim(), type: 'main' }]);
+                  } else if (type === '360') {
+                    // Only one 360 image
+                    setImages((prev) => [...prev.filter(i => i.type !== '360'), { url: imageUrl.trim(), type: '360' }]);
+                  } else {
+                    // Max 4 gallery images
+                    const galleryCount = images.filter(i => i.type === 'gallery').length;
+                    if (galleryCount >= 4) {
+                      alert('Maximum 4 gallery images allowed');
+                      return;
+                    }
+                    setImages((prev) => [...prev, { url: imageUrl.trim(), type: 'gallery' }]);
+                  }
+                  setImageUrl('');
+                }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium"
+              >
+                Add
+              </button>
+            </div>
+
+            {/* File Upload */}
+            <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center">
+              <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+              <p className="text-sm text-gray-600 mb-1">Drag & drop images here, or click to browse</p>
+              <p className="text-xs text-gray-400 mb-2">Supports: JPG, PNG, WebP (max 5MB each)</p>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  const galleryCount = images.filter(i => i.type === 'gallery').length;
+                  const remaining = 4 - galleryCount;
+                  if (files.length > remaining) {
+                    alert(`You can only add ${remaining} more gallery image(s)`);
+                  }
+                  files.slice(0, remaining).forEach((file) => {
+                    const url = URL.createObjectURL(file);
+                    setImages((prev) => [...prev, { file, url, type: 'gallery' }]);
+                  });
+                  e.target.value = '';
+                }}
+                className="hidden"
+                id="imageUpload"
+              />
+              <label
+                htmlFor="imageUpload"
+                className="inline-block px-4 py-2 bg-gold-50 text-gold-700 rounded-lg cursor-pointer hover:bg-gold-100 text-sm font-medium"
+              >
+                Browse Files
+              </label>
+            </div>
+
+            <div className="mt-3 text-xs text-gray-500 space-y-1">
+              <p><strong>Main Image:</strong> Primary display image (1 max)</p>
+              <p><strong>Gallery:</strong> Additional product views (up to 4)</p>
+              <p><strong>360° View:</strong> Interactive 360-degree rotation image (1 max)</p>
+            </div>
           </div>
 
           {/* Pricing */}

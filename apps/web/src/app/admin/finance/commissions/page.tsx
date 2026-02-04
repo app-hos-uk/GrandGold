@@ -75,6 +75,8 @@ export default function CommissionsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('');
   const [dateRange, setDateRange] = useState('30days');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const filteredCommissions = commissions.filter((c) => {
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
@@ -340,7 +342,7 @@ export default function CommissionsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredCommissions.map((comm) => {
+              {filteredCommissions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((comm) => {
                 const statusConf = statusConfig[comm.status];
                 return (
                   <motion.tr
@@ -380,20 +382,52 @@ export default function CommissionsPage() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between p-4 border-t border-gray-100">
-          <p className="text-sm text-gray-500">
-            Showing {filteredCommissions.length} of {commissions.length} entries
-          </p>
-          <div className="flex items-center gap-2">
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button className="px-3 py-1 bg-gold-500 text-white rounded-lg">1</button>
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {(() => {
+          const totalPages = Math.max(1, Math.ceil(filteredCommissions.length / itemsPerPage));
+          const startIdx = (currentPage - 1) * itemsPerPage;
+          const endIdx = Math.min(startIdx + itemsPerPage, filteredCommissions.length);
+          return (
+            <div className="flex items-center justify-between p-4 border-t border-gray-100">
+              <p className="text-sm text-gray-500">
+                Showing {filteredCommissions.length > 0 ? startIdx + 1 : 0}-{endIdx} of {filteredCommissions.length} entries
+              </p>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) pageNum = i + 1;
+                    else if (currentPage <= 3) pageNum = i + 1;
+                    else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                    else pageNum = currentPage - 2 + i;
+                    return (
+                      <button 
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`px-3 py-1 rounded-lg ${currentPage === pageNum ? 'bg-gold-500 text-white' : 'hover:bg-gray-100'}`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

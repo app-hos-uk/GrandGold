@@ -22,6 +22,7 @@ import {
   ThumbsDown,
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
+import { useToast } from '@/components/admin/toast';
 import { formatCurrency } from '@/lib/format';
 
 interface SupportMetrics {
@@ -110,6 +111,7 @@ const CSAT_BREAKDOWN = [
 ];
 
 export default function SupportAnalyticsPage() {
+  const toast = useToast();
   const [metrics] = useState<SupportMetrics>(MOCK_METRICS);
   const [dateRange, setDateRange] = useState('30days');
   const [loading, setLoading] = useState(false);
@@ -148,7 +150,31 @@ export default function SupportAnalyticsPage() {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600">
+          <button 
+            onClick={() => {
+              const headers = ['Metric', 'Value', 'Change'];
+              const csvRows = [headers.join(',')];
+              csvRows.push(`"Total Conversations",${metrics.totalConversations},"${metrics.conversationsChange}%"`);
+              csvRows.push(`"Avg Response Time (sec)",${metrics.avgResponseTime},"${metrics.responseTimeChange}%"`);
+              csvRows.push(`"Avg Resolution Time (hrs)",${metrics.avgResolutionTime},"${metrics.resolutionTimeChange}%"`);
+              csvRows.push(`"CSAT Score",${metrics.csatScore},"${metrics.csatChange}"`);
+              csvRows.push(`"First Contact Resolution %",${metrics.firstContactResolution},"-"`);
+              csvRows.push(`"AI Handled %",${metrics.aiHandledPercent},"-"`);
+              csvRows.push(`"AI Escalation Rate %",${metrics.aiEscalationRate},"-"`);
+              csvRows.push(`"Tickets Created",${metrics.ticketsCreated},"-"`);
+              csvRows.push(`"Tickets Resolved",${metrics.ticketsResolved},"-"`);
+              const csvContent = csvRows.join('\n');
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `support-analytics-${dateRange}-${new Date().toISOString().split('T')[0]}.csv`;
+              link.click();
+              URL.revokeObjectURL(url);
+              toast.success('Analytics exported successfully');
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600"
+          >
             <Download className="w-4 h-4" />
             Export
           </button>

@@ -20,6 +20,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { adminApi } from '@/lib/api';
+import { useToast } from '@/components/admin/toast';
 
 const sellers = [
   { id: 1, name: 'Royal Jewellers', email: 'contact@royaljewellers.com', phone: '+91 98765 43210', products: 124, orders: 856, revenue: 4520000, rating: 4.9, status: 'verified', joined: '10 Jan 2024' },
@@ -39,10 +40,13 @@ const statusConfig = {
 };
 
 export default function SellersPage() {
+  const toast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [addSellerOpen, setAddSellerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const filteredSellers = sellers.filter((seller) => {
     if (statusFilter !== 'all' && seller.status !== statusFilter) return false;
@@ -59,7 +63,38 @@ export default function SellersPage() {
           <p className="text-gray-600">Manage marketplace sellers</p>
         </div>
         <div className="flex items-center gap-3">
-          <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button 
+            type="button" 
+            onClick={() => {
+              const headers = ['ID', 'Name', 'Email', 'Phone', 'Products', 'Orders', 'Revenue', 'Rating', 'Status', 'Joined'];
+              const csvRows = [headers.join(',')];
+              filteredSellers.forEach(s => {
+                const row = [
+                  s.id,
+                  `"${s.name}"`,
+                  `"${s.email}"`,
+                  `"${s.phone}"`,
+                  s.products,
+                  s.orders,
+                  s.revenue,
+                  s.rating,
+                  s.status,
+                  s.joined
+                ];
+                csvRows.push(row.join(','));
+              });
+              const csvContent = csvRows.join('\n');
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `sellers-export-${new Date().toISOString().split('T')[0]}.csv`;
+              link.click();
+              URL.revokeObjectURL(url);
+              toast.success('Sellers exported successfully');
+            }}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
             <Download className="w-4 h-4" />
             Export
           </button>
@@ -139,7 +174,7 @@ export default function SellersPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredSellers.map((seller) => {
+              {filteredSellers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((seller) => {
                 const statusEntry = statusConfig[seller.status as keyof typeof statusConfig] ?? statusConfig.pending;
                 const StatusIcon = statusEntry.icon;
                 return (
@@ -205,22 +240,60 @@ export default function SellersPage() {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between p-4 border-t border-gray-100">
-          <p className="text-sm text-gray-500">
-            Showing {filteredSellers.length} of {sellers.length} sellers
-          </p>
-          <div className="flex items-center gap-2">
-            <button type="button" className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button type="button" className="px-3 py-1 bg-gold-500 text-white rounded-lg">1</button>
-            <button type="button" className="px-3 py-1 hover:bg-gray-100 rounded-lg">2</button>
-            <button type="button" className="px-3 py-1 hover:bg-gray-100 rounded-lg">3</button>
-            <button type="button" className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {(() => {
+          const totalPages = Math.max(1, Math.ceil(filteredSellers.length / itemsPerPage));
+          const startIdx = (currentPage - 1) * itemsPerPage;
+          const endIdx = Math.min(startIdx + itemsPerPage, filteredSellers.length);
+          return (
+            <div className="flex items-center justify-between p-4 border-t border-gray-100">
+              <p className="text-sm text-gray-500">
+                Showing {startIdx + 1}-{endIdx} of {filteredSellers.length} sellers
+              </p>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button" 
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return (
+                      <button 
+                        key={pageNum}
+                        type="button" 
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`px-3 py-1 rounded-lg ${currentPage === pageNum ? 'bg-gold-500 text-white' : 'hover:bg-gray-100'}`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  <button 
+                    type="button" 
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Add Seller Modal */}

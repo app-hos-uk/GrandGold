@@ -61,6 +61,34 @@ gcloud builds submit \
 
 # Deploy to Cloud Run
 echo -e "${YELLOW}Deploying to Cloud Run...${NC}"
+
+# Build environment variables string based on service
+# JWT_SECRET is required for all services that authenticate
+# You can set JWT_SECRET in GCP Secret Manager and reference it here
+ENV_VARS="NODE_ENV=production"
+
+# Check if JWT_SECRET is set (required for authentication across services)
+if [ -n "${JWT_SECRET}" ]; then
+    ENV_VARS="${ENV_VARS},JWT_SECRET=${JWT_SECRET}"
+fi
+
+# Check if DATABASE_URL is set (required for services that need database access)
+if [ -n "${DATABASE_URL}" ]; then
+    ENV_VARS="${ENV_VARS},DATABASE_URL=${DATABASE_URL}"
+fi
+
+# Check if CLOUD_SQL_CONNECTION_NAME is set (for Cloud SQL socket connection)
+if [ -n "${CLOUD_SQL_CONNECTION_NAME}" ]; then
+    ENV_VARS="${ENV_VARS},CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME}"
+fi
+
+# Check if REDIS_URL is set
+if [ -n "${REDIS_URL}" ]; then
+    ENV_VARS="${ENV_VARS},REDIS_URL=${REDIS_URL}"
+fi
+
+echo -e "${YELLOW}Environment variables: ${ENV_VARS}${NC}"
+
 gcloud run deploy ${SERVICE_NAME} \
     --image ${IMAGE_NAME} \
     --platform managed \
@@ -72,7 +100,7 @@ gcloud run deploy ${SERVICE_NAME} \
     --max-instances 10 \
     --concurrency 80 \
     --timeout 60s \
-    --set-env-vars "NODE_ENV=production"
+    --set-env-vars "${ENV_VARS}"
 
 # Get the service URL
 SERVICE_URL=$(gcloud run services describe ${SERVICE_NAME} --region ${REGION} --format 'value(status.url)')

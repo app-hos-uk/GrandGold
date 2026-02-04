@@ -534,13 +534,15 @@ function CategoryModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Slug</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">URL Path</label>
             <input
               required
               value={form.slug}
               onChange={(e) => setForm((prev) => ({ ...prev, slug: e.target.value }))}
+              placeholder="e.g. gold-necklaces"
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500 font-mono text-sm"
             />
+            <p className="text-xs text-gray-500 mt-1">Used in the storefront URL: /category/[url-path]</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
