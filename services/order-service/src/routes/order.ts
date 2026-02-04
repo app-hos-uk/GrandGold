@@ -271,7 +271,8 @@ router.patch(
         req.params.id,
         status,
         req.user.sub,
-        note
+        note,
+        req.user.country // Pass admin's country for authorization
       );
       
       res.json({

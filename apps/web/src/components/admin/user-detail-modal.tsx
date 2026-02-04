@@ -53,7 +53,9 @@ interface UserDetailProps {
   onClose: () => void;
   onRoleChange?: (userId: string, role: string, country?: string) => Promise<void>;
   onStatusChange?: (userId: string, status: string) => Promise<void>;
+  onUpdate?: (userId: string, data: { firstName?: string; lastName?: string; phone?: string }) => Promise<void>;
   currentUserRole?: string;
+  currentUserCountry?: string;
 }
 
 const ROLES = [
@@ -84,18 +86,30 @@ const kycStatusColors: Record<string, string> = {
   none: 'bg-gray-100 text-gray-500',
 };
 
-export function UserDetailModal({ user, onClose, onRoleChange, onStatusChange, currentUserRole }: UserDetailProps) {
+export function UserDetailModal({ user, onClose, onRoleChange, onStatusChange, onUpdate, currentUserRole, currentUserCountry }: UserDetailProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'orders' | 'security'>('details');
   const [editingRole, setEditingRole] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
   const [selectedRole, setSelectedRole] = useState(user.role || 'customer');
   const [selectedCountry, setSelectedCountry] = useState(user.country || 'IN');
+  const [editForm, setEditForm] = useState({
+    firstName: user.firstName || '',
+    lastName: user.lastName || '',
+    phone: user.phone || '',
+  });
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
 
   const displayName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email?.split('@')[0] || 'Unknown';
   const initial = displayName[0]?.toUpperCase() || '?';
   const isSuperAdmin = currentUserRole === 'super_admin';
+  const isCountryAdmin = currentUserRole === 'country_admin';
   const canEditRole = isSuperAdmin && user.role !== 'super_admin';
+  
+  // Country admins can edit users in their country (except admins)
+  // Super admins can edit any user
+  const canEditDetails = isSuperAdmin || 
+    (isCountryAdmin && user.country === currentUserCountry && user.role !== 'super_admin' && user.role !== 'country_admin');
 
   const handleRoleSave = async () => {
     if (!onRoleChange) return;
@@ -105,6 +119,19 @@ export function UserDetailModal({ user, onClose, onRoleChange, onStatusChange, c
       setSuccess('Role updated successfully');
       setTimeout(() => setSuccess(null), 2000);
       setEditingRole(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDetailsSave = async () => {
+    if (!onUpdate) return;
+    setSaving(true);
+    try {
+      await onUpdate(user.id, editForm);
+      setSuccess('User details updated successfully');
+      setTimeout(() => setSuccess(null), 2000);
+      setEditingDetails(false);
     } finally {
       setSaving(false);
     }
@@ -198,7 +225,106 @@ export function UserDetailModal({ user, onClose, onRoleChange, onStatusChange, c
 
           {activeTab === 'details' && (
             <div className="space-y-6">
-              {/* Contact Info */}
+              {/* Editable User Details */}
+              {canEditDetails && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-900">User Details</h3>
+                    {!editingDetails && (
+                      <button
+                        onClick={() => setEditingDetails(true)}
+                        className="flex items-center gap-1 text-sm text-gold-600 hover:text-gold-700"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit Details
+                      </button>
+                    )}
+                  </div>
+                  {editingDetails ? (
+                    <div className="p-4 bg-gray-50 rounded-lg space-y-4">
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                          <input
+                            type="text"
+                            value={editForm.firstName}
+                            onChange={(e) => setEditForm(f => ({ ...f, firstName: e.target.value }))}
+                            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                          <input
+                            type="text"
+                            value={editForm.lastName}
+                            onChange={(e) => setEditForm(f => ({ ...f, lastName: e.target.value }))}
+                            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                        <input
+                          type="tel"
+                          value={editForm.phone}
+                          onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                          placeholder="+91 98765 43210"
+                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingDetails(false);
+                            setEditForm({
+                              firstName: user.firstName || '',
+                              lastName: user.lastName || '',
+                              phone: user.phone || '',
+                            });
+                          }}
+                          className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-100"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleDetailsSave}
+                          disabled={saving}
+                          className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 disabled:opacity-50"
+                        >
+                          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                          Save Changes
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                        <UserCog className="w-5 h-5 text-gray-400" />
+                        <div>
+                          <p className="text-xs text-gray-500">First Name</p>
+                          <p className="text-sm font-medium text-gray-900">{user.firstName || '—'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                        <UserCog className="w-5 h-5 text-gray-400" />
+                        <div>
+                          <p className="text-xs text-gray-500">Last Name</p>
+                          <p className="text-sm font-medium text-gray-900">{user.lastName || '—'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg col-span-2">
+                        <Phone className="w-5 h-5 text-gray-400" />
+                        <div>
+                          <p className="text-xs text-gray-500">Phone</p>
+                          <p className="text-sm font-medium text-gray-900">{user.phone || '—'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Contact Info (read-only) */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Contact Information</h3>
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -209,13 +335,15 @@ export function UserDetailModal({ user, onClose, onRoleChange, onStatusChange, c
                       <p className="text-sm font-medium text-gray-900">{user.email || '—'}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <Phone className="w-5 h-5 text-gray-400" />
-                    <div>
-                      <p className="text-xs text-gray-500">Phone</p>
-                      <p className="text-sm font-medium text-gray-900">{user.phone || '—'}</p>
+                  {!canEditDetails && (
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <Phone className="w-5 h-5 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">Phone</p>
+                        <p className="text-sm font-medium text-gray-900">{user.phone || '—'}</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                     <MapPin className="w-5 h-5 text-gray-400" />
                     <div>

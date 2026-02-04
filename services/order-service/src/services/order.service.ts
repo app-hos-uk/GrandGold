@@ -1,4 +1,4 @@
-import { generateId, NotFoundError, ValidationError } from '@grandgold/utils';
+import { generateId, NotFoundError, ValidationError, AuthorizationError } from '@grandgold/utils';
 import type { Country, OrderStatus } from '@grandgold/types';
 import { addNotification } from '../lib/notification-store';
 
@@ -220,12 +220,18 @@ export class OrderService {
     orderId: string,
     status: OrderStatus,
     adminUserId: string,
-    note?: string
+    note?: string,
+    adminCountry?: Country // Undefined for super_admin (global access)
   ): Promise<any> {
     const order = orderStore.get(orderId);
     
     if (!order) {
       throw new NotFoundError('Order');
+    }
+
+    // Country admins can only update orders from their country
+    if (adminCountry && order.country !== adminCountry) {
+      throw new AuthorizationError('You can only update orders from your assigned country');
     }
     
     const previousStatus = order.status;

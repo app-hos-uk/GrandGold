@@ -316,6 +316,8 @@ export const adminApi = {
     api.get<CurrentUserProfile>('/api/user/me').then((d: unknown) => (d as { data?: CurrentUserProfile }).data ?? (d as CurrentUserProfile)),
   setUserRole: (userId: string, role: string, country?: string) =>
     api.patch<unknown>(`/api/user/admin/${userId}/role`, { role, country }),
+  updateUser: (userId: string, data: { firstName?: string; lastName?: string; phone?: string }) =>
+    api.patch<unknown>(`/api/user/admin/${userId}`, data),
   getProducts: (params?: { page?: number; limit?: number; category?: string; status?: string }) => {
     const q = new URLSearchParams();
     if (params?.page) q.set('page', String(params.page));

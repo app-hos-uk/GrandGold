@@ -367,10 +367,17 @@ export default function UsersPage() {
             user={selectedUser}
             onClose={() => setSelectedUser(null)}
             currentUserRole={currentUserRole ?? undefined}
+            currentUserCountry={adminCountry ?? undefined}
             onRoleChange={async (userId, role, country) => {
               await adminApi.setUserRole(userId, role, country);
               toast.success('Role updated');
-              setPage(1); // refresh list
+              setRefreshKey(k => k + 1); // refresh list
+            }}
+            onUpdate={async (userId, data) => {
+              await adminApi.updateUser(userId, data);
+              toast.success('User details updated');
+              setRefreshKey(k => k + 1); // refresh list
+              setSelectedUser(null);
             }}
           />
         )}
@@ -382,23 +389,32 @@ export default function UsersPage() {
           <AddUserModal
             key="add-user-modal"
             onClose={() => setAddUserOpen(false)}
+            adminRole={currentUserRole}
+            adminCountry={adminCountry}
             onSubmit={async (data) => {
               setSubmitting(true);
               setError(null);
               setSuccess(null);
               try {
+                // For country admins, force their country
+                const userCountry = currentUserRole === 'country_admin' && adminCountry 
+                  ? adminCountry 
+                  : data.country;
+                
                 const res = await authApi.register({
                   email: data.email,
                   password: data.password,
                   firstName: data.firstName,
                   lastName: data.lastName,
                   phone: data.phone,
-                  country: data.country as 'IN' | 'AE' | 'UK',
+                  country: userCountry as 'IN' | 'AE' | 'UK',
                   acceptedTerms: true,
                 }) as { data?: { userId?: string; user?: { id?: string } }; userId?: string };
                 const userId = res?.data?.userId ?? res?.data?.user?.id ?? (res as { userId?: string }).userId;
-                if (data.role && data.role !== 'customer' && userId) {
-                  await adminApi.setUserRole(userId, data.role, data.country);
+                
+                // Only super_admin can set roles other than customer
+                if (currentUserRole === 'super_admin' && data.role && data.role !== 'customer' && userId) {
+                  await adminApi.setUserRole(userId, data.role, userCountry);
                 }
                 setSuccess('User created successfully. They will receive a verification email.');
                 setTimeout(() => { 
@@ -432,7 +448,8 @@ export default function UsersPage() {
   );
 }
 
-const ADD_USER_ROLES = [
+// Roles available for super_admin to assign
+const SUPER_ADMIN_ROLES = [
   { value: 'customer', label: 'Customer' },
   { value: 'seller', label: 'Seller' },
   { value: 'influencer', label: 'Influencer' },
@@ -442,20 +459,44 @@ const ADD_USER_ROLES = [
   { value: 'country_admin', label: 'Country Admin' },
 ] as const;
 
+// Roles available for country_admin to assign (limited)
+const COUNTRY_ADMIN_ROLES = [
+  { value: 'customer', label: 'Customer' },
+  { value: 'seller', label: 'Seller' },
+  { value: 'influencer', label: 'Influencer' },
+] as const;
+
 function AddUserModal({
   onClose,
   onSubmit,
+  adminRole,
+  adminCountry,
   submitting,
   success,
   error,
 }: {
   onClose: () => void;
   onSubmit: (data: { email: string; password: string; firstName: string; lastName: string; phone: string; country: string; role: string }) => Promise<void>;
+  adminRole: string | null;
+  adminCountry: string | null;
   submitting: boolean;
   success: string | null;
   error: string | null;
 }) {
-  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', phone: '', country: 'IN', role: 'customer' });
+  // For country admins, lock the country to their assigned country
+  const isCountryAdmin = adminRole === 'country_admin';
+  const lockedCountry = isCountryAdmin && adminCountry ? adminCountry : null;
+  const availableRoles = adminRole === 'super_admin' ? SUPER_ADMIN_ROLES : COUNTRY_ADMIN_ROLES;
+  
+  const [form, setForm] = useState({ 
+    email: '', 
+    password: '', 
+    firstName: '', 
+    lastName: '', 
+    phone: '', 
+    country: lockedCountry || 'IN', 
+    role: 'customer' 
+  });
 
   return (
     <motion.div
@@ -519,11 +560,15 @@ function AddUserModal({
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
               aria-label="Select user role"
             >
-              {ADD_USER_ROLES.map((r) => (
+              {availableRoles.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
             </select>
-            <p className="text-xs text-gray-500 mt-1">Assign role for this user. Customer is default.</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {isCountryAdmin 
+                ? 'You can only create customers, sellers, and influencers in your country.' 
+                : 'Assign role for this user. Customer is default.'}
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -561,14 +606,20 @@ function AddUserModal({
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
             <select
-              value={form.country}
-              onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+              value={lockedCountry || form.country}
+              onChange={(e) => !lockedCountry && setForm((f) => ({ ...f, country: e.target.value }))}
+              disabled={!!lockedCountry}
+              className={`w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500 ${
+                lockedCountry ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
             >
               <option value="IN">India</option>
               <option value="AE">UAE</option>
               <option value="UK">UK</option>
             </select>
+            {lockedCountry && (
+              <p className="text-xs text-gray-500 mt-1">Country is locked to your assigned country.</p>
+            )}
           </div>
           <div className="flex gap-3 pt-4">
             <button

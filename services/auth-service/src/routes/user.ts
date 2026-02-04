@@ -60,6 +60,73 @@ const ALLOWED_ADMIN_ROLES: UserRole[] = ['super_admin', 'country_admin', 'manage
 const COUNTRY_VALUES: Country[] = ['IN', 'AE', 'UK'];
 
 /**
+ * PATCH /api/user/admin/:userId
+ * Update user details (Admin only). Country admins can only update users in their country.
+ */
+router.patch(
+  '/admin/:userId',
+  authorize('super_admin', 'country_admin'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId } = req.params;
+      const { firstName, lastName, phone } = req.body as {
+        firstName?: string;
+        lastName?: string;
+        phone?: string;
+      };
+
+      const user = await findUserById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+      }
+
+      // Country admins can only update users in their country
+      if (req.user?.role === 'country_admin') {
+        if (user.country !== req.user.country) {
+          return res.status(403).json({ 
+            success: false, 
+            error: { code: 'FORBIDDEN', message: 'You can only update users in your assigned country' } 
+          });
+        }
+        // Country admins cannot modify super_admin or other country_admin users
+        if (user.role === 'super_admin' || user.role === 'country_admin') {
+          return res.status(403).json({ 
+            success: false, 
+            error: { code: 'FORBIDDEN', message: 'You cannot modify admin users' } 
+          });
+        }
+      }
+
+      const updateData: { firstName?: string; lastName?: string; phone?: string } = {};
+      if (firstName) updateData.firstName = firstName;
+      if (lastName) updateData.lastName = lastName;
+      if (phone) updateData.phone = phone;
+
+      const updated = await updateUser(userId, updateData);
+      if (!updated) {
+        return res.status(500).json({ success: false, error: { code: 'UPDATE_FAILED', message: 'Failed to update user' } });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: updated.id,
+          email: updated.email,
+          firstName: updated.firstName,
+          lastName: updated.lastName,
+          phone: updated.phone,
+          country: updated.country,
+          role: updated.role,
+        },
+        message: 'User updated successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * PATCH /api/user/admin/:userId/role
  * Set user role (and country for country_admin). Super admin only.
  */
