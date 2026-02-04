@@ -318,6 +318,8 @@ export const adminApi = {
     api.patch<unknown>(`/api/user/admin/${userId}/role`, { role, country }),
   updateUser: (userId: string, data: { firstName?: string; lastName?: string; phone?: string }) =>
     api.patch<unknown>(`/api/user/admin/${userId}`, data),
+  deleteUser: (userId: string) =>
+    api.delete<unknown>(`/api/user/admin/${userId}`),
   getProducts: (params?: { page?: number; limit?: number; category?: string; status?: string }) => {
     const q = new URLSearchParams();
     if (params?.page) q.set('page', String(params.page));

@@ -345,17 +345,57 @@ export default function UsersPage() {
           <p className="text-sm text-gray-500">
             {loading ? 'Loading...' : `Showing ${filteredUsers.length} of ${total} users`}
           </p>
-          <div className="flex items-center gap-2">
-            <button type="button" className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button type="button" className="px-3 py-1 bg-gold-500 text-white rounded-lg">1</button>
-            <button type="button" className="px-3 py-1 hover:bg-gray-100 rounded-lg">2</button>
-            <button type="button" className="px-3 py-1 hover:bg-gray-100 rounded-lg">3</button>
-            <button type="button" className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          {(() => {
+            const limit = 20;
+            const totalPages = Math.max(1, Math.ceil(total / limit));
+            return totalPages > 1 ? (
+              <div className="flex items-center gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  // Show pages around current page
+                  let pageNum: number;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (page <= 3) {
+                    pageNum = i + 1;
+                  } else if (page >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = page - 2 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setPage(pageNum)}
+                      className={`px-3 py-1 rounded-lg ${
+                        page === pageNum 
+                          ? 'bg-gold-500 text-white' 
+                          : 'hover:bg-gray-100'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                <button 
+                  type="button" 
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            ) : null;
+          })()}
         </div>
       </div>
 
@@ -376,6 +416,12 @@ export default function UsersPage() {
             onUpdate={async (userId, data) => {
               await adminApi.updateUser(userId, data);
               toast.success('User details updated');
+              setRefreshKey(k => k + 1); // refresh list
+              setSelectedUser(null);
+            }}
+            onDelete={async (userId) => {
+              await adminApi.deleteUser(userId);
+              toast.success('User deleted successfully');
               setRefreshKey(k => k + 1); // refresh list
               setSelectedUser(null);
             }}

@@ -173,6 +173,64 @@ router.patch(
 );
 
 /**
+ * DELETE /api/user/admin/:userId
+ * Delete a user (Admin only). Super admins can delete any user except themselves.
+ * Country admins can only delete users in their country (except admins).
+ */
+router.delete(
+  '/admin/:userId',
+  authorize('super_admin', 'country_admin'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId } = req.params;
+
+      // Cannot delete yourself
+      if (userId === req.user?.sub) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'You cannot delete your own account' },
+        });
+      }
+
+      const user = await findUserById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+      }
+
+      // Country admins can only delete users in their country
+      if (req.user?.role === 'country_admin') {
+        if (user.country !== req.user.country) {
+          return res.status(403).json({
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'You can only delete users in your assigned country' },
+          });
+        }
+        // Country admins cannot delete super_admin or other country_admin users
+        if (user.role === 'super_admin' || user.role === 'country_admin') {
+          return res.status(403).json({
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'You cannot delete admin users' },
+          });
+        }
+      }
+
+      // Soft delete: mark user as deleted
+      const deleted = await updateUser(userId, { isDeleted: true });
+      if (!deleted) {
+        return res.status(500).json({ success: false, error: { code: 'DELETE_FAILED', message: 'Failed to delete user' } });
+      }
+
+      res.json({
+        success: true,
+        message: 'User deleted successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * GET /api/user/me
  * Get current user profile
  */
