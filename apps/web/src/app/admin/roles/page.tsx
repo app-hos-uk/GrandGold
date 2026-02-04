@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield,
@@ -17,7 +17,6 @@ import {
   CreditCard,
   BarChart3,
   Settings,
-  Eye,
   FileText,
   UserCog,
   Globe,
@@ -25,6 +24,7 @@ import {
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { useToast } from '@/components/admin/toast';
+import { adminApi, RoleData, ApiError } from '@/lib/api';
 
 // Permission categories and their individual permissions
 const PERMISSION_CATEGORIES = {
@@ -114,11 +114,18 @@ interface Role {
   description: string;
   isSystem: boolean;
   scope: 'global' | 'country';
+  country?: string | null;
   permissions: string[];
   userCount: number;
 }
 
-// Default roles with their permissions
+const COUNTRIES = [
+  { value: 'IN', label: 'India' },
+  { value: 'AE', label: 'UAE' },
+  { value: 'UK', label: 'United Kingdom' },
+] as const;
+
+// Default system roles (shown when API is unavailable)
 const DEFAULT_ROLES: Role[] = [
   {
     id: 'super_admin',
@@ -148,34 +155,6 @@ const DEFAULT_ROLES: Role[] = [
     ],
     userCount: 3,
   },
-  {
-    id: 'manager',
-    name: 'Manager',
-    description: 'Can manage orders, products, and view reports',
-    isSystem: false,
-    scope: 'country' as const,
-    permissions: [
-      'users.view',
-      'orders.view', 'orders.update_status',
-      'products.view', 'products.edit',
-      'sellers.view',
-      'reports.view',
-    ],
-    userCount: 5,
-  },
-  {
-    id: 'support',
-    name: 'Support Staff',
-    description: 'Can view and handle customer support tasks',
-    isSystem: false,
-    scope: 'country' as const,
-    permissions: [
-      'users.view',
-      'orders.view', 'orders.update_status',
-      'kyc.view',
-    ],
-    userCount: 12,
-  },
 ];
 
 export default function RolesPage() {
@@ -185,13 +164,45 @@ export default function RolesPage() {
   const [editMode, setEditMode] = useState(false);
   const [createMode, setCreateMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const [editForm, setEditForm] = useState({
     name: '',
     description: '',
     scope: 'country' as 'global' | 'country',
+    country: '' as string,
     permissions: [] as string[],
   });
+
+  // Load roles from API
+  const loadRoles = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await adminApi.getRoles();
+      const apiRoles = (res as { roles?: RoleData[] })?.roles || [];
+      if (apiRoles.length > 0) {
+        setRoles(apiRoles.map((r) => ({
+          id: r.id,
+          name: r.name,
+          description: r.description || '',
+          isSystem: r.isSystem,
+          scope: r.scope,
+          country: r.country,
+          permissions: r.permissions || [],
+          userCount: r.userCount || 0,
+        })));
+      }
+    } catch (err) {
+      // Use default roles on error
+      console.error('Failed to load roles:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRoles();
+  }, [loadRoles]);
 
   const handleSelectRole = (role: Role) => {
     setSelectedRole(role);
@@ -205,6 +216,7 @@ export default function RolesPage() {
       name: role.name,
       description: role.description,
       scope: role.scope,
+      country: role.country || '',
       permissions: [...role.permissions],
     });
     setEditMode(true);
@@ -217,6 +229,7 @@ export default function RolesPage() {
       name: '',
       description: '',
       scope: 'country',
+      country: 'IN',
       permissions: [],
     });
     setEditMode(false);
@@ -251,40 +264,93 @@ export default function RolesPage() {
       return;
     }
 
-    setSaving(true);
-    // Simulate API call
-    await new Promise((r) => setTimeout(r, 800));
-
-    if (createMode) {
-      const newRole: Role = {
-        id: editForm.name.toLowerCase().replace(/\s+/g, '_'),
-        name: editForm.name,
-        description: editForm.description,
-        scope: editForm.scope,
-        permissions: editForm.permissions,
-        isSystem: false,
-        userCount: 0,
-      };
-      setRoles((prev) => [...prev, newRole]);
-      setSelectedRole(newRole);
-      toast.success('Role created successfully');
-    } else if (selectedRole) {
-      setRoles((prev) =>
-        prev.map((r) =>
-          r.id === selectedRole.id
-            ? { ...r, name: editForm.name, description: editForm.description, permissions: editForm.permissions, scope: editForm.scope }
-            : r
-        )
-      );
-      setSelectedRole((prev) =>
-        prev ? { ...prev, name: editForm.name, description: editForm.description, permissions: editForm.permissions, scope: editForm.scope } : prev
-      );
-      toast.success('Role updated successfully');
+    if (editForm.scope === 'country' && !editForm.country) {
+      toast.error('Please select a country for country-scoped roles');
+      return;
     }
 
-    setSaving(false);
-    setEditMode(false);
-    setCreateMode(false);
+    setSaving(true);
+
+    try {
+      if (createMode) {
+        const res = await adminApi.createRole({
+          name: editForm.name.trim(),
+          description: editForm.description,
+          scope: editForm.scope,
+          country: editForm.scope === 'country' ? editForm.country : undefined,
+          permissions: editForm.permissions,
+        });
+        const newRole = (res as { role?: RoleData })?.role;
+        if (newRole) {
+          setRoles((prev) => [...prev, {
+            id: newRole.id,
+            name: newRole.name,
+            description: newRole.description || '',
+            scope: newRole.scope,
+            country: newRole.country,
+            permissions: newRole.permissions || [],
+            isSystem: newRole.isSystem,
+            userCount: newRole.userCount || 0,
+          }]);
+          setSelectedRole({
+            id: newRole.id,
+            name: newRole.name,
+            description: newRole.description || '',
+            scope: newRole.scope,
+            country: newRole.country,
+            permissions: newRole.permissions || [],
+            isSystem: newRole.isSystem,
+            userCount: newRole.userCount || 0,
+          });
+        }
+        toast.success('Role created successfully');
+      } else if (selectedRole) {
+        const res = await adminApi.updateRole(selectedRole.id, {
+          name: editForm.name.trim(),
+          description: editForm.description,
+          scope: editForm.scope,
+          country: editForm.scope === 'country' ? editForm.country : undefined,
+          permissions: editForm.permissions,
+        });
+        const updatedRole = (res as { role?: RoleData })?.role;
+        if (updatedRole) {
+          setRoles((prev) =>
+            prev.map((r) =>
+              r.id === selectedRole.id
+                ? {
+                    ...r,
+                    name: updatedRole.name,
+                    description: updatedRole.description || '',
+                    permissions: updatedRole.permissions || [],
+                    scope: updatedRole.scope,
+                    country: updatedRole.country,
+                  }
+                : r
+            )
+          );
+          setSelectedRole((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  name: updatedRole.name,
+                  description: updatedRole.description || '',
+                  permissions: updatedRole.permissions || [],
+                  scope: updatedRole.scope,
+                  country: updatedRole.country,
+                }
+              : prev
+          );
+        }
+        toast.success('Role updated successfully');
+      }
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to save role';
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+      setEditMode(false);
+      setCreateMode(false);
+    }
   };
 
   const handleDelete = async (role: Role) => {
@@ -294,9 +360,15 @@ export default function RolesPage() {
     }
     if (!confirm(`Delete role "${role.name}"? Users with this role will be set to "customer".`)) return;
 
-    setRoles((prev) => prev.filter((r) => r.id !== role.id));
-    if (selectedRole?.id === role.id) setSelectedRole(null);
-    toast.success('Role deleted');
+    try {
+      await adminApi.deleteRole(role.id);
+      setRoles((prev) => prev.filter((r) => r.id !== role.id));
+      if (selectedRole?.id === role.id) setSelectedRole(null);
+      toast.success('Role deleted');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to delete role';
+      toast.error(msg);
+    }
   };
 
   return (
@@ -371,11 +443,11 @@ export default function RolesPage() {
                 )}
               </div>
               <p className="text-sm text-gray-600 mt-2 line-clamp-2">{role.description}</p>
-              <div className="flex items-center gap-2 mt-3">
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                   role.scope === 'global' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
                 }`}>
-                  {role.scope === 'global' ? 'Global' : 'Country-scoped'}
+                  {role.scope === 'global' ? 'Global' : role.country ? `${role.country} only` : 'Country-scoped'}
                 </span>
                 <span className="text-xs text-gray-500">
                   {role.permissions.length} permissions
@@ -455,28 +527,46 @@ export default function RolesPage() {
                   </div>
 
                   {(editMode || createMode) && (
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Scope</label>
-                      <div className="flex gap-3">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            checked={editForm.scope === 'country'}
-                            onChange={() => setEditForm((prev) => ({ ...prev, scope: 'country' }))}
-                            className="text-gold-500"
-                          />
-                          <span className="text-sm">Country-scoped</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            checked={editForm.scope === 'global'}
-                            onChange={() => setEditForm((prev) => ({ ...prev, scope: 'global' }))}
-                            className="text-gold-500"
-                          />
-                          <span className="text-sm">Global</span>
-                        </label>
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Scope</label>
+                        <div className="flex gap-3">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              checked={editForm.scope === 'country'}
+                              onChange={() => setEditForm((prev) => ({ ...prev, scope: 'country', country: prev.country || 'IN' }))}
+                              className="text-gold-500"
+                            />
+                            <span className="text-sm">Country-scoped</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              checked={editForm.scope === 'global'}
+                              onChange={() => setEditForm((prev) => ({ ...prev, scope: 'global', country: '' }))}
+                              className="text-gold-500"
+                            />
+                            <span className="text-sm">Global</span>
+                          </label>
+                        </div>
                       </div>
+                      {editForm.scope === 'country' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
+                          <select
+                            value={editForm.country}
+                            onChange={(e) => setEditForm((prev) => ({ ...prev, country: e.target.value }))}
+                            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                          >
+                            <option value="">Select a country</option>
+                            {COUNTRIES.map((c) => (
+                              <option key={c.value} value={c.value}>{c.label}</option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-gray-500 mt-1">This role will only be available for users in the selected country.</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

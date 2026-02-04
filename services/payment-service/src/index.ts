@@ -17,6 +17,7 @@ import { savedPaymentRouter } from './routes/saved-payments';
 import { paypalRouter } from './routes/paypal';
 import { splitPaymentRouter } from './routes/split-payment';
 import { fraudRouter } from './routes/fraud';
+import { adminFinanceRouter } from './routes/admin-finance';
 import { errorHandler } from './middleware/error-handler';
 import { notFoundHandler } from './middleware/not-found';
 
@@ -62,6 +63,7 @@ app.get('/health', (req, res) => {
 });
 
 // API routes - Order matters: more specific routes first
+app.use('/api/payments/admin', adminFinanceRouter);
 app.use('/api/payments/refunds', refundRouter);
 app.use('/api/payments/stripe', stripeRouter);
 app.use('/api/payments/razorpay', razorpayRouter);

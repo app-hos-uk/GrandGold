@@ -167,7 +167,7 @@ export class AmlService {
     }
     
     if (options.severity) {
-      alerts = alerts.filter((a) => a.riskLevel === options.severity);
+      alerts = alerts.filter((a) => a.severity === options.severity);
     }
     
     const total = alerts.length;
@@ -216,9 +216,16 @@ export class AmlService {
   }): Promise<void> {
     const alertId = generateId('aml');
     
-    const alert = {
+    const alert: AmlAlert = {
       id: alertId,
-      ...data,
+      userId: data.userId,
+      type: data.type,
+      severity: data.riskLevel as AmlAlert['severity'],
+      riskLevel: data.riskLevel,
+      description: `AML alert: ${data.type} for user ${data.userId}`,
+      amount: data.amount,
+      currency: data.currency,
+      flags: data.flags,
       status: 'pending',
       createdAt: new Date(),
     };

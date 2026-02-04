@@ -428,50 +428,8 @@ export default function SettingsPage() {
                       Under GDPR and similar regulations, you can request a copy of your data or delete your account.
                     </p>
                     <div className="space-y-6">
-                      <div className="p-4 bg-cream-50 rounded-xl flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-gold-100 rounded-xl flex items-center justify-center">
-                            <Download className="w-6 h-6 text-gold-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">Download my data</p>
-                            <p className="text-sm text-gray-500">Export your profile, orders, and activity as a ZIP file</p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            // In production: api.get('/api/user/me/export').then(blob => download)
-                            alert('Data export will be sent to your email within 24 hours.');
-                          }}
-                          className="px-4 py-2 bg-gold-500 hover:bg-gold-600 text-white text-sm font-medium rounded-lg transition-colors"
-                        >
-                          Request export
-                        </button>
-                      </div>
-                      <div className="p-4 bg-red-50 rounded-xl flex items-center justify-between border border-red-100">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-                            <Trash2 className="w-6 h-6 text-red-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">Delete my account</p>
-                            <p className="text-sm text-gray-500">Permanently delete your account and personal data. This cannot be undone.</p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm('Are you sure? This will permanently delete your account and all data.')) {
-                              // In production: api.post('/api/user/me/delete')
-                              alert('Account deletion request submitted. You will receive an email to confirm.');
-                            }
-                          }}
-                          className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-100 text-sm font-medium rounded-lg transition-colors"
-                        >
-                          Delete account
-                        </button>
-                      </div>
+                      <DataExportSection />
+                      <AccountDeleteSection country={country} />
                     </div>
                   </motion.div>
                 )}
@@ -481,5 +439,168 @@ export default function SettingsPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function DataExportSection() {
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError('');
+    try {
+      const response = await fetch('/api/user/data/export', {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Export failed');
+      }
+      const data = await response.json();
+      // Download as JSON
+      const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'my-grandgold-data.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      setExported(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <div className="p-4 bg-cream-50 rounded-xl flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 bg-gold-100 rounded-xl flex items-center justify-center">
+          <Download className="w-6 h-6 text-gold-600" />
+        </div>
+        <div>
+          <p className="font-medium text-gray-900">Download my data</p>
+          <p className="text-sm text-gray-500">Export your profile, orders, and activity as a JSON file</p>
+          {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+          {exported && <p className="text-xs text-green-600 mt-1">Data exported successfully!</p>}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={handleExport}
+        disabled={exporting}
+        className="px-4 py-2 bg-gold-500 hover:bg-gold-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+      >
+        {exporting ? 'Exporting...' : 'Download data'}
+      </button>
+    </div>
+  );
+}
+
+function AccountDeleteSection({ country }: { country: string }) {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleDelete = async () => {
+    if (confirmation !== 'DELETE MY ACCOUNT') {
+      setError('Please type "DELETE MY ACCOUNT" exactly');
+      return;
+    }
+    if (!password) {
+      setError('Password is required');
+      return;
+    }
+    setDeleting(true);
+    setError('');
+    try {
+      const response = await fetch('/api/user/account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ password, confirmation }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Deletion failed');
+      }
+      // Redirect to home after deletion
+      window.location.href = `/${country}`;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Deletion failed');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  if (showConfirm) {
+    return (
+      <div className="p-4 bg-red-50 rounded-xl border border-red-200">
+        <h4 className="font-medium text-red-800 mb-3">Confirm Account Deletion</h4>
+        <p className="text-sm text-red-700 mb-4">
+          This action is irreversible. All your data will be permanently deleted.
+        </p>
+        <div className="space-y-3 mb-4">
+          <input
+            type="password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm"
+          />
+          <input
+            type="text"
+            placeholder='Type "DELETE MY ACCOUNT" to confirm'
+            value={confirmation}
+            onChange={(e) => setConfirmation(e.target.value)}
+            className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm"
+          />
+        </div>
+        {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => { setShowConfirm(false); setPassword(''); setConfirmation(''); setError(''); }}
+            className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg"
+          >
+            {deleting ? 'Deleting...' : 'Delete permanently'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 bg-red-50 rounded-xl flex items-center justify-between border border-red-100">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+          <Trash2 className="w-6 h-6 text-red-600" />
+        </div>
+        <div>
+          <p className="font-medium text-gray-900">Delete my account</p>
+          <p className="text-sm text-gray-500">Permanently delete your account and personal data. This cannot be undone.</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => setShowConfirm(true)}
+        className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-100 text-sm font-medium rounded-lg transition-colors"
+      >
+        Delete account
+      </button>
+    </div>
   );
 }

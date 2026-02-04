@@ -364,14 +364,14 @@ export class OnboardingService {
     page: number;
     limit: number;
     adminUserId: string;
-    adminCountry: Country | 'super_admin';
+    adminCountry?: Country; // Undefined for super_admin (global access)
   }): Promise<{ data: any[]; total: number }> {
     let onboardings = Array.from(onboardingStore.values()).filter(
       (o) => o.status === 'in_review'
     );
 
-    // Filter by country if admin is country-specific
-    if (options.adminCountry && options.adminCountry !== 'super_admin') {
+    // Filter by country if admin is country-specific (super_admin has undefined country)
+    if (options.adminCountry) {
       onboardings = onboardings.filter((o) => o.country === options.adminCountry);
     }
 

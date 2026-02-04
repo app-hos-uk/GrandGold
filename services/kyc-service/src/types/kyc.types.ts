@@ -76,7 +76,10 @@ export interface TierVerification<T> {
   status: 'pending' | 'verified' | 'rejected';
   submittedAt: Date;
   verifiedAt?: Date;
+  verifiedBy?: string;
   rejectionReason?: string;
+  rejectedAt?: Date;
+  rejectedBy?: string;
 }
 
 /**
@@ -101,6 +104,14 @@ export interface KycRecord {
   updatedAt: Date;
   completedAt?: Date;
   expiresAt?: Date;
+  // Admin approval fields
+  approvedBy?: string;
+  approvedAt?: Date;
+  notes?: string;
+  // Admin rejection fields
+  rejectedBy?: string;
+  rejectedAt?: Date;
+  rejectionReason?: string;
 }
 
 /**
@@ -177,8 +188,14 @@ export interface AmlAlert {
   userId: string;
   type: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
+  riskLevel?: string;
   description: string;
-  status: 'open' | 'investigating' | 'resolved' | 'dismissed';
+  status: 'open' | 'pending' | 'investigating' | 'resolved' | 'dismissed';
+  amount?: number;
+  currency?: string;
+  flags?: string[];
+  resolution?: 'approved' | 'blocked' | 'escalated';
+  notes?: string;
   createdAt: Date;
   resolvedAt?: Date;
   resolvedBy?: string;

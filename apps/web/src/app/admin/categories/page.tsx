@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -17,9 +17,11 @@ import {
   X,
   Loader2,
   Check,
+  RefreshCw,
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { useToast } from '@/components/admin/toast';
+import { adminApi, CategoryData, ApiError } from '@/lib/api';
 
 interface Category {
   id: string;
@@ -112,14 +114,52 @@ const MOCK_CATEGORIES: Category[] = [
   },
 ];
 
+// Transform API data to local Category format
+function mapCategoryData(data: CategoryData): Category {
+  return {
+    id: data.id,
+    name: data.name,
+    slug: data.slug,
+    description: data.description || '',
+    parentId: data.parentId,
+    image: data.image || undefined,
+    productCount: data.productCount,
+    isActive: data.isActive,
+    order: data.order,
+    children: data.children?.map(mapCategoryData),
+  };
+}
+
 export default function CategoriesPage() {
   const toast = useToast();
-  const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(['1', '2', '3']));
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [editModal, setEditModal] = useState<Category | null>(null);
   const [createModal, setCreateModal] = useState<{ parentId: string | null } | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Load categories from API
+  const loadCategories = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await adminApi.getCategories();
+      const data = res?.data || [];
+      setCategories(data.map(mapCategoryData));
+      // Auto-expand top-level categories
+      setExpandedIds(new Set(data.filter((c) => !c.parentId).slice(0, 3).map((c) => c.id)));
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+      toast.error('Failed to load categories');
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -130,70 +170,59 @@ export default function CategoriesPage() {
     });
   };
 
-  const toggleActive = (id: string) => {
-    const updateCat = (cats: Category[]): Category[] =>
-      cats.map((c) => ({
-        ...c,
-        isActive: c.id === id ? !c.isActive : c.isActive,
-        children: c.children ? updateCat(c.children) : undefined,
-      }));
-    setCategories(updateCat(categories));
-    toast.success('Category visibility updated');
+  const toggleActive = async (id: string) => {
+    const findCat = (cats: Category[]): Category | undefined => {
+      for (const c of cats) {
+        if (c.id === id) return c;
+        if (c.children) {
+          const found = findCat(c.children);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    };
+    const cat = findCat(categories);
+    if (!cat) return;
+
+    try {
+      await adminApi.updateCategory(id, { isActive: !cat.isActive });
+      toast.success('Category visibility updated');
+      loadCategories();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to update category');
+    }
   };
 
-  const handleDelete = (cat: Category) => {
-    if (!confirm(`Delete "${cat.name}"? This will also delete all subcategories.`)) return;
-    const removeCat = (cats: Category[]): Category[] =>
-      cats.filter((c) => c.id !== cat.id).map((c) => ({
-        ...c,
-        children: c.children ? removeCat(c.children) : undefined,
-      }));
-    setCategories(removeCat(categories));
-    toast.success('Category deleted');
+  const handleDelete = async (cat: Category) => {
+    if (!confirm(`Delete "${cat.name}"? This cannot be undone.`)) return;
+    
+    try {
+      await adminApi.deleteCategory(cat.id);
+      toast.success('Category deleted');
+      loadCategories();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to delete category');
+    }
   };
 
   const handleSave = async (data: { name: string; slug: string; description: string; isActive: boolean }, parentId: string | null, editId?: string) => {
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 600));
-
-    if (editId) {
-      // Update existing
-      const updateCat = (cats: Category[]): Category[] =>
-        cats.map((c) => ({
-          ...c,
-          ...(c.id === editId ? { ...data } : {}),
-          children: c.children ? updateCat(c.children) : undefined,
-        }));
-      setCategories(updateCat(categories));
-      toast.success('Category updated');
-    } else {
-      // Create new
-      const newCat: Category = {
-        id: `new-${Date.now()}`,
-        ...data,
-        parentId,
-        productCount: 0,
-        order: 999,
-      };
-
-      if (parentId) {
-        const addChild = (cats: Category[]): Category[] =>
-          cats.map((c) => ({
-            ...c,
-            children: c.id === parentId
-              ? [...(c.children || []), newCat]
-              : c.children ? addChild(c.children) : undefined,
-          }));
-        setCategories(addChild(categories));
+    try {
+      if (editId) {
+        await adminApi.updateCategory(editId, data);
+        toast.success('Category updated');
       } else {
-        setCategories([...categories, newCat]);
+        await adminApi.createCategory({ ...data, parentId });
+        toast.success('Category created');
       }
-      toast.success('Category created');
+      loadCategories();
+      setEditModal(null);
+      setCreateModal(null);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to save category');
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
-    setEditModal(null);
-    setCreateModal(null);
   };
 
   const filteredCategories = searchQuery
@@ -203,8 +232,17 @@ export default function CategoriesPage() {
       )
     : categories;
 
-  const totalProducts = categories.reduce((sum, c) => sum + c.productCount, 0);
-  const activeCount = categories.filter((c) => c.isActive).length;
+  const countAll = (cats: Category[]): number => 
+    cats.reduce((sum, c) => sum + 1 + (c.children ? countAll(c.children) : 0), 0);
+  const countActive = (cats: Category[]): number =>
+    cats.reduce((sum, c) => sum + (c.isActive ? 1 : 0) + (c.children ? countActive(c.children) : 0), 0);
+  const countProducts = (cats: Category[]): number =>
+    cats.reduce((sum, c) => sum + c.productCount + (c.children ? countProducts(c.children) : 0), 0);
+
+  const totalCategories = countAll(categories);
+  const activeCount = countActive(categories);
+  const totalProducts = countProducts(categories);
+  const subcategoryCount = categories.reduce((sum, c) => sum + (c.children?.length || 0), 0);
 
   return (
     <div>
@@ -215,34 +253,42 @@ export default function CategoriesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
           <p className="text-gray-600">Organize your product catalog</p>
         </div>
-        <button
-          onClick={() => setCreateModal({ parentId: null })}
-          className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add Category
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={loadCategories}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <button
+            onClick={() => setCreateModal({ parentId: null })}
+            className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Category
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-white rounded-xl p-4 shadow-sm">
           <p className="text-sm text-gray-500">Total Categories</p>
-          <p className="text-2xl font-bold text-gray-900">{categories.length}</p>
+          <p className="text-2xl font-bold text-gray-900">{loading ? '...' : totalCategories}</p>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-sm">
           <p className="text-sm text-gray-500">Active Categories</p>
-          <p className="text-2xl font-bold text-green-600">{activeCount}</p>
+          <p className="text-2xl font-bold text-green-600">{loading ? '...' : activeCount}</p>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-sm">
           <p className="text-sm text-gray-500">Subcategories</p>
-          <p className="text-2xl font-bold text-gray-900">
-            {categories.reduce((sum, c) => sum + (c.children?.length || 0), 0)}
-          </p>
+          <p className="text-2xl font-bold text-gray-900">{loading ? '...' : subcategoryCount}</p>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-sm">
           <p className="text-sm text-gray-500">Total Products</p>
-          <p className="text-2xl font-bold text-gold-600">{totalProducts}</p>
+          <p className="text-2xl font-bold text-gold-600">{loading ? '...' : totalProducts}</p>
         </div>
       </div>
 

@@ -44,6 +44,7 @@ interface Settlement {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'on_hold';
   paymentMethod?: string;
   paymentReference?: string;
+  transactionRef?: string;
   paidAt?: string;
   createdAt: string;
   country: string;
@@ -133,7 +134,33 @@ export default function SettlementsPage() {
             <RefreshCw className="w-4 h-4" />
             Process All Pending
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600">
+          <button
+            onClick={() => {
+              const headers = ['ID', 'Seller Name', 'Period Start', 'Period End', 'Gross Amount', 'Commission', 'Net Amount', 'Order Count', 'Currency', 'Status'];
+              const rows = filteredSettlements.map(s => [
+                s.id,
+                s.sellerName,
+                s.periodStart,
+                s.periodEnd,
+                s.grossAmount,
+                s.commission,
+                s.netAmount,
+                s.orderCount,
+                s.currency,
+                s.status,
+              ].join(','));
+              const csv = [headers.join(','), ...rows].join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `settlements-export-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.success('Settlements exported successfully');
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600"
+          >
             <Download className="w-4 h-4" />
             Export
           </button>
@@ -299,7 +326,40 @@ export default function SettlementsPage() {
                           </button>
                         )}
                         {settlement.status === 'completed' && (
-                          <button className="p-2 hover:bg-gray-100 rounded-lg" title="Download Invoice">
+                          <button
+                            onClick={() => {
+                              // Generate and download invoice
+                              const invoice = [
+                                `Settlement Invoice: ${settlement.id}`,
+                                ``,
+                                `Seller: ${settlement.sellerName}`,
+                                `Period: ${new Date(settlement.periodStart).toLocaleDateString()} - ${new Date(settlement.periodEnd).toLocaleDateString()}`,
+                                ``,
+                                `Gross Amount: ${formatCurrency(settlement.grossAmount, settlement.currency)}`,
+                                `Commission: -${formatCurrency(settlement.commission, settlement.currency)}`,
+                                `Gateway Fees: -${formatCurrency(settlement.gatewayFees, settlement.currency)}`,
+                                `Taxes: -${formatCurrency(settlement.taxes, settlement.currency)}`,
+                                `Other Deductions: -${formatCurrency(settlement.otherDeductions, settlement.currency)}`,
+                                ``,
+                                `Net Amount: ${formatCurrency(settlement.netAmount, settlement.currency)}`,
+                                ``,
+                                `Orders: ${settlement.orderCount}`,
+                                `Status: Completed`,
+                                `Paid: ${settlement.paidAt ? new Date(settlement.paidAt).toLocaleDateString() : 'N/A'}`,
+                                `Transaction Ref: ${settlement.transactionRef || 'N/A'}`,
+                              ].join('\n');
+                              const blob = new Blob([invoice], { type: 'text/plain' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `settlement-invoice-${settlement.id}.txt`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                              toast.success('Invoice downloaded');
+                            }}
+                            className="p-2 hover:bg-gray-100 rounded-lg"
+                            title="Download Invoice"
+                          >
                             <FileText className="w-4 h-4 text-gray-500" />
                           </button>
                         )}

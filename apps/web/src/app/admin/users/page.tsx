@@ -79,6 +79,7 @@ export default function UsersPage() {
   const [adminCountry, setAdminCountry] = useState<string | null>(null);
   const [roleActioning, setRoleActioning] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     adminApi
@@ -114,7 +115,7 @@ export default function UsersPage() {
       })
       .catch(() => setUsers(FALLBACK_USERS))
       .finally(() => setLoading(false));
-  }, [page, statusFilter, countryFilter, searchQuery]);
+  }, [page, statusFilter, countryFilter, searchQuery, refreshKey]);
 
   const filteredUsers = users.filter((user) => {
     if (statusFilter !== 'all' && user.status !== statusFilter && user.role !== statusFilter) return false;
@@ -400,7 +401,11 @@ export default function UsersPage() {
                   await adminApi.setUserRole(userId, data.role, data.country);
                 }
                 setSuccess('User created successfully. They will receive a verification email.');
-                setTimeout(() => { setAddUserOpen(false); setSuccess(null); }, 2000);
+                setTimeout(() => { 
+                  setAddUserOpen(false); 
+                  setSuccess(null);
+                  setRefreshKey((k) => k + 1); // Trigger user list refresh
+                }, 2000);
               } catch (err) {
                 setError(err instanceof ApiError ? err.message : 'Failed to create user');
               } finally {
@@ -420,6 +425,8 @@ export default function UsersPage() {
 const ADD_USER_ROLES = [
   { value: 'customer', label: 'Customer' },
   { value: 'seller', label: 'Seller' },
+  { value: 'influencer', label: 'Influencer' },
+  { value: 'consultant', label: 'Consultant' },
   { value: 'staff', label: 'Staff' },
   { value: 'manager', label: 'Manager' },
   { value: 'country_admin', label: 'Country Admin' },

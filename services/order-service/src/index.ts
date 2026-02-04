@@ -17,6 +17,8 @@ import { returnRouter } from './routes/return';
 import { clickCollectRouter } from './routes/click-collect';
 import { consultationRouter } from './routes/consultation';
 import { notificationsRouter } from './routes/notifications';
+import { supportRouter } from './routes/support';
+import { shippingRouter } from './routes/shipping';
 import { errorHandler } from './middleware/error-handler';
 import { notFoundHandler } from './middleware/not-found';
 import { veilResponseMiddleware } from './middleware/veil';
@@ -71,6 +73,8 @@ app.use('/api/tracking', trackingRouter);
 app.use('/api/click-collect', clickCollectRouter);
 app.use('/api/consultation', consultationRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/support', supportRouter);
+app.use('/api/shipping', shippingRouter);
 
 // Error handling
 app.use(notFoundHandler);

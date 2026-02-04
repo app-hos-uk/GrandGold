@@ -31,6 +31,7 @@ export default function AdminInfluencersPage() {
   const [racks, setRacks] = useState<InfluencerRack[]>(FALLBACK_RACKS);
   const [loading, setLoading] = useState(true);
   const [modalRack, setModalRack] = useState<InfluencerRack | null | 'add'>(null);
+  const [commissionRack, setCommissionRack] = useState<InfluencerRack | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -200,8 +201,9 @@ export default function AdminInfluencersPage() {
                   </Link>
                   <button
                     type="button"
+                    onClick={() => setCommissionRack(inf)}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-gold-50 text-gold-700 rounded-lg hover:bg-gold-100"
-                    title="Commission summary – coming soon"
+                    title="View commission summary"
                   >
                     <BarChart3 className="w-4 h-4" />
                     Commission
@@ -229,6 +231,160 @@ export default function AdminInfluencersPage() {
           />
         )}
       </AnimatePresence>
+
+      {/* Commission Modal */}
+      <AnimatePresence>
+        {commissionRack && (
+          <CommissionModal
+            key="commission-modal"
+            influencer={commissionRack}
+            onClose={() => setCommissionRack(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function CommissionModal({
+  influencer,
+  onClose,
+}: {
+  influencer: InfluencerRack;
+  onClose: () => void;
+}) {
+  // Mock commission data - in production, fetch from API
+  const commissionData = {
+    totalEarnings: 45000,
+    pendingPayout: 12500,
+    lastPayout: 32500,
+    lastPayoutDate: '2024-01-15',
+    conversionRate: 3.2,
+    totalClicks: 1250,
+    totalOrders: 40,
+    avgOrderValue: 18500,
+    monthlyData: [
+      { month: 'Oct', earnings: 8500, orders: 8 },
+      { month: 'Nov', earnings: 12000, orders: 11 },
+      { month: 'Dec', earnings: 15000, orders: 14 },
+      { month: 'Jan', earnings: 9500, orders: 7 },
+    ],
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
+        <div className="p-6 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Commission Summary</h2>
+              <p className="text-gray-500">{influencer.name}</p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+              <span className="sr-only">Close</span>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {/* Stats Grid */}
+          <div className="grid sm:grid-cols-4 gap-4 mb-6">
+            <div className="bg-green-50 rounded-lg p-4">
+              <p className="text-sm text-green-600">Total Earnings</p>
+              <p className="text-2xl font-bold text-green-700">₹{commissionData.totalEarnings.toLocaleString()}</p>
+            </div>
+            <div className="bg-gold-50 rounded-lg p-4">
+              <p className="text-sm text-gold-600">Pending Payout</p>
+              <p className="text-2xl font-bold text-gold-700">₹{commissionData.pendingPayout.toLocaleString()}</p>
+            </div>
+            <div className="bg-blue-50 rounded-lg p-4">
+              <p className="text-sm text-blue-600">Total Orders</p>
+              <p className="text-2xl font-bold text-blue-700">{commissionData.totalOrders}</p>
+            </div>
+            <div className="bg-purple-50 rounded-lg p-4">
+              <p className="text-sm text-purple-600">Conversion Rate</p>
+              <p className="text-2xl font-bold text-purple-700">{commissionData.conversionRate}%</p>
+            </div>
+          </div>
+
+          {/* Commission Rate */}
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Commission Rate</p>
+                <p className="text-lg font-semibold text-gray-900">{influencer.commissionRate || 5}%</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Avg. Order Value</p>
+                <p className="text-lg font-semibold text-gray-900">₹{commissionData.avgOrderValue.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Total Clicks</p>
+                <p className="text-lg font-semibold text-gray-900">{commissionData.totalClicks.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Monthly Breakdown */}
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-3">Monthly Breakdown</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-sm text-gray-500 border-b border-gray-200">
+                    <th className="pb-2 font-medium">Month</th>
+                    <th className="pb-2 font-medium text-right">Orders</th>
+                    <th className="pb-2 font-medium text-right">Earnings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {commissionData.monthlyData.map((row) => (
+                    <tr key={row.month} className="border-b border-gray-100">
+                      <td className="py-3 text-gray-900">{row.month}</td>
+                      <td className="py-3 text-gray-600 text-right">{row.orders}</td>
+                      <td className="py-3 text-gray-900 font-medium text-right">₹{row.earnings.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Last Payout */}
+          <div className="mt-6 pt-6 border-t border-gray-100">
+            <p className="text-sm text-gray-500">
+              Last payout: <span className="font-medium text-gray-700">₹{commissionData.lastPayout.toLocaleString()}</span> on {new Date(commissionData.lastPayoutDate).toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-white"
+          >
+            Close
+          </button>
+          <button className="px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600">
+            Process Payout
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }

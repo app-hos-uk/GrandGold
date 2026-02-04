@@ -18,10 +18,10 @@ const helpCategories = [
     title: 'Getting Started',
     description: 'Learn the basics of selling on GrandGold',
     links: [
-      { name: 'How to complete onboarding', href: '#' },
-      { name: 'Setting up your store', href: '#' },
-      { name: 'Adding your first product', href: '#' },
-      { name: 'Understanding commissions', href: '#' },
+      { name: 'How to complete onboarding', href: '/seller/onboarding' },
+      { name: 'Setting up your store', href: '/seller/settings' },
+      { name: 'Adding your first product', href: '/seller/products' },
+      { name: 'Understanding commissions', href: '/seller/payouts' },
     ],
   },
   {
@@ -29,10 +29,10 @@ const helpCategories = [
     title: 'Products & Inventory',
     description: 'Manage your product listings and stock',
     links: [
-      { name: 'Product listing guidelines', href: '#' },
-      { name: 'Bulk upload products', href: '#' },
-      { name: 'Managing inventory', href: '#' },
-      { name: 'Product photography tips', href: '#' },
+      { name: 'Product listing guidelines', href: '/seller/products' },
+      { name: 'Bulk upload products', href: '/seller/products/bulk' },
+      { name: 'Managing inventory', href: '/seller/inventory' },
+      { name: 'Product photography tips', href: '/seller/products' },
     ],
   },
   {
@@ -40,10 +40,10 @@ const helpCategories = [
     title: 'Orders & Shipping',
     description: 'Handle orders and shipping logistics',
     links: [
-      { name: 'Processing orders', href: '#' },
-      { name: 'Shipping best practices', href: '#' },
-      { name: 'Handling returns', href: '#' },
-      { name: 'International shipping', href: '#' },
+      { name: 'Processing orders', href: '/seller/orders' },
+      { name: 'Shipping best practices', href: '/seller/orders' },
+      { name: 'Handling returns', href: '/seller/orders' },
+      { name: 'International shipping', href: '/seller/settings' },
     ],
   },
   {
@@ -51,10 +51,10 @@ const helpCategories = [
     title: 'Video Tutorials',
     description: 'Watch step-by-step video guides',
     links: [
-      { name: 'Seller dashboard overview', href: '#' },
-      { name: 'Product listing walkthrough', href: '#' },
-      { name: 'Order management tutorial', href: '#' },
-      { name: 'Payout settings guide', href: '#' },
+      { name: 'Seller dashboard overview', href: '/seller' },
+      { name: 'Product listing walkthrough', href: '/seller/products' },
+      { name: 'Order management tutorial', href: '/seller/orders' },
+      { name: 'Payout settings guide', href: '/seller/payouts' },
     ],
   },
 ];

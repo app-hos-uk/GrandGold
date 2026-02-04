@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { formatCurrency } from '@/lib/format';
+import { useToast } from '@/components/admin/toast';
 
 interface Transaction {
   id: string;
@@ -72,6 +73,7 @@ const statusConfig = {
 const COUNTRIES = ['IN', 'AE', 'UK'] as const;
 
 export default function TransactionsPage() {
+  const toast = useToast();
   const [transactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -119,7 +121,31 @@ export default function TransactionsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
           <p className="text-gray-600">View all platform financial transactions</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600">
+        <button
+          onClick={() => {
+            const headers = ['ID', 'Type', 'Amount', 'Currency', 'Status', 'Date', 'Description', 'Reference'];
+            const rows = filteredTransactions.map(t => [
+              t.id,
+              t.type,
+              t.amount,
+              t.currency,
+              t.status,
+              t.createdAt,
+              t.description.replace(/,/g, ';'),
+              t.reference,
+            ].join(','));
+            const csv = [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `transactions-export-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success('Transactions exported successfully');
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600"
+        >
           <Download className="w-4 h-4" />
           Export CSV
         </button>

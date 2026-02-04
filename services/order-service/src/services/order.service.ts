@@ -15,7 +15,7 @@ interface AdminOrderFilters extends OrderFilters {
   country?: string;
   dateFrom?: string;
   dateTo?: string;
-  adminCountry: Country | 'super_admin';
+  adminCountry?: Country; // Undefined for super_admin (global access)
 }
 
 export class OrderService {
@@ -188,8 +188,8 @@ export class OrderService {
     let orders = Array.from(orderStore.values())
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     
-    // Filter by admin's country if not super admin
-    if (filters.adminCountry && filters.adminCountry !== 'super_admin') {
+    // Filter by admin's country if not super admin (super admins have undefined country)
+    if (filters.adminCountry) {
       orders = orders.filter((o) => o.country === filters.adminCountry);
     }
     

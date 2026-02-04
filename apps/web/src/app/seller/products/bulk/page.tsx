@@ -80,13 +80,24 @@ export default function SellerBulkUploadPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      // In production: await api.postFormData('/api/sellers/products/bulk', formData);
-      await new Promise((r) => setTimeout(r, 2000));
-      setResult({ success: 48, failed: 2, errors: ['Row 12: Invalid category', 'Row 31: Duplicate SKU'] });
-      toast.success('Upload complete. Review results below.');
-    } catch {
-      toast.error('Upload failed');
-      setResult({ success: 0, failed: 50, errors: ['Upload service unavailable'] });
+      const response = await fetch('/api/sellers/products/bulk', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Upload failed');
+      }
+      setResult({
+        success: data.data?.imported ?? 0,
+        failed: data.data?.failed ?? 0,
+        errors: data.data?.errors ?? [],
+      });
+      toast.success(data.message || 'Upload complete. Review results below.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+      setResult({ success: 0, failed: 0, errors: [err instanceof Error ? err.message : 'Upload service unavailable'] });
     } finally {
       setUploading(false);
     }

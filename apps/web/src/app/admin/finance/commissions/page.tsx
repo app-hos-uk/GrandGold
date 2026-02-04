@@ -20,6 +20,7 @@ import {
 import Link from 'next/link';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { formatCurrency } from '@/lib/format';
+import { useToast } from '@/components/admin/toast';
 
 interface CommissionEntry {
   id: string;
@@ -68,6 +69,7 @@ const statusConfig = {
 };
 
 export default function CommissionsPage() {
+  const toast = useToast();
   const [commissions] = useState<CommissionEntry[]>(MOCK_COMMISSIONS);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -123,7 +125,33 @@ export default function CommissionsPage() {
             <option value="90days">Last 90 Days</option>
             <option value="year">This Year</option>
           </select>
-          <button className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600">
+          <button
+            onClick={() => {
+              const headers = ['ID', 'Order ID', 'Seller Name', 'Order Amount', 'Commission Rate', 'Commission Amount', 'Category', 'Country', 'Date', 'Status'];
+              const rows = filteredCommissions.map(c => [
+                c.id,
+                c.orderId,
+                c.sellerName,
+                c.orderAmount,
+                c.commissionRate,
+                c.commissionAmount,
+                c.category,
+                c.country,
+                c.createdAt,
+                c.status,
+              ].join(','));
+              const csv = [headers.join(','), ...rows].join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `commissions-export-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.success('Commissions exported successfully');
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600"
+          >
             <Download className="w-4 h-4" />
             Export
           </button>

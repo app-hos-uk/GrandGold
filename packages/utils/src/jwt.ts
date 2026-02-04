@@ -29,7 +29,7 @@ export function configureJwt(newConfig: Partial<JwtConfig>): void {
  */
 export function generateAccessToken(payload: Omit<JwtPayload, 'iat' | 'exp'>): string {
   const options: SignOptions = {
-    expiresIn: config.accessExpiresIn,
+    expiresIn: config.accessExpiresIn as jwt.SignOptions['expiresIn'],
     issuer: config.issuer,
     audience: config.audience,
   };
@@ -43,7 +43,7 @@ export function generateAccessToken(payload: Omit<JwtPayload, 'iat' | 'exp'>): s
 export function generateRefreshToken(userId: string): string {
   const payload = { sub: userId, type: 'refresh' };
   const options: SignOptions = {
-    expiresIn: config.refreshExpiresIn,
+    expiresIn: config.refreshExpiresIn as jwt.SignOptions['expiresIn'],
     issuer: config.issuer,
     audience: config.audience,
   };

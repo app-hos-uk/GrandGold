@@ -1,7 +1,7 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response, NextFunction, IRouter } from 'express';
 import { z } from 'zod';
 
-const router = Router();
+const router: IRouter = Router();
 
 // Send email (placeholder - wire to Resend/SendGrid)
 const sendEmailSchema = z.object({

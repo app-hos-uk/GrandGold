@@ -35,6 +35,15 @@ export function formatDateShort(date: Date | string | number): string {
   }
 }
 
-export function formatCurrency(amount: number): string {
-  return `₹${amount.toLocaleString('en-IN')}`;
+export function formatCurrency(amount: number, currency?: string): string {
+  const currencySymbols: Record<string, string> = {
+    INR: '₹',
+    AED: 'AED ',
+    GBP: '£',
+    USD: '$',
+    EUR: '€',
+  };
+  const symbol = currency ? (currencySymbols[currency] || `${currency} `) : '₹';
+  const locale = currency === 'INR' || !currency ? 'en-IN' : 'en-US';
+  return `${symbol}${amount.toLocaleString(locale)}`;
 }

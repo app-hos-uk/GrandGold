@@ -182,6 +182,36 @@ export const productReviewsRelations = relations(productReviews, ({ one }) => ({
   }),
 }));
 
+// Categories table (dynamic, hierarchical)
+export const categories = pgTable('categories', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  slug: varchar('slug', { length: 150 }).notNull().unique(),
+  description: text('description'),
+  parentId: varchar('parent_id', { length: 36 }),
+  image: text('image'),
+  icon: varchar('icon', { length: 50 }),
+  productCount: integer('product_count').notNull().default(0),
+  isActive: boolean('is_active').notNull().default(true),
+  order: integer('order').notNull().default(0),
+  level: integer('level').notNull().default(0), // 0 = root, 1 = child, 2 = grandchild
+  path: text('path'), // e.g., "1/5/12" for breadcrumb
+  metaTitle: varchar('meta_title', { length: 100 }),
+  metaDescription: text('meta_description'),
+  countries: jsonb('countries').$type<string[]>().notNull().default(['IN', 'AE', 'UK']),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const categoriesRelations = relations(categories, ({ one, many }) => ({
+  parent: one(categories, {
+    fields: [categories.parentId],
+    references: [categories.id],
+    relationName: 'parentChild',
+  }),
+  children: many(categories, { relationName: 'parentChild' }),
+}));
+
 // Type exports
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;
@@ -191,3 +221,5 @@ export type ProductReview = typeof productReviews.$inferSelect;
 export type NewProductReview = typeof productReviews.$inferInsert;
 export type Wishlist = typeof wishlists.$inferSelect;
 export type NewWishlist = typeof wishlists.$inferInsert;
+export type Category = typeof categories.$inferSelect;
+export type NewCategory = typeof categories.$inferInsert;

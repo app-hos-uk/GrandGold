@@ -19,6 +19,8 @@ import {
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { formatCurrency } from '@/lib/format';
 import { TableRowSkeleton, StatCardSkeleton } from '@/components/admin/skeleton';
+import { useToast } from '@/components/admin/toast';
+import Link from 'next/link';
 
 const FALLBACK: ProductRow[] = [
   { id: '1', name: 'Traditional Kundan Necklace Set', sku: 'GG-NK-001', category: 'Necklaces', price: 185000, stock: 12, status: 'active' },
@@ -54,6 +56,7 @@ interface ProductRow {
 }
 
 export default function ProductsPage() {
+  const toast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -63,6 +66,7 @@ export default function ProductsPage() {
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState<{ total: number; active: number; out_of_stock: number; low_stock: number } | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -107,18 +111,73 @@ export default function ProductsPage() {
           <p className="text-gray-600">Manage your product catalog</p>
         </div>
         <div className="flex items-center gap-3">
-          <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <label className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
             <Upload className="w-4 h-4" />
             Import
-          </button>
-          <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+            <input
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                toast.info('Processing import...');
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                  const response = await fetch('/api/products/import', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include',
+                  });
+                  if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.message || 'Import failed');
+                  }
+                  toast.success('Products imported successfully');
+                  setPage(1);
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Import failed');
+                }
+                e.target.value = '';
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              // Export products as CSV
+              const headers = ['SKU', 'Name', 'Category', 'Price', 'Stock', 'Status'];
+              const rows = products.map(p => [
+                p.sku || '',
+                p.name,
+                p.category || '',
+                p.price ?? 0,
+                p.stock ?? 0,
+                p.status || 'active',
+              ].join(','));
+              const csv = [headers.join(','), ...rows].join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `products-export-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.success('Products exported successfully');
+            }}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
             <Download className="w-4 h-4" />
             Export
           </button>
-          <button type="button" className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors">
+          <Link
+            href="/admin/products/new"
+            className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors"
+          >
             <Plus className="w-4 h-4" />
             Add Product
-          </button>
+          </Link>
         </div>
       </div>
 

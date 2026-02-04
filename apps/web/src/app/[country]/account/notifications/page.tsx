@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Bell, Mail, Smartphone, MessageCircle, Check } from 'lucide-react';
-import { api, notificationsApi, userApi } from '@/lib/api';
+import { notificationsApi, userApi } from '@/lib/api';
 
 interface NotificationPrefs {
   email?: { orders?: boolean; promotions?: boolean; priceAlerts?: boolean; newsletter?: boolean };
@@ -69,7 +69,9 @@ export default function NotificationsPage() {
       await notificationsApi.markRead(id);
       setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
       setUnreadCount((c) => Math.max(0, c - 1));
-    } catch {}
+    } catch {
+      // Silent fail - notification may already be marked
+    }
   };
 
   const markAllRead = async () => {
@@ -77,7 +79,9 @@ export default function NotificationsPage() {
       await notificationsApi.markAllRead();
       setItems((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadCount(0);
-    } catch {}
+    } catch {
+      // Silent fail - notifications may already be marked
+    }
   };
 
   return (

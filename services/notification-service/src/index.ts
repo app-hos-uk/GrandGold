@@ -1,13 +1,14 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { Application } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
 import { notificationRouter } from './routes/notification';
+import { marketingRouter } from './routes/marketing';
 import { errorHandler } from './middleware/error-handler';
 import { notFoundHandler } from './middleware/not-found';
 
-const app = express();
+const app: Application = express();
 
 app.set('trust proxy', 1);
 app.use(helmet());
@@ -31,6 +32,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/notifications', notificationRouter);
+app.use('/api/marketing', marketingRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

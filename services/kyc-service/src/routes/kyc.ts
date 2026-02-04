@@ -35,7 +35,7 @@ const tier2Schema = z.object({
   fullName: z.string().min(1),
   dateOfBirth: z.string(),
   nationality: z.string(),
-  documentType: z.enum(['passport', 'national_id', 'drivers_license', 'emirates_id', 'aadhaar', 'pan']),
+  documentType: z.enum(['passport', 'national_id', 'driving_license', 'residence_permit', 'voter_id', 'emirates_id', 'aadhaar', 'pan_card']),
   documentNumber: z.string().min(1),
   address: z.object({
     line1: z.string().min(1),

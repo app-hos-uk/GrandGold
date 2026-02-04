@@ -20,18 +20,23 @@ export const phoneSchemaByCountry = {
   UK: z.string().regex(/^7[0-9]{9}$/, 'Invalid UK phone number'),
 };
 
-// Generic phone validation
-export const phoneSchema = z.string().min(9).max(15);
+// Generic phone validation - allows digits, spaces, dashes, plus sign, parentheses
+export const phoneSchema = z
+  .string()
+  .min(7, 'Phone number too short')
+  .max(20, 'Phone number too long')
+  .transform((val) => val.replace(/[\s\-()]/g, '')) // Strip formatting
+  .refine((val) => /^\+?\d{7,15}$/.test(val), 'Invalid phone number format');
 
 // Country validation
 export const countrySchema = z.enum(['IN', 'AE', 'UK']);
 
-// Name validation
+// Name validation - allows Unicode letters, spaces, hyphens, apostrophes, dots
 export const nameSchema = z
   .string()
   .min(1, 'Name is required')
   .max(50, 'Name must be less than 50 characters')
-  .regex(/^[a-zA-Z\s'-]+$/, 'Name can only contain letters, spaces, hyphens, and apostrophes');
+  .regex(/^[\p{L}\s'.\-]+$/u, 'Name can only contain letters, spaces, hyphens, apostrophes, and dots');
 
 // Registration schema
 export const registerSchema = z.object({

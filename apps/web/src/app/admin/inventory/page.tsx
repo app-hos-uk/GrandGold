@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { useToast } from '@/components/admin/toast';
+import { adminApi, InventoryItem as ApiInventoryItem } from '@/lib/api';
 
 interface InventoryItem {
   id: string;
@@ -38,13 +39,9 @@ interface InventoryItem {
   country: string;
 }
 
-const MOCK_INVENTORY: InventoryItem[] = [
+const FALLBACK_INVENTORY: InventoryItem[] = [
   { id: '1', sku: 'GG-NKL-001', productName: 'Gold Necklace 22K', category: 'Necklaces', location: 'Mumbai Warehouse', quantity: 45, reserved: 5, available: 40, reorderPoint: 10, status: 'in_stock', lastUpdated: '2 hours ago', country: 'IN' },
   { id: '2', sku: 'GG-RNG-002', productName: 'Diamond Ring 18K', category: 'Rings', location: 'Mumbai Warehouse', quantity: 8, reserved: 3, available: 5, reorderPoint: 10, status: 'low_stock', lastUpdated: '1 hour ago', country: 'IN' },
-  { id: '3', sku: 'GG-BNG-003', productName: 'Gold Bangles Set', category: 'Bangles', location: 'Delhi Warehouse', quantity: 0, reserved: 0, available: 0, reorderPoint: 15, status: 'out_of_stock', lastUpdated: '30 min ago', country: 'IN' },
-  { id: '4', sku: 'GG-EAR-004', productName: 'Pearl Earrings', category: 'Earrings', location: 'Dubai Warehouse', quantity: 120, reserved: 20, available: 100, reorderPoint: 25, status: 'in_stock', lastUpdated: '4 hours ago', country: 'AE' },
-  { id: '5', sku: 'GG-BRC-005', productName: 'Gold Bracelet 22K', category: 'Bracelets', location: 'London Warehouse', quantity: 35, reserved: 10, available: 25, reorderPoint: 20, status: 'in_stock', lastUpdated: '1 day ago', country: 'UK' },
-  { id: '6', sku: 'GG-CHN-006', productName: 'Silver Chain', category: 'Chains', location: 'Mumbai Warehouse', quantity: 5, reserved: 5, available: 0, reorderPoint: 20, status: 'reserved', lastUpdated: '3 hours ago', country: 'IN' },
 ];
 
 const statusConfig = {
@@ -54,13 +51,57 @@ const statusConfig = {
   reserved: { color: 'bg-blue-100 text-blue-700', label: 'Reserved' },
 };
 
+function mapApiItem(item: ApiInventoryItem): InventoryItem {
+  return {
+    id: item.id,
+    sku: item.sku,
+    productName: item.productName,
+    category: item.category,
+    location: item.location,
+    quantity: item.quantity,
+    reserved: item.reserved,
+    available: item.available,
+    reorderPoint: item.reorderPoint,
+    status: item.status,
+    lastUpdated: item.lastUpdated,
+    country: item.country,
+  };
+}
+
 export default function InventoryPage() {
   const toast = useToast();
-  const [inventory, setInventory] = useState<InventoryItem[]>(MOCK_INVENTORY);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+
+  const loadInventory = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await adminApi.getInventory({
+        page,
+        limit: 50,
+        country: countryFilter || undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+      });
+      const items = res?.data || [];
+      setInventory(items.map(mapApiItem));
+      setTotal(res?.total || items.length);
+    } catch (err) {
+      console.error('Failed to load inventory:', err);
+      setInventory(FALLBACK_INVENTORY);
+      setTotal(FALLBACK_INVENTORY.length);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, countryFilter, statusFilter]);
+
+  useEffect(() => {
+    loadInventory();
+  }, [loadInventory]);
 
   const stats = {
     totalItems: inventory.reduce((sum, i) => sum + i.quantity, 0),
@@ -70,8 +111,6 @@ export default function InventoryPage() {
   };
 
   const filteredInventory = inventory.filter((item) => {
-    if (statusFilter !== 'all' && item.status !== statusFilter) return false;
-    if (countryFilter && item.country !== countryFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return (
@@ -84,9 +123,7 @@ export default function InventoryPage() {
   });
 
   const handleRefresh = async () => {
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
+    await loadInventory();
     toast.success('Inventory refreshed');
   };
 
@@ -108,14 +145,69 @@ export default function InventoryPage() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button
+            onClick={() => {
+              // Export inventory data as CSV
+              const headers = ['SKU', 'Product Name', 'Category', 'Location', 'Quantity', 'Reserved', 'Available', 'Reorder Point', 'Status', 'Country'];
+              const rows = inventory.map(item => [
+                item.sku,
+                item.productName,
+                item.category,
+                item.location,
+                item.quantity,
+                item.reserved,
+                item.available,
+                item.reorderPoint,
+                item.status,
+                item.country,
+              ].join(','));
+              const csv = [headers.join(','), ...rows].join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `inventory-export-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.success('Inventory exported successfully');
+            }}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
             <Download className="w-4 h-4" />
             Export
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors">
+          <label className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors cursor-pointer">
             <Upload className="w-4 h-4" />
             Import Stock
-          </button>
+            <input
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                toast.info('Processing import...');
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                  const response = await fetch('/api/inventory/import', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include',
+                  });
+                  if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.message || 'Import failed');
+                  }
+                  toast.success('Inventory imported successfully');
+                  handleRefresh();
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Import failed');
+                }
+                e.target.value = '';
+              }}
+            />
+          </label>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ToastProvider } from '@/components/admin/toast';
@@ -32,7 +32,7 @@ import {
   Truck,
   Sparkles,
 } from 'lucide-react';
-import { adminApi, authApi, type CurrentUserProfile } from '@/lib/api';
+import { adminApi, authApi, ApiError, type CurrentUserProfile } from '@/lib/api';
 import { Logo } from '@/components/brand/logo';
 
 const ALL_NAV = [
@@ -72,35 +72,69 @@ export default function AdminLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const profileFetchedRef = useRef(false);
+  const isRedirectingRef = useRef(false);
+
+  // Fetch profile only once on mount, not on every path change
+  const fetchProfile = useCallback(async () => {
+    if (isRedirectingRef.current) return;
+    
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
+        : null;
+    
+    if (!token) {
+      isRedirectingRef.current = true;
+      router.replace('/admin/login');
+      return;
+    }
+
+    try {
+      const user = await adminApi.getMe();
+      const role = user?.role;
+      if (role !== 'super_admin' && role !== 'country_admin') {
+        isRedirectingRef.current = true;
+        authApi.logout();
+        router.replace('/admin/login');
+        return;
+      }
+      setProfile(user);
+      profileFetchedRef.current = true;
+    } catch (error) {
+      // Only redirect on 401 Unauthorized errors
+      if (error instanceof ApiError && error.status === 401) {
+        isRedirectingRef.current = true;
+        authApi.logout();
+        router.replace('/admin/login');
+      } else {
+        // For other errors (network, 500, etc.), don't redirect if we already have a profile
+        console.error('Failed to fetch admin profile:', error);
+        if (!profileFetchedRef.current) {
+          // First load failed with non-auth error - still redirect
+          isRedirectingRef.current = true;
+          router.replace('/admin/login');
+        }
+        // Otherwise keep the existing profile and don't disrupt the session
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
 
   useEffect(() => {
     if (pathname === '/admin/login') {
       setLoading(false);
       return;
     }
-    const token =
-      typeof window !== 'undefined'
-        ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
-        : null;
-    if (!token) {
-      router.replace('/admin/login');
-      return;
+    
+    // Only fetch profile once, or if we don't have one yet
+    if (!profileFetchedRef.current) {
+      fetchProfile();
+    } else {
+      setLoading(false);
     }
-    adminApi
-      .getMe()
-      .then((user) => {
-        const role = user?.role;
-        if (role !== 'super_admin' && role !== 'country_admin') {
-          router.replace('/admin/login');
-          return;
-        }
-        setProfile(user);
-      })
-      .catch(() => {
-        router.replace('/admin/login');
-      })
-      .finally(() => setLoading(false));
-  }, [router, pathname]);
+  }, [pathname, fetchProfile]);
 
   const navigation = profile ? getNavigation(profile.role) : [];
   const roleLabel =

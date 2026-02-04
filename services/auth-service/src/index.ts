@@ -12,6 +12,9 @@ import { userRouter } from './routes/user';
 import { mfaRouter } from './routes/mfa';
 import { oauthRouter } from './routes/oauth';
 import { sessionRouter } from './routes/session';
+import { rolesRouter } from './routes/roles';
+import { adminRouter } from './routes/admin';
+import { auditLogsRouter } from './routes/audit-logs';
 import { errorHandler } from './middleware/error-handler';
 import { notFoundHandler } from './middleware/not-found';
 
@@ -74,6 +77,9 @@ app.use('/api/auth/oauth', oauthRouter);
 app.use('/api/user', userRouter);
 app.use('/api/mfa', mfaRouter);
 app.use('/api/sessions', sessionRouter);
+app.use('/api/roles', rolesRouter);
+app.use('/api/admin', adminRouter);
+app.use('/api/audit-logs', auditLogsRouter);
 
 // Error handling
 app.use(notFoundHandler);

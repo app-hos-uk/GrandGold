@@ -17,6 +17,7 @@ import { comparisonRouter } from './routes/comparison';
 import { qaRouter } from './routes/qa';
 import { bundleRouter } from './routes/bundle';
 import { influencerRouter } from './routes/influencer';
+import { categoryRouter } from './routes/category';
 import { errorHandler } from './middleware/error-handler';
 import { notFoundHandler } from './middleware/not-found';
 
@@ -68,6 +69,7 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+app.use('/api/categories', categoryRouter);
 app.use('/api/products/compare', comparisonRouter);
 app.use('/api/products', productRouter);
 app.use('/api/products', qaRouter);

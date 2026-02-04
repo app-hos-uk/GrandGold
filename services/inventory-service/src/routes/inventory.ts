@@ -1,16 +1,17 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { ValidationError } from '@grandgold/utils';
+import { ValidationError, NotFoundError } from '@grandgold/utils';
 import {
   InventoryService,
   InventoryCSVMapper,
   ERPBridge,
   InventoryForecasting,
 } from '../services/inventory.service';
-import { authenticate, optionalAuth } from '../middleware/auth';
+import { authenticate, optionalAuth, authorize } from '../middleware/auth';
 
 const router = Router();
 const inventoryService = new InventoryService();
+const ADMIN_ROLES = ['super_admin', 'country_admin', 'manager'];
 const csvMapper = new InventoryCSVMapper();
 const erpBridge = new ERPBridge();
 const forecasting = new InventoryForecasting();
@@ -27,6 +28,43 @@ const reserveSchema = z.object({
   quantity: z.number().int().positive(),
   cartId: z.string().min(1),
 });
+
+/**
+ * GET /api/inventory/admin
+ * List all inventory items (admin only)
+ */
+router.get(
+  '/admin',
+  authenticate,
+  authorize(...ADMIN_ROLES),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const status = req.query.status as string;
+      const country = req.query.country as string;
+      const search = req.query.search as string;
+
+      const result = await inventoryService.listAllInventory({
+        page,
+        limit,
+        status,
+        country,
+        search,
+      });
+
+      res.json({
+        success: true,
+        data: result.items,
+        total: result.total,
+        page,
+        limit,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 /**
  * GET /api/inventory/product/:productId

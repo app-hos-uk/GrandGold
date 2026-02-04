@@ -1,4 +1,4 @@
-import { eq, and, lt, desc, sql } from 'drizzle-orm';
+import { eq, and, lt, desc, sql, isNull, or } from 'drizzle-orm';
 import { db } from '../client';
 import {
   sessions,
@@ -6,6 +6,7 @@ import {
   oauthAccounts,
   otpCodes,
   userActivities,
+  roles,
   type Session,
   type NewSession,
   type VerificationToken,
@@ -16,6 +17,8 @@ import {
   type NewOtpCode,
   type UserActivity,
   type NewUserActivity,
+  type Role,
+  type NewRole,
 } from '../schema/auth';
 
 // Session queries
@@ -193,4 +196,53 @@ export async function getUserActivities(
     .where(eq(userActivities.userId, userId))
     .orderBy(desc(userActivities.createdAt))
     .limit(limit);
+}
+
+// Role queries
+export async function listRoles(options?: { country?: string }): Promise<Role[]> {
+  if (options?.country) {
+    // Return global roles + country-specific roles
+    return db.select()
+      .from(roles)
+      .where(or(
+        eq(roles.scope, 'global'),
+        and(eq(roles.scope, 'country'), eq(roles.country, options.country))
+      ))
+      .orderBy(desc(roles.isSystem), roles.name);
+  }
+  return db.select().from(roles).orderBy(desc(roles.isSystem), roles.name);
+}
+
+export async function findRoleById(id: string): Promise<Role | undefined> {
+  const result = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
+  return result[0];
+}
+
+export async function createRole(data: NewRole): Promise<Role> {
+  const result = await db.insert(roles).values(data).returning();
+  return result[0];
+}
+
+export async function updateRole(
+  id: string,
+  data: Partial<Omit<Role, 'id' | 'createdAt' | 'isSystem'>>
+): Promise<Role | undefined> {
+  const result = await db.update(roles)
+    .set({ ...data, updatedAt: new Date() })
+    .where(and(eq(roles.id, id), eq(roles.isSystem, false)))
+    .returning();
+  return result[0];
+}
+
+export async function deleteRole(id: string): Promise<boolean> {
+  const result = await db.delete(roles)
+    .where(and(eq(roles.id, id), eq(roles.isSystem, false)))
+    .returning({ id: roles.id });
+  return result.length > 0;
+}
+
+export async function updateRoleUserCount(roleId: string, delta: number): Promise<void> {
+  await db.update(roles)
+    .set({ userCount: sql`GREATEST(0, ${roles.userCount} + ${delta})` })
+    .where(eq(roles.id, roleId));
 }

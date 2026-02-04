@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -23,8 +23,11 @@ import {
   CheckCircle,
   XCircle,
   Info,
+  RefreshCw,
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
+import { adminApi, AuditLog as ApiAuditLog } from '@/lib/api';
+import { useToast } from '@/components/admin/toast';
 
 interface AuditLog {
   id: string;
@@ -158,15 +161,61 @@ const statusConfig = {
   warning: { icon: AlertCircle, color: 'text-yellow-600', bg: 'bg-yellow-100' },
 };
 
+// Fallback data for when API is unavailable
+const FALLBACK_LOGS: AuditLog[] = MOCK_LOGS.slice(0, 3);
+
+function mapApiLog(log: ApiAuditLog): AuditLog {
+  return {
+    id: log.id,
+    timestamp: log.timestamp,
+    actor: log.actor,
+    action: log.action,
+    category: log.category as AuditLog['category'],
+    resource: log.resource,
+    details: log.details,
+    status: log.status as AuditLog['status'],
+    ip: log.ip,
+    userAgent: log.userAgent,
+    country: log.country,
+  };
+}
+
 export default function AuditLogsPage() {
-  const [logs] = useState<AuditLog[]>(MOCK_LOGS);
+  const toast = useToast();
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const loadLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await adminApi.getAuditLogs({
+        page,
+        limit: 50,
+        category: categoryFilter !== 'all' ? categoryFilter : undefined,
+      });
+      const data = res?.data || [];
+      setLogs(data.map(mapApiLog));
+      setTotal(res?.total || data.length);
+    } catch (err) {
+      console.error('Failed to load audit logs:', err);
+      setLogs(FALLBACK_LOGS);
+      setTotal(FALLBACK_LOGS.length);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, categoryFilter]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
+
   const filteredLogs = logs.filter((log) => {
-    if (categoryFilter !== 'all' && log.category !== categoryFilter) return false;
     if (statusFilter !== 'all' && log.status !== statusFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -198,7 +247,32 @@ export default function AuditLogsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Audit Logs</h1>
           <p className="text-gray-600">Track all admin actions and system events</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+        <button
+          onClick={() => {
+            const headers = ['ID', 'Timestamp', 'Actor Name', 'Actor Email', 'Action', 'Category', 'Status', 'IP Address', 'Description'];
+            const rows = logs.map(l => [
+              l.id,
+              l.timestamp,
+              l.actor.name,
+              l.actor.email,
+              l.action,
+              l.category,
+              l.status,
+              l.ip || '',
+              (l.details || '').replace(/,/g, ';'),
+            ].join(','));
+            const csv = [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `audit-logs-export-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success('Audit logs exported successfully');
+          }}
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+        >
           <Download className="w-4 h-4" />
           Export Logs
         </button>

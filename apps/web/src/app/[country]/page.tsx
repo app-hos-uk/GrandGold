@@ -6,15 +6,20 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Sparkles, Shield, TrendingUp } from 'lucide-react';
 import { TrendingProducts } from '@/components/home/trending-products';
 import { PersonalizedSection } from '@/components/home/personalized-section';
+import { getFeaturedProducts, getBestsellers, type MockProduct } from '@/lib/product-data';
 
-const mockProducts = [
-  { id: '1', name: 'Traditional Kundan Necklace Set', category: 'Necklaces', price: 185000 },
-  { id: '2', name: 'Diamond Jhumkas', category: 'Earrings', price: 78500 },
-  { id: '3', name: 'Solitaire Ring', category: 'Rings', price: 245000 },
-  { id: '4', name: 'Pearl Drop Earrings', category: 'Earrings', price: 45000 },
-  { id: '5', name: 'Temple Choker', category: 'Necklaces', price: 295000 },
-  { id: '6', name: 'Diamond Eternity Band', category: 'Rings', price: 165000 },
-];
+// Get products from shared data file (edit product-data.ts to update)
+const featuredProducts = getFeaturedProducts();
+const bestsellers = getBestsellers();
+const mockProducts = [...featuredProducts, ...bestsellers]
+  .filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i) // dedupe
+  .slice(0, 6)
+  .map((p: MockProduct) => ({
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    price: p.price,
+  }));
 
 // Country-specific content
 const countryContent = {

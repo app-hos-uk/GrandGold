@@ -103,6 +103,59 @@ export const userActivitiesRelations = relations(userActivities, ({ one }) => ({
   }),
 }));
 
+// Role scope enum
+export const roleScopeEnum = pgEnum('role_scope', ['global', 'country']);
+
+// Custom roles table for RBAC
+export const roles = pgTable('roles', {
+  id: varchar('id', { length: 50 }).primaryKey(), // e.g., 'super_admin', 'manager_in'
+  name: varchar('name', { length: 100 }).notNull(),
+  description: text('description'),
+  scope: roleScopeEnum('scope').notNull().default('country'),
+  country: varchar('country', { length: 3 }), // For country-scoped roles
+  permissions: jsonb('permissions').$type<string[]>().notNull().default([]),
+  isSystem: boolean('is_system').notNull().default(false), // System roles can't be deleted
+  userCount: integer('user_count').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// Audit logs table for admin activity tracking
+export const auditLogCategoryEnum = pgEnum('audit_log_category', [
+  'auth',
+  'users',
+  'orders',
+  'products',
+  'payments',
+  'settings',
+  'security',
+]);
+
+export const auditLogStatusEnum = pgEnum('audit_log_status', ['success', 'failed', 'warning']);
+
+export const auditLogs = pgTable('audit_logs', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  timestamp: timestamp('timestamp').notNull().defaultNow(),
+  actor: jsonb('actor').$type<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  }>().notNull(),
+  action: varchar('action', { length: 100 }).notNull(),
+  category: varchar('category', { length: 50 }).notNull(),
+  resource: jsonb('resource').$type<{
+    type: string;
+    id: string;
+    name?: string;
+  }>().notNull(),
+  details: text('details').notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('success'),
+  ip: varchar('ip', { length: 45 }).notNull(),
+  userAgent: text('user_agent').notNull(),
+  country: varchar('country', { length: 3 }),
+});
+
 // Type exports
 export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
@@ -114,3 +167,7 @@ export type OtpCode = typeof otpCodes.$inferSelect;
 export type NewOtpCode = typeof otpCodes.$inferInsert;
 export type UserActivity = typeof userActivities.$inferSelect;
 export type NewUserActivity = typeof userActivities.$inferInsert;
+export type Role = typeof roles.$inferSelect;
+export type NewRole = typeof roles.$inferInsert;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;

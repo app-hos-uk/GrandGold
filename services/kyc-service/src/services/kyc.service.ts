@@ -87,12 +87,14 @@ export class KycService {
         tier: 'none',
         status: 'pending',
         createdAt: new Date(),
+        updatedAt: new Date(),
       };
     }
     
     kyc.tier1 = {
-      ...data,
+      data,
       verified: true, // Auto-verify for tier1 if email/phone verified
+      status: 'verified',
       submittedAt: new Date(),
       verifiedAt: new Date(),
     };
@@ -117,18 +119,18 @@ export class KycService {
     }
     
     kyc.tier2 = {
-      ...data,
+      data,
       status: 'pending',
       verified: false,
       submittedAt: new Date(),
     };
     
-    kyc.status = 'pending_review';
+    kyc.status = 'pending';
     kyc.updatedAt = new Date();
     
     kycStore.set(userId, kyc);
     
-    return { status: 'pending_review' };
+    return { status: 'pending' };
   }
 
   /**
@@ -148,14 +150,14 @@ export class KycService {
     
     // Process ID document with Document AI when documentFront is uploaded
     const idDocument = documents.documentFront || documents.documentBack;
-    const documentType = kyc.tier2?.documentType;
-    if (idDocument && documentType) {
+    const documentType = kyc.tier2?.data?.documentType;
+    if (idDocument && documentType && kyc.tier2?.data) {
       try {
         const { DocumentAIService } = await import('./document-ai.service');
         const docAIService = new DocumentAIService();
         const result = await docAIService.processDocumentWithOCR(
           idDocument.buffer,
-          kyc.tier2.documentType as any
+          documentType as any
         );
         if (result.success) {
           extractedData = result.extractedData;
@@ -223,7 +225,7 @@ export class KycService {
   }> {
     const kyc = kycStore.get(userId);
     const tier: KycTier = kyc?.tier || 'none';
-    const country: Country = kyc?.tier2?.address?.country || kyc?.tier1?.country || 'IN';
+    const country: Country = kyc?.tier2?.data?.address?.country || 'IN';
     
     const currencies: Record<Country, string> = { IN: 'INR', AE: 'AED', UK: 'GBP' };
     
@@ -295,12 +297,12 @@ export class KycService {
     adminCountry: Country;
   }): Promise<PaginatedResult<KycRecord>> {
     let applications = Array.from(kycStore.values()).filter(
-      (kyc) => kyc.status === 'pending_review'
+      (kyc) => kyc.status === 'pending'
     );
     
     if (options.country) {
       applications = applications.filter(
-        (kyc) => kyc.tier2?.address?.country === options.country
+        (kyc) => kyc.tier2?.data?.address?.country === options.country
       );
     }
     
@@ -349,7 +351,7 @@ export class KycService {
       kyc.tier2.verified = true;
       kyc.tier2.verifiedAt = new Date();
       kyc.tier2.verifiedBy = adminUserId;
-      kyc.tier2.status = 'approved';
+      kyc.tier2.status = 'verified';
       kyc.tier = 'tier2';
     }
     

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -21,7 +21,7 @@ import {
   HelpCircle,
   FileCheck,
 } from 'lucide-react';
-import { authApi, getStoredToken } from '@/lib/api';
+import { authApi, getStoredToken, ApiError } from '@/lib/api';
 
 const navigation = [
   { name: 'Dashboard', href: '/seller', icon: LayoutDashboard },
@@ -42,30 +42,55 @@ export default function SellerLayout({
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authChecked, setAuthChecked] = useState(pathname === '/seller/login');
+  const profileFetchedRef = useRef(false);
+  const isRedirectingRef = useRef(false);
+
+  const fetchProfile = useCallback(async () => {
+    if (isRedirectingRef.current) return;
+    
+    const token = getStoredToken();
+    if (!token) {
+      isRedirectingRef.current = true;
+      router.replace('/seller/login');
+      return;
+    }
+
+    try {
+      const user = await authApi.getMe();
+      if (user.role !== 'seller') {
+        isRedirectingRef.current = true;
+        authApi.logout();
+        router.replace('/seller/login');
+        return;
+      }
+      setAuthChecked(true);
+      profileFetchedRef.current = true;
+    } catch (error) {
+      // Only redirect on 401 Unauthorized errors
+      if (error instanceof ApiError && error.status === 401) {
+        isRedirectingRef.current = true;
+        authApi.logout();
+        router.replace('/seller/login');
+      } else {
+        console.error('Failed to fetch seller profile:', error);
+        if (!profileFetchedRef.current) {
+          isRedirectingRef.current = true;
+          router.replace('/seller/login');
+        }
+      }
+    }
+  }, [router]);
 
   useEffect(() => {
     if (pathname === '/seller/login') {
       setAuthChecked(true);
       return;
     }
-    const token = getStoredToken();
-    if (!token) {
-      router.replace('/seller/login');
-      return;
+    
+    if (!profileFetchedRef.current) {
+      fetchProfile();
     }
-    authApi
-      .getMe()
-      .then((user) => {
-        if (user.role !== 'seller') {
-          router.replace('/seller/login');
-          return;
-        }
-        setAuthChecked(true);
-      })
-      .catch(() => {
-        router.replace('/seller/login');
-      });
-  }, [pathname, router]);
+  }, [pathname, fetchProfile]);
 
   if (pathname === '/seller/login') {
     return <>{children}</>;

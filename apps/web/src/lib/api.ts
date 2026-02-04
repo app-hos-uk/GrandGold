@@ -8,10 +8,13 @@ const getBaseUrl = () => {
   return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 };
 
+const AUTH_TOKEN_KEY = 'grandgold_token';
+const AUTH_REFRESH_KEY = 'grandgold_refresh';
+
 /** Get auth token - from localStorage (set after login) or cookie */
 const getAuthHeaders = (): HeadersInit => {
   if (typeof window === 'undefined') return {};
-  const token = localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken');
+  const token = localStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem('accessToken');
   if (token) return { Authorization: `Bearer ${token}` };
   return {};
 };
@@ -28,7 +31,67 @@ export class ApiError extends Error {
   }
 }
 
-async function handleResponse<T>(res: Response): Promise<T> {
+// Token refresh state to prevent multiple simultaneous refreshes
+let isRefreshing = false;
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  
+  const refreshToken = localStorage.getItem(AUTH_REFRESH_KEY);
+  if (!refreshToken) return false;
+  
+  // If already refreshing, wait for that to complete
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+  
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+        credentials: 'include',
+      });
+      
+      if (!res.ok) {
+        return false;
+      }
+      
+      const data = await res.json();
+      const tokens = data?.data?.tokens || data?.tokens;
+      if (tokens?.accessToken) {
+        localStorage.setItem(AUTH_TOKEN_KEY, tokens.accessToken);
+        localStorage.setItem('accessToken', tokens.accessToken);
+        if (tokens.refreshToken) {
+          localStorage.setItem(AUTH_REFRESH_KEY, tokens.refreshToken);
+        }
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+  
+  return refreshPromise;
+}
+
+async function handleResponse<T>(res: Response, retryFn?: () => Promise<Response>): Promise<T> {
+  // If 401 and we have a retry function, try to refresh token and retry
+  if (res.status === 401 && retryFn) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      const retryRes = await retryFn();
+      return handleResponse<T>(retryRes); // Don't pass retryFn to avoid infinite loop
+    }
+  }
+  
   const data = await res.json().catch(() => ({}));
   
   if (!res.ok) {
@@ -46,7 +109,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export const api = {
   async patch<T>(path: string, body: unknown, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${getBaseUrl()}${path}`, {
+    const doFetch = () => fetch(`${getBaseUrl()}${path}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -57,21 +120,23 @@ export const api = {
       credentials: 'include',
       ...options,
     });
-    return handleResponse<T>(res);
+    const res = await doFetch();
+    return handleResponse<T>(res, doFetch);
   },
 
   async delete<T>(path: string, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${getBaseUrl()}${path}`, {
+    const doFetch = () => fetch(`${getBaseUrl()}${path}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
       credentials: 'include',
       ...options,
     });
-    return handleResponse<T>(res);
+    const res = await doFetch();
+    return handleResponse<T>(res, doFetch);
   },
 
   async post<T>(path: string, body: unknown, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${getBaseUrl()}${path}`, {
+    const doFetch = () => fetch(`${getBaseUrl()}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -82,11 +147,12 @@ export const api = {
       credentials: 'include',
       ...options,
     });
-    return handleResponse<T>(res);
+    const res = await doFetch();
+    return handleResponse<T>(res, doFetch);
   },
 
   async put<T>(path: string, body: unknown, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${getBaseUrl()}${path}`, {
+    const doFetch = () => fetch(`${getBaseUrl()}${path}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -97,28 +163,31 @@ export const api = {
       credentials: 'include',
       ...options,
     });
-    return handleResponse<T>(res);
+    const res = await doFetch();
+    return handleResponse<T>(res, doFetch);
   },
 
   async get<T>(path: string, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${getBaseUrl()}${path}`, {
+    const doFetch = () => fetch(`${getBaseUrl()}${path}`, {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include',
       ...options,
     });
-    return handleResponse<T>(res);
+    const res = await doFetch();
+    return handleResponse<T>(res, doFetch);
   },
 
   async postFormData<T>(path: string, formData: FormData, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${getBaseUrl()}${path}`, {
+    const doFetch = () => fetch(`${getBaseUrl()}${path}`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: formData,
       credentials: 'include',
       ...options,
     });
-    return handleResponse<T>(res);
+    const res = await doFetch();
+    return handleResponse<T>(res, doFetch);
   },
 };
 
@@ -255,6 +324,40 @@ export const adminApi = {
     if (params?.status) q.set('status', params.status);
     return api.get<{ data: unknown[]; total: number }>(`/api/search/admin?${q.toString()}`);
   },
+  createProduct: (data: {
+    name: string;
+    sku?: string;
+    slug: string;
+    category: string;
+    description?: string;
+    basePrice: number;
+    currency: string;
+    pricingModel: 'fixed' | 'live_rate';
+    goldWeight?: number;
+    purity?: string;
+    metalType?: string;
+    stockQuantity?: number;
+    tags?: string[];
+    countries: string[];
+  }) => api.post<{ data: { id: string } }>('/api/products', data),
+  updateProduct: (id: string, data: Partial<{
+    name: string;
+    sku: string;
+    slug: string;
+    category: string;
+    description: string;
+    basePrice: number;
+    currency: string;
+    pricingModel: 'fixed' | 'live_rate';
+    goldWeight: number;
+    purity: string;
+    metalType: string;
+    stockQuantity: number;
+    tags: string[];
+    countries: string[];
+    isActive: boolean;
+  }>) => api.patch<{ data: { id: string } }>(`/api/products/${id}`, data),
+  deleteProduct: (id: string) => api.delete<void>(`/api/products/${id}`),
   getOrders: (params?: { page?: number; limit?: number; country?: string; status?: string }) => {
     const q = new URLSearchParams();
     if (params?.page) q.set('page', String(params.page));
@@ -310,7 +413,337 @@ export const adminApi = {
     api.post<unknown>(`/api/sellers/onboarding/${onboardingId}/approve`, {}),
   rejectOnboarding: (onboardingId: string, reason: string) =>
     api.post<unknown>(`/api/sellers/onboarding/${onboardingId}/reject`, { reason }),
+  // Seller invitation
+  inviteSeller: (data: { 
+    email: string; 
+    firstName: string; 
+    lastName: string; 
+    phone: string; 
+    businessName: string; 
+    country: string; 
+    tempPassword?: string;
+  }) => api.post<{ data: { id: string; email: string; onboardingUrl: string }; message: string }>('/api/admin/invite-seller', data),
+  // Influencer invitation
+  inviteInfluencer: (data: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone?: string;
+    country: string;
+    socialHandles?: { instagram?: string; youtube?: string; tiktok?: string };
+    tempPassword?: string;
+  }) => api.post<{ data: { id: string; email: string }; message: string }>('/api/admin/invite-influencer', data),
+  // Roles CRUD
+  getRoles: (params?: { country?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.country) q.set('country', params.country);
+    return api.get<{ roles: RoleData[] }>(`/api/roles?${q.toString()}`);
+  },
+  getRole: (roleId: string) => api.get<{ role: RoleData }>(`/api/roles/${roleId}`),
+  createRole: (data: { name: string; description?: string; scope: 'global' | 'country'; country?: string; permissions: string[] }) =>
+    api.post<{ role: RoleData }>('/api/roles', data),
+  updateRole: (roleId: string, data: { name?: string; description?: string; scope?: 'global' | 'country'; country?: string; permissions?: string[] }) =>
+    api.patch<{ role: RoleData }>(`/api/roles/${roleId}`, data),
+  deleteRole: (roleId: string) => api.delete<void>(`/api/roles/${roleId}`),
+  // Categories CRUD
+  getCategories: (params?: { flat?: boolean; country?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.flat) q.set('flat', 'true');
+    if (params?.country) q.set('country', params.country);
+    return api.get<{ data: CategoryData[]; total: number }>(`/api/categories?${q.toString()}`);
+  },
+  getCategory: (idOrSlug: string) => api.get<{ data: CategoryData & { children?: CategoryData[] } }>(`/api/categories/${idOrSlug}`),
+  createCategory: (data: { name: string; slug?: string; description?: string; parentId?: string | null; image?: string; icon?: string; isActive?: boolean; order?: number; metaTitle?: string; metaDescription?: string; countries?: string[] }) =>
+    api.post<{ data: CategoryData }>('/api/categories', data),
+  updateCategory: (id: string, data: Partial<{ name: string; slug: string; description: string; parentId: string | null; image: string; icon: string; isActive: boolean; order: number; metaTitle: string; metaDescription: string; countries: string[] }>) =>
+    api.patch<{ data: CategoryData }>(`/api/categories/${id}`, data),
+  deleteCategory: (id: string) => api.delete<void>(`/api/categories/${id}`),
+  reorderCategories: (items: { id: string; order: number }[]) =>
+    api.post<void>('/api/categories/reorder', { items }),
+  // Inventory (admin view)
+  getInventory: (params?: { page?: number; limit?: number; country?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.country) q.set('country', params.country);
+    if (params?.status) q.set('status', params.status);
+    return api.get<{ data: InventoryItem[]; total: number }>(`/api/inventory/admin?${q.toString()}`);
+  },
+  getInventoryAlerts: () => api.get<{ data: InventoryItem[] }>('/api/inventory/alerts'),
+  updateInventory: (productId: string, data: { quantity: number; lowStockThreshold?: number }) =>
+    api.put<{ data: InventoryItem }>(`/api/inventory/product/${productId}`, data),
+  // Analytics (admin dashboard)
+  getAnalytics: (params?: { dateRange?: string; country?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.dateRange) q.set('dateRange', params.dateRange);
+    if (params?.country) q.set('country', params.country);
+    return api.get<AdminAnalytics>(`/api/admin/analytics?${q.toString()}`);
+  },
+  // Finance
+  getFinanceStats: (params?: { dateRange?: string; country?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.dateRange) q.set('dateRange', params.dateRange);
+    if (params?.country) q.set('country', params.country);
+    return api.get<FinanceStats>(`/api/payments/admin/stats?${q.toString()}`);
+  },
+  getTransactions: (params?: { page?: number; limit?: number; type?: string; status?: string; country?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.type) q.set('type', params.type);
+    if (params?.status) q.set('status', params.status);
+    if (params?.country) q.set('country', params.country);
+    return api.get<{ data: TransactionRecord[]; total: number }>(`/api/payments/admin/transactions?${q.toString()}`);
+  },
+  getSettlements: (params?: { page?: number; limit?: number; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.status) q.set('status', params.status);
+    return api.get<{ data: Settlement[]; total: number }>(`/api/payments/admin/settlements?${q.toString()}`);
+  },
+  processSettlement: (settlementId: string) =>
+    api.post<void>(`/api/payments/admin/settlements/${settlementId}/process`, {}),
+  // Audit logs
+  getAuditLogs: (params?: { page?: number; limit?: number; category?: string; actor?: string; startDate?: string; endDate?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.category) q.set('category', params.category);
+    if (params?.actor) q.set('actor', params.actor);
+    if (params?.startDate) q.set('startDate', params.startDate);
+    if (params?.endDate) q.set('endDate', params.endDate);
+    return api.get<{ data: AuditLog[]; total: number }>(`/api/audit-logs?${q.toString()}`);
+  },
+  // Support tickets
+  getTickets: (params?: { page?: number; limit?: number; status?: string; priority?: string; assignee?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.status) q.set('status', params.status);
+    if (params?.priority) q.set('priority', params.priority);
+    if (params?.assignee) q.set('assignee', params.assignee);
+    return api.get<{ data: SupportTicket[]; total: number; stats?: SupportStats }>(`/api/support/tickets?${q.toString()}`);
+  },
+  getTicket: (ticketId: string) => api.get<{ data: SupportTicket }>(`/api/support/tickets/${ticketId}`),
+  updateTicket: (ticketId: string, data: { status?: string; priority?: string; assigneeId?: string }) =>
+    api.patch<{ data: SupportTicket }>(`/api/support/tickets/${ticketId}`, data),
+  addTicketReply: (ticketId: string, content: string, isInternal?: boolean) =>
+    api.post<void>(`/api/support/tickets/${ticketId}/reply`, { content, isInternal }),
+  createTicket: (data: { subject: string; category: string; priority: string; customerEmail?: string; customerName?: string; orderId?: string; description: string }) =>
+    api.post<{ data: SupportTicket }>('/api/support/tickets', data),
+  // Marketing
+  getCampaigns: (params?: { page?: number; limit?: number; status?: string; channel?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.status) q.set('status', params.status);
+    if (params?.channel) q.set('channel', params.channel);
+    return api.get<{ data: Campaign[]; total: number }>(`/api/marketing/campaigns?${q.toString()}`);
+  },
+  createCampaign: (data: { name: string; channel: string; subject?: string; content: string; segmentId?: string; scheduledAt?: string }) =>
+    api.post<{ data: Campaign }>('/api/marketing/campaigns', data),
+  getSegments: (params?: { page?: number; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    return api.get<{ data: Segment[]; total: number }>(`/api/marketing/segments?${q.toString()}`);
+  },
+  createSegment: (data: { name: string; criteria: Record<string, unknown> }) =>
+    api.post<{ data: Segment }>('/api/marketing/segments', data),
+  // Shipping
+  getCarriers: (params?: { country?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.country) q.set('country', params.country);
+    return api.get<{ data: Carrier[] }>(`/api/shipping/carriers?${q.toString()}`);
+  },
+  updateCarrier: (carrierId: string, data: Partial<Carrier>) =>
+    api.patch<{ data: Carrier }>(`/api/shipping/carriers/${carrierId}`, data),
+  createCarrier: (data: Omit<Carrier, 'id'>) =>
+    api.post<{ data: Carrier }>('/api/shipping/carriers', data),
+  updateShippingSettings: (settings: { freeShippingThreshold: number; armoredTransportEnabled: boolean }) =>
+    api.put<void>('/api/shipping/settings', settings),
 };
+
+// Category data type
+export interface CategoryData {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  parentId: string | null;
+  image: string | null;
+  icon: string | null;
+  productCount: number;
+  isActive: boolean;
+  order: number;
+  level: number;
+  path: string | null;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  countries: string[];
+  createdAt: string;
+  updatedAt: string;
+  children?: CategoryData[];
+}
+
+// Inventory item type
+export interface InventoryItem {
+  id: string;
+  productId: string;
+  sku: string;
+  productName: string;
+  category: string;
+  location: string;
+  quantity: number;
+  reserved: number;
+  available: number;
+  reorderPoint: number;
+  status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'reserved';
+  lastUpdated: string;
+  country: string;
+}
+
+// Admin analytics type
+export interface AdminAnalytics {
+  revenue: { total: number; change: number };
+  orders: { total: number; change: number };
+  customers: { total: number; change: number };
+  avgOrderValue: number;
+  topProducts: { id: string; name: string; sales: number }[];
+  revenueByCountry: { country: string; revenue: number }[];
+  recentOrders: { id: string; customer: string; amount: number; status: string; date: string }[];
+}
+
+// Finance types
+export interface FinanceStats {
+  totalRevenue: number;
+  revenueChange: number;
+  totalTransactions: number;
+  transactionsChange: number;
+  pendingPayouts: number;
+  pendingPayoutsCount: number;
+  totalCommission: number;
+  commissionChange: number;
+  avgTransactionValue: number;
+  refundsProcessed: number;
+  refundAmount: number;
+  platformBalance: number;
+}
+
+export interface TransactionRecord {
+  id: string;
+  type: 'payment' | 'refund' | 'payout' | 'commission';
+  amount: number;
+  status: 'completed' | 'pending' | 'failed';
+  description: string;
+  date: string;
+  country: string;
+  orderId?: string;
+  sellerId?: string;
+}
+
+export interface Settlement {
+  id: string;
+  sellerName: string;
+  sellerId: string;
+  amount: number;
+  ordersCount: number;
+  periodStart: string;
+  periodEnd: string;
+  status: 'ready' | 'processing' | 'completed' | 'on_hold';
+}
+
+// Audit log type
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  actor: { id: string; name: string; email: string; role: string };
+  action: string;
+  category: 'auth' | 'users' | 'orders' | 'products' | 'payments' | 'settings' | 'security';
+  resource: { type: string; id: string; name?: string };
+  details: string;
+  status: 'success' | 'failed' | 'warning';
+  ip: string;
+  userAgent: string;
+  country?: string;
+}
+
+// Support types
+export interface SupportTicket {
+  id: string;
+  subject: string;
+  customer: { id: string; name: string; email: string };
+  type: 'order' | 'return' | 'payment' | 'product' | 'account' | 'other';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'open' | 'pending' | 'in_progress' | 'resolved' | 'closed';
+  channel: 'chat' | 'email' | 'phone' | 'whatsapp';
+  assignee?: { id: string; name: string };
+  messages?: { id: string; content: string; sender: string; isInternal: boolean; createdAt: string }[];
+  createdAt: string;
+  updatedAt: string;
+  country: string;
+}
+
+export interface SupportStats {
+  openTickets: number;
+  avgResponseTime: number;
+  resolutionRate: number;
+  activeChats: number;
+  waitingCustomers: number;
+  aiResolutionRate: number;
+  customerSatisfaction: number;
+}
+
+// Marketing types
+export interface Campaign {
+  id: string;
+  name: string;
+  channel: 'email' | 'whatsapp' | 'push' | 'sms';
+  status: 'draft' | 'scheduled' | 'sent' | 'sending';
+  subject?: string;
+  content: string;
+  segmentId?: string;
+  recipients: number;
+  sentAt?: string;
+  scheduledAt?: string;
+  openRate?: number;
+  clickRate?: number;
+  createdAt: string;
+}
+
+export interface Segment {
+  id: string;
+  name: string;
+  criteria: Record<string, unknown>;
+  count: number;
+  lastUpdated: string;
+}
+
+// Shipping types
+export interface Carrier {
+  id: string;
+  name: string;
+  code: string;
+  countries: string[];
+  services: { name: string; estimatedDays: string; rateType: 'flat' | 'per_kg'; rate: number }[];
+  isActive: boolean;
+  supportsTracking: boolean;
+  supportsInsurance: boolean;
+}
+
+export interface RoleData {
+  id: string;
+  name: string;
+  description: string | null;
+  scope: 'global' | 'country';
+  country: string | null;
+  permissions: string[];
+  isSystem: boolean;
+  userCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 // Auth API
 export interface LoginResponse {
@@ -329,9 +762,6 @@ export interface LoginResponse {
     expiresIn: number;
   };
 }
-
-const AUTH_TOKEN_KEY = 'grandgold_token';
-const AUTH_REFRESH_KEY = 'grandgold_refresh';
 
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;

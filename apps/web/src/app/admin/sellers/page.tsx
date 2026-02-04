@@ -19,6 +19,7 @@ import {
   X,
   Loader2,
 } from 'lucide-react';
+import { adminApi } from '@/lib/api';
 
 const sellers = [
   { id: 1, name: 'Royal Jewellers', email: 'contact@royaljewellers.com', phone: '+91 98765 43210', products: 124, orders: 856, revenue: 4520000, rating: 4.9, status: 'verified', joined: '10 Jan 2024' },
@@ -231,13 +232,15 @@ export default function SellersPage() {
             onSubmit={async (data) => {
               setSubmitting(true);
               try {
-                const res = await fetch('/api/admin/invite-seller', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(data),
+                await adminApi.inviteSeller({
+                  email: data.email,
+                  firstName: data.firstName,
+                  lastName: data.lastName,
+                  phone: data.phone,
+                  businessName: data.businessName,
+                  country: data.country,
+                  tempPassword: data.tempPassword || undefined,
                 });
-                const result = await res.json();
-                if (!res.ok) throw new Error(result?.error?.message || 'Failed to invite seller');
               } finally {
                 setSubmitting(false);
               }

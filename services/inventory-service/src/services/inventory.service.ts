@@ -259,6 +259,110 @@ export class InventoryService {
     if (!stock) return 0;
     return Math.max(0, stock.quantity - stock.reservedQuantity);
   }
+
+  /**
+   * List all inventory items for admin view
+   */
+  async listAllInventory(params: {
+    page: number;
+    limit: number;
+    status?: string;
+    country?: string;
+    search?: string;
+  }): Promise<{ items: InventoryAdminItem[]; total: number }> {
+    // Get all stock keys from Redis
+    const keys = await redisKeys(`${STOCK_PREFIX}*`);
+    const items: InventoryAdminItem[] = [];
+
+    for (const key of keys) {
+      const data = await redisGet(key);
+      if (data) {
+        const stock: StockRecord = JSON.parse(data);
+        const available = stock.quantity - stock.reservedQuantity;
+        let status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'reserved' = 'in_stock';
+        
+        if (stock.quantity === 0) {
+          status = 'out_of_stock';
+        } else if (available === 0 && stock.reservedQuantity > 0) {
+          status = 'reserved';
+        } else if (available <= stock.lowStockThreshold) {
+          status = 'low_stock';
+        }
+
+        // Apply country filter
+        if (params.country && !stock.countries.includes(params.country as Country)) {
+          continue;
+        }
+
+        // Apply status filter
+        if (params.status && params.status !== status) {
+          continue;
+        }
+
+        items.push({
+          id: stock.productId,
+          productId: stock.productId,
+          sku: stock.productId, // In real impl, fetch from product service
+          productName: `Product ${stock.productId}`, // In real impl, fetch from product service
+          category: 'Jewelry', // In real impl, fetch from product service
+          location: this.getLocationForCountry(stock.countries[0] || 'IN'),
+          quantity: stock.quantity,
+          reserved: stock.reservedQuantity,
+          available,
+          reorderPoint: stock.lowStockThreshold,
+          status,
+          lastUpdated: stock.updatedAt,
+          country: stock.countries[0] || 'IN',
+        });
+      }
+    }
+
+    // Apply search filter
+    let filtered = items;
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      filtered = items.filter(
+        (i) =>
+          i.productName.toLowerCase().includes(q) ||
+          i.sku.toLowerCase().includes(q) ||
+          i.category.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort by last updated (most recent first)
+    filtered.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime());
+
+    // Paginate
+    const start = (params.page - 1) * params.limit;
+    const paginated = filtered.slice(start, start + params.limit);
+
+    return { items: paginated, total: filtered.length };
+  }
+
+  private getLocationForCountry(country: string): string {
+    switch (country) {
+      case 'IN': return 'Mumbai Warehouse';
+      case 'AE': return 'Dubai Warehouse';
+      case 'UK': return 'London Warehouse';
+      default: return 'Main Warehouse';
+    }
+  }
+}
+
+export interface InventoryAdminItem {
+  id: string;
+  productId: string;
+  sku: string;
+  productName: string;
+  category: string;
+  location: string;
+  quantity: number;
+  reserved: number;
+  available: number;
+  reorderPoint: number;
+  status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'reserved';
+  lastUpdated: string;
+  country: string;
 }
 
 /**

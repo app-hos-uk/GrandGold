@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { formatCurrency } from '@/lib/format';
+import { adminApi, FinanceStats as ApiFinanceStats, TransactionRecord, Settlement } from '@/lib/api';
 
 interface FinanceStats {
   totalRevenue: number;
@@ -79,15 +80,15 @@ interface PendingPayout {
   sellerName: string;
   amount: number;
   ordersCount: number;
-  periodEnd: string;
+  period: string;
   status: 'ready' | 'processing' | 'on_hold';
 }
 
 const MOCK_PAYOUTS: PendingPayout[] = [
-  { id: 'SET001', sellerName: 'Royal Jewellers', amount: 485000, ordersCount: 42, periodEnd: 'Feb 3, 2024', status: 'ready' },
-  { id: 'SET002', sellerName: 'Diamond Palace', amount: 325000, ordersCount: 28, periodEnd: 'Feb 3, 2024', status: 'ready' },
-  { id: 'SET003', sellerName: 'Gold Craft India', amount: 198000, ordersCount: 15, periodEnd: 'Feb 3, 2024', status: 'processing' },
-  { id: 'SET004', sellerName: 'Heritage Jewels', amount: 156000, ordersCount: 12, periodEnd: 'Feb 2, 2024', status: 'on_hold' },
+  { id: 'SET001', sellerName: 'Royal Jewellers', amount: 485000, ordersCount: 42, period: 'Jan 25 - Feb 3, 2024', status: 'ready' },
+  { id: 'SET002', sellerName: 'Diamond Palace', amount: 325000, ordersCount: 28, period: 'Jan 25 - Feb 3, 2024', status: 'ready' },
+  { id: 'SET003', sellerName: 'Gold Craft India', amount: 198000, ordersCount: 15, period: 'Jan 25 - Feb 3, 2024', status: 'processing' },
+  { id: 'SET004', sellerName: 'Heritage Jewels', amount: 156000, ordersCount: 12, period: 'Jan 18 - Feb 2, 2024', status: 'on_hold' },
 ];
 
 const COUNTRY_REVENUE = [
@@ -115,17 +116,67 @@ const payoutStatusConfig = {
   on_hold: { color: 'text-yellow-600', bg: 'bg-yellow-100', label: 'On Hold' },
 };
 
+function mapTransaction(t: TransactionRecord): RecentTransaction {
+  return {
+    id: t.id,
+    type: t.type,
+    amount: t.amount,
+    status: t.status,
+    description: t.description,
+    date: t.date,
+    country: t.country,
+  };
+}
+
+function mapPayout(s: Settlement): PendingPayout {
+  return {
+    id: s.id,
+    sellerName: s.sellerName,
+    amount: s.amount,
+    ordersCount: s.ordersCount,
+    period: `${s.periodStart} - ${s.periodEnd}`,
+    status: s.status as PendingPayout['status'],
+  };
+}
+
 export default function FinanceDashboard() {
-  const [stats] = useState<FinanceStats>(MOCK_STATS);
-  const [transactions] = useState<RecentTransaction[]>(MOCK_TRANSACTIONS);
-  const [payouts] = useState<PendingPayout[]>(MOCK_PAYOUTS);
+  const [stats, setStats] = useState<FinanceStats>(MOCK_STATS);
+  const [transactions, setTransactions] = useState<RecentTransaction[]>(MOCK_TRANSACTIONS);
+  const [payouts, setPayouts] = useState<PendingPayout[]>(MOCK_PAYOUTS);
   const [dateRange, setDateRange] = useState('30days');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [statsRes, txRes, settlementsRes] = await Promise.all([
+        adminApi.getFinanceStats({ dateRange }).catch(() => null),
+        adminApi.getTransactions({ limit: 10 }).catch(() => null),
+        adminApi.getSettlements({ status: 'ready', limit: 10 }).catch(() => null),
+      ]);
+      
+      if (statsRes?.totalRevenue !== undefined) {
+        setStats(statsRes);
+      }
+      if (txRes?.data) {
+        setTransactions(txRes.data.map(mapTransaction));
+      }
+      if (settlementsRes?.data) {
+        setPayouts(settlementsRes.data.map(mapPayout));
+      }
+    } catch (err) {
+      console.error('Failed to load finance data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [dateRange]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleRefresh = async () => {
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
+    await loadData();
   };
 
   return (
@@ -381,7 +432,7 @@ export default function FinanceDashboard() {
                       <p className="font-medium text-gray-900">{payout.sellerName}</p>
                       <p className="text-xs text-gray-500">{payout.id}</p>
                     </td>
-                    <td className="px-6 py-4 text-gray-600">{payout.periodEnd}</td>
+                    <td className="px-6 py-4 text-gray-600">{payout.period}</td>
                     <td className="px-6 py-4 text-right text-gray-900">{payout.ordersCount}</td>
                     <td className="px-6 py-4 text-right font-semibold text-gray-900">{formatCurrency(payout.amount)}</td>
                     <td className="px-6 py-4">
