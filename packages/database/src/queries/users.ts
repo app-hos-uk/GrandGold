@@ -3,13 +3,21 @@ import { db } from '../client';
 import { users, userAddresses, type User, type NewUser, type UserAddress, type NewUserAddress } from '../schema/users';
 
 // User queries
-export async function findUserById(id: string): Promise<User | undefined> {
-  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+export async function findUserById(id: string, includeDeleted = false): Promise<User | undefined> {
+  const conditions = [eq(users.id, id)];
+  if (!includeDeleted) {
+    conditions.push(eq(users.isDeleted, false));
+  }
+  const result = await db.select().from(users).where(and(...conditions)).limit(1);
   return result[0];
 }
 
-export async function findUserByEmail(email: string): Promise<User | undefined> {
-  const result = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
+export async function findUserByEmail(email: string, includeDeleted = false): Promise<User | undefined> {
+  const conditions = [eq(users.email, email.toLowerCase())];
+  if (!includeDeleted) {
+    conditions.push(eq(users.isDeleted, false));
+  }
+  const result = await db.select().from(users).where(and(...conditions)).limit(1);
   return result[0];
 }
 
