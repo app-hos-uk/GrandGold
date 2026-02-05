@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -17,14 +18,22 @@ import { MiniCart } from '@/components/cart/mini-cart';
 import { useWishlist } from '@/contexts/wishlist-context';
 import { Logo } from '@/components/brand/logo';
 
+type CountryCode = 'in' | 'ae' | 'uk';
+
 interface HeaderProps {
-  country: 'in' | 'ae' | 'uk';
+  country: CountryCode;
 }
 
-const countryConfig = {
-  in: { name: 'India', flag: '🇮🇳', currency: 'INR' },
-  ae: { name: 'UAE', flag: '🇦🇪', currency: 'AED' },
-  uk: { name: 'UK', flag: '🇬🇧', currency: 'GBP' },
+const COUNTRY_OPTIONS: { code: CountryCode; name: string; flag: string; currency: string; symbol: string; goldRate: string }[] = [
+  { code: 'in', name: 'India', flag: '🇮🇳', currency: 'INR', symbol: '₹', goldRate: '6,150' },
+  { code: 'ae', name: 'UAE', flag: '🇦🇪', currency: 'AED', symbol: 'AED ', goldRate: '615' },
+  { code: 'uk', name: 'UK', flag: '🇬🇧', currency: 'GBP', symbol: '£', goldRate: '6,150' },
+];
+
+const countryConfig: Record<CountryCode, { name: string; flag: string; currency: string; symbol: string; goldRate: string }> = {
+  in: { name: 'India', flag: '🇮🇳', currency: 'INR', symbol: '₹', goldRate: '6,150' },
+  ae: { name: 'UAE', flag: '🇦🇪', currency: 'AED', symbol: 'AED ', goldRate: '615' },
+  uk: { name: 'UK', flag: '🇬🇧', currency: 'GBP', symbol: '£', goldRate: '6,150' },
 };
 
 const navigation = [
@@ -36,11 +45,64 @@ const navigation = [
   { name: 'AR Try-On', href: '/ar-tryon', highlight: true },
 ];
 
+function setCountryCookie(code: CountryCode) {
+  if (typeof document === 'undefined') return;
+  document.cookie = `country=${code};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
+}
+
+const countryToCurrency: Record<CountryCode, string> = {
+  in: 'INR',
+  ae: 'AED',
+  uk: 'GBP',
+};
+
 export function Header({ country }: HeaderProps) {
+  const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isCountryOpen, setIsCountryOpen] = useState(false);
+  const [liveGoldRate, setLiveGoldRate] = useState<string | null>(null);
+  const countryRef = useRef<HTMLDivElement>(null);
   const countryInfo = countryConfig[country];
   const { wishlistCount } = useWishlist();
+
+  useEffect(() => {
+    let cancelled = false;
+    const currency = countryToCurrency[country];
+    fetch('/api/rates/metals')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { gold?: Record<string, number> } | null) => {
+        if (cancelled) return;
+        const rate = data?.gold?.[currency];
+        if (typeof rate === 'number') {
+          setLiveGoldRate(rate >= 1000 ? rate.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : String(rate));
+        } else {
+          setLiveGoldRate(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLiveGoldRate(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [country]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (countryRef.current && !countryRef.current.contains(e.target as Node)) {
+        setIsCountryOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleCountrySelect = (code: CountryCode) => {
+    setCountryCookie(code);
+    setIsCountryOpen(false);
+    router.push(`/${code}`);
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-cream-200">
@@ -51,16 +113,49 @@ export function Header({ country }: HeaderProps) {
         <div className="container mx-auto px-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <span className="text-gold-400 font-medium">Live Gold:</span>
-            <span>24K: ₹6,150/g</span>
+            <span>24K: {countryInfo.symbol}{liveGoldRate ?? countryInfo.goldRate}/g</span>
             <span className="text-green-400 text-xs">▲ 0.5%</span>
           </div>
           
-          <div className="flex items-center gap-4">
-            <button className="flex items-center gap-1 hover:text-gold-400 transition-colors">
+          <div className="flex items-center gap-4 relative" ref={countryRef}>
+            <button
+              type="button"
+              onClick={() => setIsCountryOpen((o) => !o)}
+              className="flex items-center gap-1 hover:text-gold-400 transition-colors"
+              aria-expanded={isCountryOpen}
+              aria-haspopup="listbox"
+              aria-label="Select country"
+            >
               <MapPin className="w-4 h-4" />
               <span>{countryInfo.flag} {countryInfo.name}</span>
-              <ChevronDown className="w-3 h-3" />
+              <ChevronDown className={`w-3 h-3 transition-transform ${isCountryOpen ? 'rotate-180' : ''}`} />
             </button>
+            <AnimatePresence>
+              {isCountryOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  className="absolute right-0 top-full mt-1 py-1 bg-gray-800 rounded-lg shadow-xl border border-gray-700 min-w-[160px] z-50"
+                  role="listbox"
+                >
+                  {COUNTRY_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.code}
+                      type="button"
+                      role="option"
+                      aria-selected={country === opt.code}
+                      onClick={() => handleCountrySelect(opt.code)}
+                      className={`w-full flex items-center gap-2 px-4 py-2 text-left text-sm hover:bg-gray-700 transition-colors ${country === opt.code ? 'bg-gold-600/20 text-gold-400' : ''}`}
+                    >
+                      <span>{opt.flag}</span>
+                      <span>{opt.name}</span>
+                      <span className="text-gray-400 text-xs">({opt.symbol.trim() || opt.currency})</span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </div>

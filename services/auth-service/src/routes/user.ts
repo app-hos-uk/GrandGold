@@ -126,21 +126,40 @@ router.patch(
   }
 );
 
+// Roles that country admins can assign (non-admin roles only)
+const COUNTRY_ADMIN_ASSIGNABLE_ROLES: UserRole[] = ['customer', 'seller', 'influencer', 'consultant', 'staff', 'manager'];
+
 /**
  * PATCH /api/user/admin/:userId/role
- * Set user role (and country for country_admin). Super admin only.
+ * Set user role (and country for country_admin).
+ * Super admins can assign any role. Country admins can only assign non-admin roles to users in their country.
  */
 router.patch(
   '/admin/:userId/role',
-  authorize('super_admin'),
+  authorize('super_admin', 'country_admin'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { userId } = req.params;
       const { role, country } = req.body as { role?: UserRole; country?: Country };
+      
+      const isSuperAdmin = req.user?.role === 'super_admin';
+      const isCountryAdmin = req.user?.role === 'country_admin';
+      const adminCountry = req.user?.country;
 
       if (!role || !ALLOWED_ADMIN_ROLES.includes(role)) {
         throw new ValidationError('Valid role is required');
       }
+      
+      // Country admins can only assign specific non-admin roles
+      if (isCountryAdmin && !isSuperAdmin) {
+        if (!COUNTRY_ADMIN_ASSIGNABLE_ROLES.includes(role)) {
+          return res.status(403).json({ 
+            success: false, 
+            error: { code: 'FORBIDDEN', message: 'You can only assign non-admin roles' } 
+          });
+        }
+      }
+      
       const updateData: { role: UserRole; country?: Country } = { role };
       if (role === 'country_admin') {
         if (!country || !COUNTRY_VALUES.includes(country)) {
@@ -152,6 +171,24 @@ router.patch(
       if (!user) {
         return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
       }
+      
+      // Country admins can only modify users in their country
+      if (isCountryAdmin && !isSuperAdmin) {
+        if (user.country !== adminCountry) {
+          return res.status(403).json({ 
+            success: false, 
+            error: { code: 'FORBIDDEN', message: 'You can only modify users in your country' } 
+          });
+        }
+        // Country admins cannot modify super_admin or other country_admin users
+        if (user.role === 'super_admin' || user.role === 'country_admin') {
+          return res.status(403).json({ 
+            success: false, 
+            error: { code: 'FORBIDDEN', message: 'You cannot modify admin users' } 
+          });
+        }
+      }
+      
       const updated = await updateUser(userId, updateData);
       if (!updated) {
         return res.status(500).json({ success: false, error: { code: 'UPDATE_FAILED', message: 'Failed to update user' } });

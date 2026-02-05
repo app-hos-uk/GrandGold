@@ -47,7 +47,10 @@ const roleBadgeColors: Record<string, string> = {
   country_admin: 'bg-blue-100 text-blue-800',
   manager: 'bg-indigo-100 text-indigo-800',
   staff: 'bg-slate-100 text-slate-800',
+  support: 'bg-slate-100 text-slate-800',
   seller: 'bg-gold-100 text-gold-800',
+  influencer: 'bg-pink-100 text-pink-800',
+  consultant: 'bg-teal-100 text-teal-800',
   customer: 'bg-gray-100 text-gray-700',
 };
 
@@ -312,9 +315,11 @@ export default function UsersPage() {
                       </p>
                     </div>
                   </td>
-                  <td className="px-6 py-4 font-medium text-gray-900">{user.orders ?? '–'}</td>
                   <td className="px-6 py-4 font-medium text-gray-900">
-                    ₹{(user.spent ?? 0).toLocaleString()}
+                    {user.role === 'customer' ? (user.orders ?? '–') : '—'}
+                  </td>
+                  <td className="px-6 py-4 font-medium text-gray-900">
+                    {user.role === 'customer' ? `₹${(user.spent ?? 0).toLocaleString()}` : '—'}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${roleBadgeColors[user.role ?? 'customer'] ?? 'bg-gray-100 text-gray-700'}`}>

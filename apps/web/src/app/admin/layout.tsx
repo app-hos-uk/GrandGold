@@ -38,7 +38,7 @@ import { Logo } from '@/components/brand/logo';
 const ALL_NAV = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, roles: ['super_admin', 'country_admin'] },
   { name: 'Users', href: '/admin/users', icon: Users, roles: ['super_admin', 'country_admin'] },
-  { name: 'Roles', href: '/admin/roles', icon: Shield, roles: ['super_admin'] },
+  { name: 'Roles', href: '/admin/roles', icon: Shield, roles: ['super_admin', 'country_admin'] },
   { name: 'Orders', href: '/admin/orders', icon: ShoppingCart, roles: ['super_admin', 'country_admin'] },
   { name: 'Products', href: '/admin/products', icon: Package, roles: ['super_admin', 'country_admin'] },
   { name: 'Categories', href: '/admin/categories', icon: FolderTree, roles: ['super_admin', 'country_admin'] },

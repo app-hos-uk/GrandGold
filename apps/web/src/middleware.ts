@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const SUPPORTED_COUNTRIES = ['in', 'ae', 'uk'] as const;
 type SupportedCountry = typeof SUPPORTED_COUNTRIES[number];
 
-// Country detection based on various factors
+// Country detection: prefer cookie (user choice), otherwise default to India
 function detectCountry(request: NextRequest): SupportedCountry {
   // 1. Check URL path first
   const pathname = request.nextUrl.pathname;
@@ -14,36 +14,13 @@ function detectCountry(request: NextRequest): SupportedCountry {
     }
   }
 
-  // 2. Check cookie for user preference
-  const countryCookie = request.cookies.get('country')?.value as SupportedCountry;
+  // 2. Check cookie for user preference (e.g. from country selector)
+  const countryCookie = request.cookies.get('country')?.value?.toLowerCase() as SupportedCountry;
   if (countryCookie && SUPPORTED_COUNTRIES.includes(countryCookie)) {
     return countryCookie;
   }
 
-  // 3. Check Cloudflare/GCP geolocation headers
-  const cfCountry = request.headers.get('cf-ipcountry');
-  const gcpCountry = request.headers.get('x-appengine-country');
-  const geoCountry = cfCountry || gcpCountry;
-
-  if (geoCountry) {
-    switch (geoCountry.toUpperCase()) {
-      case 'IN':
-        return 'in';
-      case 'AE':
-        return 'ae';
-      case 'GB':
-      case 'UK':
-        return 'uk';
-    }
-  }
-
-  // 4. Check Accept-Language header
-  const acceptLanguage = request.headers.get('accept-language') || '';
-  if (acceptLanguage.includes('en-IN')) return 'in';
-  if (acceptLanguage.includes('ar-AE') || acceptLanguage.includes('en-AE')) return 'ae';
-  if (acceptLanguage.includes('en-GB')) return 'uk';
-
-  // Default to India
+  // 3. Default to India (no geo or Accept-Language so first-time visitors get India)
   return 'in';
 }
 

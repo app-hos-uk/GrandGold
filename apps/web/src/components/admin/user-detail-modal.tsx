@@ -63,11 +63,17 @@ interface UserDetailProps {
 const ROLES = [
   { value: 'customer', label: 'Customer' },
   { value: 'seller', label: 'Seller' },
+  { value: 'influencer', label: 'Influencer' },
+  { value: 'consultant', label: 'Consultant' },
+  { value: 'staff', label: 'Staff' },
   { value: 'support', label: 'Support Staff' },
   { value: 'manager', label: 'Manager' },
   { value: 'country_admin', label: 'Country Admin' },
   { value: 'super_admin', label: 'Super Admin' },
 ];
+
+// Roles that country admins can assign (non-admin roles)
+const COUNTRY_ADMIN_ASSIGNABLE_ROLES = ['customer', 'seller', 'influencer', 'consultant', 'staff', 'support', 'manager'];
 
 const COUNTRIES = ['IN', 'AE', 'UK'] as const;
 
@@ -76,7 +82,10 @@ const roleBadgeColors: Record<string, string> = {
   country_admin: 'bg-blue-100 text-blue-800',
   manager: 'bg-indigo-100 text-indigo-800',
   support: 'bg-slate-100 text-slate-800',
+  staff: 'bg-slate-100 text-slate-800',
   seller: 'bg-gold-100 text-gold-800',
+  influencer: 'bg-pink-100 text-pink-800',
+  consultant: 'bg-teal-100 text-teal-800',
   customer: 'bg-gray-100 text-gray-700',
 };
 
@@ -106,7 +115,14 @@ export function UserDetailModal({ user, onClose, onRoleChange, onStatusChange, o
   const initial = displayName[0]?.toUpperCase() || '?';
   const isSuperAdmin = currentUserRole === 'super_admin';
   const isCountryAdmin = currentUserRole === 'country_admin';
-  const canEditRole = isSuperAdmin && user.role !== 'super_admin';
+  // Super admin can edit any role except super_admin
+  // Country admin can edit roles for users in their country (only non-admin roles)
+  const canEditRole = 
+    (isSuperAdmin && user.role !== 'super_admin') ||
+    (isCountryAdmin && 
+     user.country === currentUserCountry && 
+     user.role !== 'super_admin' && 
+     user.role !== 'country_admin');
   
   // Country admins can edit users in their country (except admins)
   // Super admins can edit any user
@@ -417,7 +433,14 @@ export function UserDetailModal({ user, onClose, onRoleChange, onStatusChange, o
                             onChange={(e) => setSelectedRole(e.target.value)}
                             className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
                           >
-                            {ROLES.filter((r) => r.value !== 'super_admin' || isSuperAdmin).map((role) => (
+                            {ROLES.filter((r) => {
+                              // Country admins can only assign non-admin roles
+                              if (isCountryAdmin && !isSuperAdmin) {
+                                return COUNTRY_ADMIN_ASSIGNABLE_ROLES.includes(r.value);
+                              }
+                              // Super admins can assign any role except super_admin (to others)
+                              return r.value !== 'super_admin' || isSuperAdmin;
+                            }).map((role) => (
                               <option key={role.value} value={role.value}>{role.label}</option>
                             ))}
                           </select>
@@ -504,31 +527,44 @@ export function UserDetailModal({ user, onClose, onRoleChange, onStatusChange, o
 
           {activeTab === 'orders' && (
             <div className="space-y-4">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-                  <ShoppingCart className="w-6 h-6 text-blue-500" />
-                  <div>
-                    <p className="text-2xl font-bold text-gray-900">{user.orders ?? 0}</p>
-                    <p className="text-sm text-gray-500">Total Orders</p>
+              {user.role === 'customer' ? (
+                <>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+                      <ShoppingCart className="w-6 h-6 text-blue-500" />
+                      <div>
+                        <p className="text-2xl font-bold text-gray-900">{user.orders ?? 0}</p>
+                        <p className="text-sm text-gray-500">Total Orders</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+                      <CreditCard className="w-6 h-6 text-green-500" />
+                      <div>
+                        <p className="text-2xl font-bold text-gray-900">₹{(user.spent ?? 0).toLocaleString()}</p>
+                        <p className="text-sm text-gray-500">Total Spent</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-                  <CreditCard className="w-6 h-6 text-green-500" />
-                  <div>
-                    <p className="text-2xl font-bold text-gray-900">₹{(user.spent ?? 0).toLocaleString()}</p>
-                    <p className="text-sm text-gray-500">Total Spent</p>
+                  <div className="text-center py-8">
+                    <a
+                      href={`/admin/orders?user=${user.id}`}
+                      className="inline-flex items-center gap-2 text-gold-600 hover:text-gold-700 font-medium"
+                    >
+                      View All Orders
+                      <History className="w-4 h-4" />
+                    </a>
                   </div>
+                </>
+              ) : (
+                <div className="p-6 bg-gray-50 rounded-lg text-center">
+                  <p className="text-gray-600 mb-2">
+                    Orders and total spent are <strong>purchase</strong> metrics and only apply to customers.
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    This user is a <span className="font-medium capitalize">{user.role?.replace(/_/g, ' ') ?? '—'}</span>. Purchase history is not shown here.
+                  </p>
                 </div>
-              </div>
-              <div className="text-center py-8">
-                <a
-                  href={`/admin/orders?user=${user.id}`}
-                  className="inline-flex items-center gap-2 text-gold-600 hover:text-gold-700 font-medium"
-                >
-                  View All Orders
-                  <History className="w-4 h-4" />
-                </a>
-              </div>
+              )}
             </div>
           )}
 

@@ -9,6 +9,23 @@ const getConfigPath = () => {
   return path.join(root, '.grandgold', 'config.json');
 };
 
+/** Integration types for global admin API configuration */
+export type MetalPricingProvider = 'metalpriceapi' | 'metalsdev';
+
+export interface MetalPricingConfig {
+  provider: MetalPricingProvider;
+  apiKey: string;
+  baseUrl?: string;
+}
+
+export interface IntegrationsConfig {
+  metalPricing?: MetalPricingConfig;
+}
+
+function maskSecret(value: string | undefined): boolean {
+  return !!(value && value.length > 0);
+}
+
 export async function GET() {
   try {
     const configPath = getConfigPath();
@@ -26,6 +43,13 @@ export async function GET() {
           publishableKey: config.stripe?.publishableKey || '',
           publishableKeyConfigured: !!config.stripe?.publishableKey,
         },
+        integrations: {
+          metalPricing: {
+            provider: (config.integrations?.metalPricing?.provider || 'metalpriceapi').toLowerCase(),
+            apiKeyConfigured: maskSecret(config.integrations?.metalPricing?.apiKey),
+            baseUrl: (config.integrations?.metalPricing?.baseUrl || '').trim(),
+          },
+        },
       },
     });
   } catch {
@@ -34,6 +58,13 @@ export async function GET() {
       data: {
         razorpay: { keyId: '', keyIdConfigured: false },
         stripe: { publishableKey: '', publishableKeyConfigured: false },
+        integrations: {
+          metalPricing: {
+            provider: 'metalpriceapi',
+            apiKeyConfigured: false,
+            baseUrl: '',
+          },
+        },
       },
     });
   }
@@ -55,6 +86,9 @@ export async function POST(request: NextRequest) {
       // File doesn't exist yet
     }
 
+    const existingIntegrations = (existing.integrations as Record<string, unknown>) || {};
+    const existingMetal = (existingIntegrations.metalPricing as Record<string, string> | undefined) || {};
+
     const updated = {
       ...existing,
       razorpay: body.razorpay
@@ -69,6 +103,18 @@ export async function POST(request: NextRequest) {
             secretKey: body.stripe.secretKey || (existing.stripe as Record<string, string>)?.secretKey,
           }
         : (existing.stripe as object),
+      integrations: body.integrations
+        ? {
+            ...existingIntegrations,
+            metalPricing: body.integrations.metalPricing
+              ? {
+                  provider: (body.integrations.metalPricing.provider || existingMetal.provider || 'metalpriceapi').toLowerCase(),
+                  apiKey: body.integrations.metalPricing.apiKey || existingMetal.apiKey,
+                  baseUrl: (body.integrations.metalPricing.baseUrl ?? existingMetal.baseUrl ?? '').trim(),
+                }
+              : existingIntegrations.metalPricing,
+          }
+        : existing.integrations,
       updatedAt: new Date().toISOString(),
     };
 

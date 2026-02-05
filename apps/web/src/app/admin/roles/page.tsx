@@ -165,6 +165,12 @@ export default function RolesPage() {
   const [createMode, setCreateMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // Current admin user info
+  const [currentUser, setCurrentUser] = useState<{ role: string; country?: string } | null>(null);
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isCountryAdmin = currentUser?.role === 'country_admin';
+  const adminCountry = currentUser?.country;
 
   const [editForm, setEditForm] = useState({
     name: '',
@@ -173,6 +179,15 @@ export default function RolesPage() {
     country: '' as string,
     permissions: [] as string[],
   });
+  
+  // Load current user info
+  useEffect(() => {
+    adminApi.getMe().then((user) => {
+      setCurrentUser({ role: user?.role || '', country: user?.country });
+    }).catch(() => {
+      // Ignore - layout handles auth
+    });
+  }, []);
 
   // Load roles from API
   const loadRoles = useCallback(async () => {
@@ -228,13 +243,26 @@ export default function RolesPage() {
     setEditForm({
       name: '',
       description: '',
-      scope: 'country',
-      country: 'IN',
+      // Country admins can only create country-scoped roles for their country
+      scope: isCountryAdmin ? 'country' : 'country',
+      country: isCountryAdmin ? (adminCountry || 'IN') : 'IN',
       permissions: [],
     });
     setEditMode(false);
     setCreateMode(true);
   };
+  
+  // Filter roles based on current user role
+  // Country admins can only see country-scoped roles for their country
+  const filteredRoles = roles.filter((role) => {
+    if (isSuperAdmin) return true;
+    if (isCountryAdmin) {
+      // Country admins see country-scoped roles for their country OR system roles they can use
+      return (role.scope === 'country' && role.country === adminCountry) ||
+             ['customer', 'seller', 'influencer', 'consultant', 'staff', 'support', 'manager'].includes(role.id);
+    }
+    return true;
+  });
 
   const togglePermission = (permKey: string) => {
     setEditForm((prev) => ({
@@ -267,6 +295,18 @@ export default function RolesPage() {
     if (editForm.scope === 'country' && !editForm.country) {
       toast.error('Please select a country for country-scoped roles');
       return;
+    }
+    
+    // Country admins can only create/edit roles for their country
+    if (isCountryAdmin && !isSuperAdmin) {
+      if (editForm.scope === 'global') {
+        toast.error('You can only create country-scoped roles');
+        return;
+      }
+      if (editForm.country !== adminCountry) {
+        toast.error('You can only create roles for your country');
+        return;
+      }
     }
 
     setSaving(true);
@@ -392,7 +432,7 @@ export default function RolesPage() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Roles List */}
         <div className="lg:col-span-1 space-y-3">
-          {roles.map((role) => (
+          {filteredRoles.map((role) => (
             <motion.div
               key={role.id}
               initial={{ opacity: 0, y: 10 }}
@@ -535,35 +575,48 @@ export default function RolesPage() {
                             <input
                               type="radio"
                               checked={editForm.scope === 'country'}
-                              onChange={() => setEditForm((prev) => ({ ...prev, scope: 'country', country: prev.country || 'IN' }))}
+                              onChange={() => setEditForm((prev) => ({ ...prev, scope: 'country', country: prev.country || (adminCountry || 'IN') }))}
                               className="text-gold-500"
                             />
                             <span className="text-sm">Country-scoped</span>
                           </label>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              checked={editForm.scope === 'global'}
-                              onChange={() => setEditForm((prev) => ({ ...prev, scope: 'global', country: '' }))}
-                              className="text-gold-500"
-                            />
-                            <span className="text-sm">Global</span>
-                          </label>
+                          {/* Only super admins can create global roles */}
+                          {isSuperAdmin && (
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                checked={editForm.scope === 'global'}
+                                onChange={() => setEditForm((prev) => ({ ...prev, scope: 'global', country: '' }))}
+                                className="text-gold-500"
+                              />
+                              <span className="text-sm">Global</span>
+                            </label>
+                          )}
                         </div>
+                        {isCountryAdmin && (
+                          <p className="text-xs text-gray-500 mt-1">As a country admin, you can only create country-scoped roles for your country.</p>
+                        )}
                       </div>
                       {editForm.scope === 'country' && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
-                          <select
-                            value={editForm.country}
-                            onChange={(e) => setEditForm((prev) => ({ ...prev, country: e.target.value }))}
-                            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
-                          >
-                            <option value="">Select a country</option>
-                            {COUNTRIES.map((c) => (
-                              <option key={c.value} value={c.value}>{c.label}</option>
-                            ))}
-                          </select>
+                          {/* Country admins can only create roles for their country */}
+                          {isCountryAdmin ? (
+                            <div className="px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+                              {COUNTRIES.find((c) => c.value === adminCountry)?.label || adminCountry}
+                            </div>
+                          ) : (
+                            <select
+                              value={editForm.country}
+                              onChange={(e) => setEditForm((prev) => ({ ...prev, country: e.target.value }))}
+                              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                            >
+                              <option value="">Select a country</option>
+                              {COUNTRIES.map((c) => (
+                                <option key={c.value} value={c.value}>{c.label}</option>
+                              ))}
+                            </select>
+                          )}
                           <p className="text-xs text-gray-500 mt-1">This role will only be available for users in the selected country.</p>
                         </div>
                       )}
