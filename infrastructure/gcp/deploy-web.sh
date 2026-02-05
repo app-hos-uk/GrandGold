@@ -7,6 +7,7 @@ set -e
 PROJECT_ID="${GCP_PROJECT_ID:-grandgold-prod}"
 REGION="${1:-asia-south1}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 CLOUDBUILD_CONFIG="${SCRIPT_DIR}/cloudbuild-web.yaml"
 
 RED='\033[0;31m'
@@ -30,6 +31,7 @@ fi
 gcloud config set project ${PROJECT_ID}
 
 echo -e "${YELLOW}Building web image...${NC}"
+cd "${PROJECT_ROOT}"
 gcloud builds submit \
   --config=${CLOUDBUILD_CONFIG} \
   --timeout=20m \
