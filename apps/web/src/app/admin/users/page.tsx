@@ -16,6 +16,8 @@ import {
   X,
   Loader2,
   CheckCircle,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import { authApi, adminApi, ApiError } from '@/lib/api';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
@@ -80,6 +82,16 @@ export default function UsersPage() {
   const [roleActioning, setRoleActioning] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setDropdownOpen(null);
+    if (dropdownOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [dropdownOpen]);
 
   useEffect(() => {
     adminApi
@@ -358,9 +370,57 @@ export default function UsersPage() {
                         >
                           <Eye className="w-4 h-4 text-gray-500" />
                         </button>
-                      <button type="button" className="p-2 hover:bg-gray-100 rounded-lg" title="More">
-                        <MoreHorizontal className="w-4 h-4 text-gray-500" />
-                      </button>
+                      <div className="relative">
+                        <button 
+                          type="button" 
+                          className="p-2 hover:bg-gray-100 rounded-lg" 
+                          title="More"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDropdownOpen(dropdownOpen === user.id ? null : user.id);
+                          }}
+                        >
+                          <MoreHorizontal className="w-4 h-4 text-gray-500" />
+                        </button>
+                        {dropdownOpen === user.id && (
+                          <div 
+                            className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDropdownOpen(null);
+                                setSelectedUser(user);
+                              }}
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                              Edit User
+                            </button>
+                            {(currentUserRole === 'super_admin' || (currentUserRole === 'country_admin' && user.country === adminCountry && user.role !== 'super_admin' && user.role !== 'country_admin')) && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+                                  setDropdownOpen(null);
+                                  try {
+                                    await adminApi.deleteUser(user.id);
+                                    toast.success('User deleted successfully');
+                                    setRefreshKey(k => k + 1);
+                                  } catch (err) {
+                                    toast.error(err instanceof ApiError ? err.message : 'Failed to delete user');
+                                  }
+                                }}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Delete User
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </motion.tr>

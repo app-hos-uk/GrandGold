@@ -22,7 +22,22 @@ router.use(authorize('super_admin'));
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const country = req.query.country as string | undefined;
-    const rolesList = await listRoles({ country });
+    let rolesList: Awaited<ReturnType<typeof listRoles>> = [];
+    
+    try {
+      rolesList = await listRoles({ country });
+    } catch (dbError) {
+      // If database table doesn't exist or query fails, return default system roles
+      console.error('Failed to load roles from database, using defaults:', dbError);
+      rolesList = [
+        { id: 'super_admin', name: 'Super Admin', description: 'Full system access', scope: 'global', country: null, permissions: ['*'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'country_admin', name: 'Country Admin', description: 'Country-level access', scope: 'country', country: null, permissions: ['manage_country'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'manager', name: 'Manager', description: 'Management access', scope: 'country', country: null, permissions: ['manage_orders', 'manage_products'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'support', name: 'Support Staff', description: 'Customer support access', scope: 'country', country: null, permissions: ['view_orders', 'manage_tickets'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'seller', name: 'Seller', description: 'Seller access', scope: 'country', country: null, permissions: ['manage_own_products'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'customer', name: 'Customer', description: 'Regular customer', scope: 'global', country: null, permissions: [], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
+      ];
+    }
 
     res.json({
       success: true,
