@@ -16,6 +16,9 @@ SERVICES=(
     "payment-service"
     "product-service"
     "inventory-service"
+    "promotion-service"
+    "notification-service"
+    "ai-service"
 )
 
 # Colors for output

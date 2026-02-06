@@ -25,7 +25,7 @@ function RegisterForm() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [countryCode, setCountryCode] = useState<'IN' | 'AE' | 'UK'>('IN');
+  const [countryCode, setCountryCode] = useState<'IN' | 'AE' | 'UK'>(country.toUpperCase() as 'IN' | 'AE' | 'UK');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);

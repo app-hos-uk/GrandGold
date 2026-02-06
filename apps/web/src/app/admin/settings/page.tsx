@@ -39,6 +39,8 @@ export default function SettingsPage() {
     provider: MetalPricingProvider;
     apiKeyConfigured: boolean;
     baseUrl: string;
+    enabled: boolean;
+    fetchIntervalMinutes: number;
   } | null>(null);
 
   const handleSave = () => {
@@ -57,16 +59,28 @@ export default function SettingsPage() {
             provider: mp.provider || 'metalpriceapi',
             apiKeyConfigured: !!mp.apiKeyConfigured,
             baseUrl: mp.baseUrl || '',
+            enabled: mp.enabled !== false,
+            fetchIntervalMinutes: Math.min(60, Math.max(1, Number(mp.fetchIntervalMinutes) || 5)),
           });
         } else {
           setMetalPricingStatus({
             provider: 'metalpriceapi',
             apiKeyConfigured: false,
             baseUrl: '',
+            enabled: true,
+            fetchIntervalMinutes: 5,
           });
         }
       })
-      .catch(() => setMetalPricingStatus({ provider: 'metalpriceapi', apiKeyConfigured: false, baseUrl: '' }));
+      .catch(() =>
+        setMetalPricingStatus({
+          provider: 'metalpriceapi',
+          apiKeyConfigured: false,
+          baseUrl: '',
+          enabled: true,
+          fetchIntervalMinutes: 5,
+        })
+      );
   }, [activeTab]);
 
   return (
@@ -279,6 +293,7 @@ export default function SettingsPage() {
                 Configure third-party API credentials for live data (metal pricing, etc.). Only Super Admins can manage these settings.
               </p>
               <div className="space-y-6">
+                {/* Metal Pricing — now links to dedicated page */}
                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -288,7 +303,7 @@ export default function SettingsPage() {
                       <div>
                         <p className="font-medium text-gray-900">Live Metal Pricing</p>
                         <p className="text-sm text-gray-500">
-                          Gold, silver, platinum rates by country (MetalpriceAPI or Metals.Dev)
+                          Manual pricing, API rates, fetch schedule, and per-country adjustments
                         </p>
                       </div>
                     </div>
@@ -303,17 +318,30 @@ export default function SettingsPage() {
                     </span>
                   </div>
                   {metalPricingStatus?.apiKeyConfigured && (
-                    <p className="text-xs text-gray-500 mb-3">
-                      Provider: {metalPricingStatus.provider === 'metalpriceapi' ? 'MetalpriceAPI' : 'Metals.Dev'}
-                    </p>
+                    <>
+                      <p className="text-xs text-gray-500 mb-1">
+                        Provider: {metalPricingStatus.provider === 'metalpriceapi' ? 'MetalpriceAPI' : 'Metals.Dev'}
+                      </p>
+                      <p className="text-xs text-gray-500 mb-1">
+                        Storefront: {metalPricingStatus.enabled ? 'Live price shown' : 'Disabled'} · Fetch every {metalPricingStatus.fetchIntervalMinutes} min
+                      </p>
+                    </>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setMetalPricingModalOpen(true)}
-                    className="text-sm text-gold-600 font-medium hover:text-gold-700"
-                  >
-                    {metalPricingStatus?.apiKeyConfigured ? 'Update credentials' : 'Configure'}
-                  </button>
+                  <div className="flex items-center gap-4 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setMetalPricingModalOpen(true)}
+                      className="text-sm text-gold-600 font-medium hover:text-gold-700"
+                    >
+                      {metalPricingStatus?.apiKeyConfigured ? 'Update API credentials' : 'Configure API'}
+                    </button>
+                    <a
+                      href="/admin/pricing"
+                      className="text-sm text-blue-600 font-medium hover:text-blue-700"
+                    >
+                      Full Pricing Management →
+                    </a>
+                  </div>
                 </div>
                 <p className="text-xs text-gray-400">
                   More integrations (payments, email, SMS) can be added here. Payment gateways are under the Payments tab.
@@ -599,18 +627,36 @@ export default function SettingsPage() {
   );
 }
 
+const FETCH_INTERVAL_OPTIONS = [1, 5, 15, 60] as const;
+
 function MetalPricingConfigModal({
   initialStatus,
   onClose,
   onSaved,
 }: {
-  initialStatus: { provider: MetalPricingProvider; apiKeyConfigured: boolean; baseUrl: string } | null;
+  initialStatus: {
+    provider: MetalPricingProvider;
+    apiKeyConfigured: boolean;
+    baseUrl: string;
+    enabled: boolean;
+    fetchIntervalMinutes: number;
+  } | null;
   onClose: () => void;
-  onSaved: (status: { provider: MetalPricingProvider; apiKeyConfigured: boolean; baseUrl: string }) => void;
+  onSaved: (status: {
+    provider: MetalPricingProvider;
+    apiKeyConfigured: boolean;
+    baseUrl: string;
+    enabled: boolean;
+    fetchIntervalMinutes: number;
+  }) => void;
 }) {
   const [provider, setProvider] = useState<MetalPricingProvider>(initialStatus?.provider || 'metalpriceapi');
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState(initialStatus?.baseUrl || '');
+  const [enabled, setEnabled] = useState(initialStatus?.enabled !== false);
+  const [fetchIntervalMinutes, setFetchIntervalMinutes] = useState(
+    Math.min(60, Math.max(1, initialStatus?.fetchIntervalMinutes || 5))
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -655,6 +701,8 @@ function MetalPricingConfigModal({
               provider,
               apiKey: apiKey || undefined,
               baseUrl: baseUrl || undefined,
+              enabled,
+              fetchIntervalMinutes,
             },
           },
         }),
@@ -666,6 +714,8 @@ function MetalPricingConfigModal({
         provider,
         apiKeyConfigured: !!apiKey || !!initialStatus?.apiKeyConfigured,
         baseUrl,
+        enabled,
+        fetchIntervalMinutes,
       });
       setTimeout(() => {
         if (mountedRef.current) {
@@ -744,6 +794,38 @@ function MetalPricingConfigModal({
               placeholder={provider === 'metalpriceapi' ? 'https://api.metalpriceapi.com' : 'https://api.metals.dev'}
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
             />
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <p className="font-medium text-gray-900 text-sm">Show live price on storefront</p>
+              <p className="text-xs text-gray-500">Display live gold rate in the header</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={enabled}
+              onClick={() => setEnabled((e) => !e)}
+              className={`relative w-11 h-6 rounded-full transition-colors ${enabled ? 'bg-gold-500' : 'bg-gray-200'}`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0'}`}
+              />
+            </button>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fetch interval</label>
+            <select
+              value={fetchIntervalMinutes}
+              onChange={(e) => setFetchIntervalMinutes(Number(e.target.value))}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+            >
+              {FETCH_INTERVAL_OPTIONS.map((m) => (
+                <option key={m} value={m}>
+                  Every {m} {m === 1 ? 'minute' : 'minutes'}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">How often to fetch new rates from the API</p>
           </div>
           <div className="flex gap-3 pt-4">
             <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">

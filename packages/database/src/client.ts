@@ -16,16 +16,27 @@ const sslOption = process.env.DATABASE_SSL_NO_VERIFY === '1' ? { rejectUnauthori
 /**
  * Parse DATABASE_URL to extract credentials (for Unix socket connections).
  * Returns { username, password, database } or null if parsing fails.
+ *
+ * Uses the URL constructor so passwords with special characters (/, +, =, etc.)
+ * are handled correctly via percent-encoding.
  */
 function parseConnectionString(url: string): { username: string; password: string; database: string } | null {
   try {
-    // Format: postgresql://user:password@host:port/database
-    const match = url.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@[^/]+\/(.+)$/);
-    if (match) {
-      return { username: match[1], password: match[2], database: match[3].split('?')[0] };
-    }
-    return null;
+    const parsed = new URL(url);
+    const username = decodeURIComponent(parsed.username);
+    const password = decodeURIComponent(parsed.password);
+    // pathname is e.g. "/grandgold" → strip leading "/"
+    const database = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+    if (!username || !database) return null;
+    return { username, password, database };
   } catch {
+    // Fallback: try regex for non-standard URLs (e.g. socket-only)
+    try {
+      const match = url.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@[^/]+\/([^?]+)/);
+      if (match) {
+        return { username: match[1], password: match[2], database: match[3] };
+      }
+    } catch { /* ignore */ }
     return null;
   }
 }

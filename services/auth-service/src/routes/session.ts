@@ -21,8 +21,8 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const sessions = await sessionService.getUserSessions(req.user.sub);
     
     // Mark current session
-    const authHeader = req.headers.authorization;
-    const currentToken = authHeader?.split(' ')[1];
+    // const authHeader = req.headers.authorization;
+    // const currentToken = authHeader?.split(' ')[1]; // TODO: use for proper session matching
     
     const sessionsWithCurrent = sessions.map(session => ({
       ...session,

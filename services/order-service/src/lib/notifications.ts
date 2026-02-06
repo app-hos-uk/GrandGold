@@ -95,7 +95,8 @@ export async function sendAbandonedCartWhatsApp(payload: AbandonedCartNotifyPayl
   try {
     // TODO: Integrate Twilio WhatsApp or Meta Cloud API
     // Example: twilioClient.messages.create({ to: `whatsapp:${payload.phone}`, from: whatsappFrom, body: `...` })
-    const itemList = payload.items.map((i) => `• ${i.name} x${i.quantity}`).join('\n');
+    // Build item list for future use in notification body
+    // const itemList = payload.items.map((i) => `• ${i.name} x${i.quantity}`).join('\n');
     const body = `Your GrandGold cart is waiting! Subtotal: ${payload.currency} ${payload.subtotal.toLocaleString()}. Complete checkout: ${payload.checkoutUrl}`;
     // eslint-disable-next-line no-console
     console.log('[notifications] WhatsApp placeholder:', { to: payload.phone, body });

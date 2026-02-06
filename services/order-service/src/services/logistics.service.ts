@@ -25,9 +25,10 @@ export class LogisticsService {
     country: Country,
     postalCode: string,
     subtotal: number,
-    weightKg?: number
+    _weightKg?: number
   ): Promise<ShippingQuote[]> {
-    const weight = weightKg ?? 0.5; // Default 500g for jewelry
+    // Weight is used for future carrier API integration
+    // const weight = weightKg ?? 0.5;
 
     const quotes: ShippingQuote[] = [];
 
@@ -60,7 +61,7 @@ export class LogisticsService {
    */
   async getDeliveryEstimate(
     country: Country,
-    postalCode: string
+    _postalCode: string
   ): Promise<DeliveryEstimate> {
     const now = new Date();
     const minDays = country === 'IN' ? 5 : country === 'AE' ? 4 : 7;
@@ -85,7 +86,7 @@ export class LogisticsService {
   async calculateImportDuty(
     destinationCountry: Country,
     productValue: number,
-    productCategory: string
+    _productCategory: string
   ): Promise<{ duty: number; tax: number; total: number }> {
     // Simplified - in production integrate with customs APIs
     const dutyRate = destinationCountry === 'UK' ? 0.02 : 0; // 2% for UK imports

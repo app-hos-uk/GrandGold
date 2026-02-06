@@ -294,6 +294,158 @@ export function searchProducts(query: string): MockProduct[] {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Fuzzy search helpers (for search bar autocomplete & typo handling)  */
+/* ------------------------------------------------------------------ */
+
+/** Levenshtein distance between two strings */
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+/** All searchable terms (product names, categories, tags, subcategories) */
+function getAllSearchTerms(): string[] {
+  const terms = new Set<string>();
+  MOCK_PRODUCTS.forEach((p) => {
+    terms.add(p.name.toLowerCase());
+    terms.add(p.category.toLowerCase());
+    if (p.subcategory) terms.add(p.subcategory.toLowerCase());
+    p.tags.forEach((t) => terms.add(t.toLowerCase()));
+  });
+  // Add common jewelry terms
+  ['gold', 'diamond', 'platinum', 'silver', 'rose gold', 'white gold',
+   'necklace', 'earring', 'ring', 'bangle', 'bracelet', 'pendant',
+   'jhumka', 'choker', 'chain', 'stud', 'solitaire', 'kundan',
+   'bridal', 'wedding', 'engagement', 'anniversary', 'birthday',
+   '22k', '18k', '24k', 'hallmark', 'certified',
+  ].forEach((t) => terms.add(t));
+  return [...terms];
+}
+
+export interface SearchSuggestion {
+  text: string;
+  type: 'product' | 'category' | 'tag' | 'correction';
+  product?: MockProduct;
+  categorySlug?: string;
+}
+
+/** Get autocomplete suggestions as user types */
+export function getSearchSuggestions(query: string): SearchSuggestion[] {
+  if (!query || query.length < 2) return [];
+  const q = query.toLowerCase().trim();
+  const suggestions: SearchSuggestion[] = [];
+  const seen = new Set<string>();
+
+  // 1. Exact product matches (name contains query)
+  MOCK_PRODUCTS.forEach((p) => {
+    if (p.name.toLowerCase().includes(q) && !seen.has(p.id)) {
+      seen.add(p.id);
+      suggestions.push({ text: p.name, type: 'product', product: p });
+    }
+  });
+
+  // 2. Category matches
+  const categories = [...new Set(MOCK_PRODUCTS.map((p) => p.category))];
+  categories.forEach((cat) => {
+    if (cat.toLowerCase().includes(q) && !seen.has(`cat:${cat}`)) {
+      seen.add(`cat:${cat}`);
+      suggestions.push({ text: cat, type: 'category', categorySlug: cat.toLowerCase() });
+    }
+  });
+
+  // 3. Tag / subcategory matches
+  MOCK_PRODUCTS.forEach((p) => {
+    p.tags.forEach((tag) => {
+      if (tag.toLowerCase().includes(q) && !seen.has(`tag:${tag}`)) {
+        seen.add(`tag:${tag}`);
+        suggestions.push({ text: tag, type: 'tag' });
+      }
+    });
+    if (p.subcategory && p.subcategory.toLowerCase().includes(q) && !seen.has(`sub:${p.subcategory}`)) {
+      seen.add(`sub:${p.subcategory}`);
+      suggestions.push({ text: p.subcategory, type: 'category' });
+    }
+  });
+
+  // 4. Description keyword matches (products whose description contains query)
+  MOCK_PRODUCTS.forEach((p) => {
+    if (p.description.toLowerCase().includes(q) && !seen.has(p.id)) {
+      seen.add(p.id);
+      suggestions.push({ text: p.name, type: 'product', product: p });
+    }
+  });
+
+  return suggestions.slice(0, 8);
+}
+
+/** Fuzzy search - find closest match when no exact match exists (misspelling correction) */
+export function fuzzyCorrect(query: string): string | null {
+  const q = query.toLowerCase().trim();
+  if (q.length < 3) return null;
+
+  const allTerms = getAllSearchTerms();
+  // Check if we already have exact matches
+  const exactExists = allTerms.some((t) => t.includes(q) || q.includes(t));
+  if (exactExists) return null;
+
+  // Find the closest word per query token
+  const tokens = q.split(/\s+/);
+  const corrected: string[] = [];
+  let anyCorrection = false;
+
+  for (const token of tokens) {
+    if (token.length < 3) {
+      corrected.push(token);
+      continue;
+    }
+    let bestMatch = token;
+    let bestDist = Infinity;
+    for (const term of allTerms) {
+      // Compare token against each word in the term
+      const termWords = term.split(/\s+/);
+      for (const tw of termWords) {
+        if (tw.length < 3) continue;
+        const dist = levenshtein(token, tw);
+        const threshold = token.length <= 4 ? 1 : 2;
+        if (dist <= threshold && dist < bestDist) {
+          bestDist = dist;
+          bestMatch = tw;
+        }
+      }
+    }
+    if (bestMatch !== token) anyCorrection = true;
+    corrected.push(bestMatch);
+  }
+
+  return anyCorrection ? corrected.join(' ') : null;
+}
+
+/** Full fuzzy search: returns results + optional "did you mean" correction */
+export function fuzzySearchProducts(query: string): { results: MockProduct[]; correction: string | null } {
+  const directResults = searchProducts(query);
+  if (directResults.length > 0) return { results: directResults, correction: null };
+
+  const correction = fuzzyCorrect(query);
+  if (correction) {
+    const correctedResults = searchProducts(correction);
+    return { results: correctedResults, correction };
+  }
+
+  return { results: [], correction: null };
+}
+
 export function getProductsForCountry(country: 'IN' | 'AE' | 'UK'): MockProduct[] {
   return MOCK_PRODUCTS.filter(p => p.countries.includes(country) && p.inStock);
 }

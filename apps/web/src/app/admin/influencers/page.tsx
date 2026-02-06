@@ -61,6 +61,7 @@ export default function AdminInfluencersPage() {
           bio: data.bio || undefined,
           productIds: data.productIds.length ? data.productIds : undefined,
           commissionRate: data.commissionRate,
+          ...(data.commissionType && { commissionType: data.commissionType }),
         });
         setSuccess('Influencer created. Storefront available at /[country]/influencer/' + data.slug);
         toast.success('Influencer created');
@@ -70,6 +71,7 @@ export default function AdminInfluencersPage() {
           bio: data.bio || undefined,
           productIds: data.productIds.length ? data.productIds : undefined,
           commissionRate: data.commissionRate,
+          ...(data.commissionType && { commissionType: data.commissionType }),
         });
         setSuccess('Influencer updated.');
         toast.success('Influencer updated');
@@ -176,7 +178,11 @@ export default function AdminInfluencersPage() {
                     <p className="text-sm text-gray-500 mt-0.5">{inf.bio}</p>
                     <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
                       <span>{(inf.productIds ?? []).length} products in rack</span>
-                      <span>{inf.commissionRate ?? 5}% commission</span>
+                      <span>
+                        {(inf.commissionRate ?? 5) > 0
+                          ? `${inf.commissionRate ?? 5}% commission`
+                          : 'No commission'}
+                      </span>
                     </div>
                   </div>
                 </div>

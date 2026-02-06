@@ -126,7 +126,8 @@ router.post(
       const data = inviteSellerSchema.parse(req.body);
       
       // Generate a temporary password if not provided
-      const tempPassword = data.tempPassword || `Seller${randomUUID().slice(0, 8)}!`;
+      // Password generated for email invitation in production
+      // const tempPassword = data.tempPassword || `Seller${randomUUID().slice(0, 8)}!`;
       
       // In production, this would:
       // 1. Create the user with seller role in database
@@ -171,7 +172,7 @@ router.post(
   authorize(...ADMIN_ROLES),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email, firstName, lastName, phone, country, socialHandles, tempPassword } = req.body;
+      const { email, firstName, lastName, country, socialHandles } = req.body;
       
       if (!email || !firstName || !lastName || !country) {
         res.status(400).json({
@@ -182,7 +183,8 @@ router.post(
       }
       
       // Generate a temporary password if not provided
-      const password = tempPassword || `Influencer${randomUUID().slice(0, 8)}!`;
+      // Password generated for email invitation in production
+      // const password = tempPassword || `Influencer${randomUUID().slice(0, 8)}!`;
       
       // In production, this would create the user and send email
       const influencerId = randomUUID();

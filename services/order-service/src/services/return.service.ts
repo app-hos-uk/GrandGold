@@ -1,7 +1,17 @@
 import { generateId, NotFoundError, ValidationError } from '@grandgold/utils';
 
+interface ReturnRecord {
+  id: string; orderId: string; userId: string; items: string[];
+  reason: string; reasonDetails?: string; images: string[];
+  preferredResolution: string; status: string;
+  requestedAt: Date; approvedAt: Date | null; rejectedAt: Date | null;
+  rejectionReason: string | null; returnLabelUrl: string | null;
+  trackingNumber: string | null; refundAmount: number | null; refundedAt: Date | null;
+  [key: string]: unknown;
+}
+
 // In-memory store for demo
-const returnStore = new Map<string, any>();
+const returnStore = new Map<string, ReturnRecord>();
 
 interface CreateReturnInput {
   orderId: string;
@@ -17,7 +27,7 @@ export class ReturnService {
   /**
    * Initiate return request
    */
-  async initiateReturn(input: CreateReturnInput): Promise<any> {
+  async initiateReturn(input: CreateReturnInput): Promise<ReturnRecord> {
     // Verify order exists and belongs to user
     const order = { id: input.orderId, status: 'delivered', deliveredAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) }; // Mock
 
@@ -72,7 +82,7 @@ export class ReturnService {
   /**
    * Get return request
    */
-  async getReturn(returnId: string, userId: string): Promise<any> {
+  async getReturn(returnId: string, userId: string): Promise<ReturnRecord> {
     const returnRequest = returnStore.get(returnId);
 
     if (!returnRequest || returnRequest.userId !== userId) {
@@ -88,7 +98,7 @@ export class ReturnService {
   async getUserReturns(
     userId: string,
     options: { status?: string; page: number; limit: number }
-  ): Promise<{ data: any[]; total: number }> {
+  ): Promise<{ data: ReturnRecord[]; total: number }> {
     let returns = Array.from(returnStore.values())
       .filter((r) => r.userId === userId)
       .sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime());
@@ -111,7 +121,7 @@ export class ReturnService {
     returnId: string,
     approverId: string,
     refundAmount: number
-  ): Promise<any> {
+  ): Promise<ReturnRecord> {
     const returnRequest = returnStore.get(returnId);
 
     if (!returnRequest) {
@@ -143,7 +153,7 @@ export class ReturnService {
     returnId: string,
     approverId: string,
     reason: string
-  ): Promise<any> {
+  ): Promise<ReturnRecord> {
     const returnRequest = returnStore.get(returnId);
 
     if (!returnRequest) {
@@ -167,7 +177,7 @@ export class ReturnService {
   /**
    * Process return (after item received)
    */
-  async processReturn(returnId: string, adminId: string): Promise<any> {
+  async processReturn(returnId: string, adminId: string): Promise<ReturnRecord> {
     const returnRequest = returnStore.get(returnId);
 
     if (!returnRequest) {

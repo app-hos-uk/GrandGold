@@ -194,6 +194,7 @@ router.post(
       carriersStore.set(carrier.id, carrier);
 
       // Don't return secrets
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { apiKey, apiSecret, ...rest } = carrier;
 
       res.status(201).json({
@@ -237,6 +238,7 @@ router.patch(
       carriersStore.set(id, carrier);
 
       // Don't return secrets
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { apiKey, apiSecret, ...rest } = carrier;
 
       res.json({

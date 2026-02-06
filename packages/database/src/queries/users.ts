@@ -1,4 +1,4 @@
-import { eq, and, or, desc, sql, ilike } from 'drizzle-orm';
+import { eq, and, or, desc, sql, ilike, inArray } from 'drizzle-orm';
 import { db } from '../client';
 import { users, userAddresses, type User, type NewUser, type UserAddress, type NewUserAddress } from '../schema/users';
 
@@ -190,12 +190,17 @@ export interface ListUsersOptions {
   country?: string;
   role?: string;
   search?: string;
+  /** When set, return only users with these IDs (ignores page/limit for count). */
+  ids?: string[];
 }
 
 export async function listUsers(options: ListUsersOptions = {}): Promise<{ users: User[]; total: number }> {
-  const { page = 1, limit = 20, country, role, search } = options;
+  const { page = 1, limit = 20, country, role, search, ids } = options;
   const conditions = [eq(users.isDeleted, false)];
 
+  if (ids !== undefined && ids.length > 0) {
+    conditions.push(inArray(users.id, ids));
+  }
   if (country) conditions.push(eq(users.country, country as 'IN' | 'AE' | 'UK'));
   if (role) conditions.push(eq(users.role, role as any));
   if (search) {
@@ -203,7 +208,7 @@ export async function listUsers(options: ListUsersOptions = {}): Promise<{ users
     conditions.push(or(ilike(users.email, term), ilike(users.firstName, term), ilike(users.lastName, term))!);
   }
 
-  const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const where = and(...conditions);
   const offset = (page - 1) * limit;
 
   const [usersList, countResult] = await Promise.all([

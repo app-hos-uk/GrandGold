@@ -1,70 +1,47 @@
-# AI Service Dockerfile
+# Notification Service Dockerfile
 FROM node:20-alpine AS base
 
-# Install pnpm (pin for reproducible installs)
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-# Dependencies stage
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy workspace config
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY turbo.json ./
 
-# Copy all package.json files
 COPY packages/types/package.json ./packages/types/
 COPY packages/utils/package.json ./packages/utils/
-COPY packages/database/package.json ./packages/database/
-COPY services/ai-service/package.json ./services/ai-service/
+COPY services/notification-service/package.json ./services/notification-service/
 
-# Install all dependencies
 RUN pnpm install --frozen-lockfile
 
-# Build stage
 FROM base AS builder
 WORKDIR /app
-
-# Copy dependencies
 COPY --from=deps /app ./
-
-# Copy source code
 COPY packages ./packages
-COPY services/ai-service ./services/ai-service
+COPY services/notification-service ./services/notification-service
 COPY tsconfig.base.json ./
 
-# Build packages and service
-RUN pnpm turbo run build --filter=@grandgold/ai-service
+RUN pnpm turbo run build --filter=@grandgold/notification-service
 
-# Production stage
 FROM base AS runner
 WORKDIR /app
-
 ENV NODE_ENV=production
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 grandgold
 
-# Copy workspace config for pnpm
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-
-# Copy built packages
 COPY --from=builder /app/packages/types/dist ./packages/types/dist
 COPY --from=builder /app/packages/types/package.json ./packages/types/
 COPY --from=builder /app/packages/utils/dist ./packages/utils/dist
 COPY --from=builder /app/packages/utils/package.json ./packages/utils/
+COPY --from=builder /app/services/notification-service/dist ./services/notification-service/dist
+COPY --from=builder /app/services/notification-service/package.json ./services/notification-service/
 
-# Copy built service
-COPY --from=builder /app/services/ai-service/dist ./services/ai-service/dist
-COPY --from=builder /app/services/ai-service/package.json ./services/ai-service/
-
-# Install production dependencies only
 RUN pnpm install --prod --frozen-lockfile
 
 USER grandgold
-
-# Cloud Run injects PORT env var (default 8080)
 EXPOSE 8080
-
-CMD ["node", "services/ai-service/dist/index.js"]
+CMD ["node", "services/notification-service/dist/index.js"]

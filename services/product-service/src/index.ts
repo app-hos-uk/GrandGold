@@ -86,10 +86,11 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start server
-const PORT = parseInt(process.env.PORT || '4005');
+const PORT = parseInt(process.env.PORT || '4007');
+const HOST = process.env.HOST || '0.0.0.0';
 
-app.listen(PORT, () => {
-  logger.info(`Product service started on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+  logger.info(`Product service started on ${HOST}:${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
 });
 
@@ -97,6 +98,13 @@ app.listen(PORT, () => {
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down...');
   process.exit(0);
+});
+process.on('unhandledRejection', (reason) => {
+  logger.error({ err: reason }, 'Unhandled rejection');
+});
+process.on('uncaughtException', (err) => {
+  logger.error({ err }, 'Uncaught exception — shutting down');
+  process.exit(1);
 });
 
 export { app };

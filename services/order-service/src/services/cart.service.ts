@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import { generateId, NotFoundError, ValidationError } from '@grandgold/utils';
+import { NotFoundError, ValidationError } from '@grandgold/utils';
 import type { Country } from '@grandgold/types';
 
 // Redis client for cart storage
@@ -94,7 +94,7 @@ export class CartService {
         quantity: data.quantity,
         goldWeight: product.goldWeight,
         purity: product.purity,
-        priceModel: product.pricingModel,
+        priceModel: product.pricingModel as 'fixed' | 'dynamic',
         sellerId: product.sellerId, // Stored but hidden
         addedAt: new Date(),
       });
@@ -255,7 +255,11 @@ export class CartService {
   /**
    * Fetch product (mock - in production, call product service)
    */
-  private async fetchProduct(productId: string): Promise<any | null> {
+  private async fetchProduct(productId: string): Promise<{
+    id: string; name: string; images: { url: string }[];
+    currentPrice: number; basePrice: number; goldWeight?: number;
+    purity?: string; pricingModel: string; sellerId: string; stockQuantity: number;
+  } | null> {
     // Mock product
     return {
       id: productId,

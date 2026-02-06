@@ -56,10 +56,23 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 const PORT = parseInt(process.env.PORT || '4009');
+const HOST = process.env.HOST || '0.0.0.0';
 
-app.listen(PORT, () => {
-  logger.info(`AI service started on port ${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  logger.info(`AI service started on ${HOST}:${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
+});
+
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down...');
+  server.close(() => process.exit(0));
+});
+process.on('unhandledRejection', (reason) => {
+  logger.error({ err: reason }, 'Unhandled rejection');
+});
+process.on('uncaughtException', (err) => {
+  logger.error({ err }, 'Uncaught exception — shutting down');
+  server.close(() => process.exit(1));
 });
 
 export { app };

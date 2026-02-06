@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
 
-// Store config in .grandgold/config.json (relative to project root)
-// In production, use database or secret manager
-const getConfigPath = () => {
-  const root = process.cwd();
-  return path.join(root, '.grandgold', 'config.json');
-};
+/**
+ * Admin configuration API.
+ *
+ * Cloud Run containers have an ephemeral, read-only filesystem, so we
+ * cannot persist config to disk.  We use an in-memory store here so the
+ * admin panel keeps working across requests within the same instance.
+ *
+ * For true persistence across deploys / instances, migrate to a database
+ * table or GCP Secret Manager.
+ */
 
 /** Integration types for global admin API configuration */
 export type MetalPricingProvider = 'metalpriceapi' | 'metalsdev';
@@ -16,91 +18,124 @@ export interface MetalPricingConfig {
   provider: MetalPricingProvider;
   apiKey: string;
   baseUrl?: string;
+  enabled?: boolean;
+  fetchIntervalMinutes?: number;
 }
 
 export interface IntegrationsConfig {
   metalPricing?: MetalPricingConfig;
 }
 
+// ── In-memory config store (replaces filesystem) ──────────────────────
+let configStore: Record<string, unknown> = {};
+
+// Seed from environment variables so Cloud Run deployments start pre-configured
+function seedFromEnv(): void {
+  if (Object.keys(configStore).length > 0) return; // already seeded
+
+  const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+  const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+  const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const metalApiKey = process.env.METAL_PRICING_API_KEY;
+  const metalProvider = process.env.METAL_PRICING_PROVIDER;
+
+  if (razorpayKeyId || razorpayKeySecret) {
+    configStore.razorpay = { keyId: razorpayKeyId, keySecret: razorpayKeySecret };
+  }
+  if (stripePublishableKey || stripeSecretKey) {
+    configStore.stripe = { publishableKey: stripePublishableKey, secretKey: stripeSecretKey };
+  }
+  if (metalApiKey || metalProvider) {
+    configStore.integrations = {
+      metalPricing: {
+        provider: (metalProvider || 'metalpriceapi').toLowerCase(),
+        apiKey: metalApiKey || '',
+        baseUrl: process.env.METAL_PRICING_BASE_URL || '',
+        enabled: true,
+        fetchIntervalMinutes: 5,
+      },
+    };
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────
+
 function maskSecret(value: string | undefined): boolean {
   return !!(value && value.length > 0);
 }
 
+// ── GET ───────────────────────────────────────────────────────────────
+
 export async function GET() {
-  try {
-    const configPath = getConfigPath();
-    const data = await fs.readFile(configPath, 'utf-8').catch(() => '{}');
-    const config = JSON.parse(data);
-    // Don't return secrets to client - only masked version
-    return NextResponse.json({
-      success: true,
-      data: {
-        razorpay: {
-          keyId: config.razorpay?.keyId || '',
-          keyIdConfigured: !!config.razorpay?.keyId,
-        },
-        stripe: {
-          publishableKey: config.stripe?.publishableKey || '',
-          publishableKeyConfigured: !!config.stripe?.publishableKey,
-        },
-        integrations: {
-          metalPricing: {
-            provider: (config.integrations?.metalPricing?.provider || 'metalpriceapi').toLowerCase(),
-            apiKeyConfigured: maskSecret(config.integrations?.metalPricing?.apiKey),
-            baseUrl: (config.integrations?.metalPricing?.baseUrl || '').trim(),
-          },
+  seedFromEnv();
+
+  const config = configStore;
+  const razorpay = config.razorpay as Record<string, string> | undefined;
+  const stripe = config.stripe as Record<string, string> | undefined;
+  const integrations = config.integrations as Record<string, Record<string, unknown>> | undefined;
+  const metalPricing = integrations?.metalPricing;
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      razorpay: {
+        keyId: razorpay?.keyId || '',
+        keyIdConfigured: !!razorpay?.keyId,
+      },
+      stripe: {
+        publishableKey: stripe?.publishableKey || '',
+        publishableKeyConfigured: !!stripe?.publishableKey,
+      },
+      integrations: {
+        metalPricing: {
+          provider: ((metalPricing?.provider as string) || 'metalpriceapi').toLowerCase(),
+          apiKeyConfigured: maskSecret(metalPricing?.apiKey as string | undefined),
+          baseUrl: ((metalPricing?.baseUrl as string) || '').trim(),
+          enabled: metalPricing?.enabled !== false,
+          fetchIntervalMinutes: Math.min(
+            60,
+            Math.max(1, Number(metalPricing?.fetchIntervalMinutes) || 5),
+          ),
         },
       },
-    });
-  } catch {
-    return NextResponse.json({
-      success: true,
-      data: {
-        razorpay: { keyId: '', keyIdConfigured: false },
-        stripe: { publishableKey: '', publishableKeyConfigured: false },
-        integrations: {
-          metalPricing: {
-            provider: 'metalpriceapi',
-            apiKeyConfigured: false,
-            baseUrl: '',
-          },
-        },
-      },
-    });
-  }
+    },
+  });
 }
+
+// ── POST ──────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
+    seedFromEnv();
+
     const body = await request.json();
-    const configPath = getConfigPath();
-    const dir = path.dirname(configPath);
-
-    await fs.mkdir(dir, { recursive: true });
-
-    let existing: Record<string, unknown> = {};
-    try {
-      const data = await fs.readFile(configPath, 'utf-8');
-      existing = JSON.parse(data);
-    } catch {
-      // File doesn't exist yet
-    }
+    const existing = configStore;
 
     const existingIntegrations = (existing.integrations as Record<string, unknown>) || {};
-    const existingMetal = (existingIntegrations.metalPricing as Record<string, string> | undefined) || {};
+    const existingMetal =
+      (existingIntegrations.metalPricing as Record<string, string> | undefined) || {};
 
-    const updated = {
+    configStore = {
       ...existing,
       razorpay: body.razorpay
         ? {
-            keyId: body.razorpay.keyId || (existing.razorpay as Record<string, string>)?.keyId,
-            keySecret: body.razorpay.keySecret || (existing.razorpay as Record<string, string>)?.keySecret,
+            keyId:
+              body.razorpay.keyId ||
+              (existing.razorpay as Record<string, string>)?.keyId,
+            keySecret:
+              body.razorpay.keySecret ||
+              (existing.razorpay as Record<string, string>)?.keySecret,
           }
         : (existing.razorpay as object),
       stripe: body.stripe
         ? {
-            publishableKey: body.stripe.publishableKey || (existing.stripe as Record<string, string>)?.publishableKey,
-            secretKey: body.stripe.secretKey || (existing.stripe as Record<string, string>)?.secretKey,
+            publishableKey:
+              body.stripe.publishableKey ||
+              (existing.stripe as Record<string, string>)?.publishableKey,
+            secretKey:
+              body.stripe.secretKey ||
+              (existing.stripe as Record<string, string>)?.secretKey,
           }
         : (existing.stripe as object),
       integrations: body.integrations
@@ -108,9 +143,28 @@ export async function POST(request: NextRequest) {
             ...existingIntegrations,
             metalPricing: body.integrations.metalPricing
               ? {
-                  provider: (body.integrations.metalPricing.provider || existingMetal.provider || 'metalpriceapi').toLowerCase(),
-                  apiKey: body.integrations.metalPricing.apiKey || existingMetal.apiKey,
-                  baseUrl: (body.integrations.metalPricing.baseUrl ?? existingMetal.baseUrl ?? '').trim(),
+                  provider: (
+                    body.integrations.metalPricing.provider ||
+                    existingMetal.provider ||
+                    'metalpriceapi'
+                  ).toLowerCase(),
+                  apiKey:
+                    body.integrations.metalPricing.apiKey || existingMetal.apiKey,
+                  baseUrl: (
+                    body.integrations.metalPricing.baseUrl ??
+                    existingMetal.baseUrl ??
+                    ''
+                  ).trim(),
+                  enabled: body.integrations.metalPricing.enabled !== false,
+                  fetchIntervalMinutes: Math.min(
+                    60,
+                    Math.max(
+                      1,
+                      Number(
+                        body.integrations.metalPricing.fetchIntervalMinutes,
+                      ) || 5,
+                    ),
+                  ),
                 }
               : existingIntegrations.metalPricing,
           }
@@ -118,17 +172,14 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date().toISOString(),
     };
 
-    await fs.writeFile(configPath, JSON.stringify(updated, null, 2), 'utf-8');
-
     return NextResponse.json({
       success: true,
       message: 'Configuration saved successfully',
     });
   } catch {
-    // Log to monitoring service in production
     return NextResponse.json(
       { success: false, error: { message: 'Failed to save configuration' } },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -21,8 +21,10 @@ import {
   Shield,
   RotateCcw,
   ZoomIn,
+  Search,
 } from 'lucide-react';
 import { VisualSearch } from '@/components/search/visual-search';
+import { MOCK_PRODUCTS, fuzzySearchProducts } from '@/lib/product-data';
 
 interface Product {
   id: string;
@@ -37,106 +39,21 @@ interface Product {
   inStock?: boolean;
 }
 
-const products: Product[] = [
-  {
-    id: '1',
-    name: 'Traditional Kundan Necklace Set',
-    category: 'Necklaces',
-    price: 185000,
-    weight: '45.5g',
-    purity: '22K',
-    image: '/products/necklace-1.jpg',
-    isNew: true,
-    description: 'Exquisite handcrafted Kundan necklace set featuring intricate meenakari work. This stunning piece combines traditional craftsmanship with timeless elegance, perfect for weddings and special occasions.',
-    inStock: true,
-  },
-  {
-    id: '2',
-    name: 'Diamond Studded Jhumkas',
-    category: 'Earrings',
-    price: 78500,
-    weight: '12.3g',
-    purity: '18K',
-    image: '/products/earring-1.jpg',
-    isNew: false,
-    description: 'Beautiful diamond-studded jhumkas crafted in 18K gold. These elegant earrings feature sparkling diamonds set in a classic jhumka design, perfect for both traditional and contemporary outfits.',
-    inStock: true,
-  },
-  {
-    id: '3',
-    name: 'Solitaire Engagement Ring',
-    category: 'Rings',
-    price: 245000,
-    weight: '8.2g',
-    purity: '18K',
-    image: '/products/ring-1.jpg',
-    isNew: true,
-    description: 'Stunning solitaire engagement ring featuring a brilliant-cut diamond set in 18K white gold. The timeless design symbolizes eternal love and commitment.',
-    inStock: true,
-  },
-  {
-    id: '4',
-    name: 'Classic Gold Bangle Set',
-    category: 'Bracelets',
-    price: 125000,
-    weight: '35.0g',
-    purity: '22K',
-    image: '/products/bangle-1.jpg',
-    isNew: false,
-    description: 'Set of 4 classic gold bangles in 22K gold with intricate filigree work. These versatile bangles are perfect for everyday wear or special occasions.',
-    inStock: true,
-  },
-  {
-    id: '5',
-    name: 'Temple Design Choker',
-    category: 'Necklaces',
-    price: 295000,
-    weight: '58.2g',
-    purity: '22K',
-    image: '/products/necklace-2.jpg',
-    isNew: true,
-    description: 'Magnificent temple design choker necklace inspired by ancient South Indian temple architecture. Hand-crafted in 22K gold with divine motifs and intricate detailing.',
-    inStock: false,
-  },
-  {
-    id: '6',
-    name: 'Pearl Drop Earrings',
-    category: 'Earrings',
-    price: 45000,
-    weight: '8.5g',
-    purity: '18K',
-    image: '/products/earring-2.jpg',
-    isNew: false,
-    description: 'Elegant pearl drop earrings featuring lustrous freshwater pearls set in 18K gold. A timeless accessory that adds sophistication to any ensemble.',
-    inStock: true,
-  },
-  {
-    id: '7',
-    name: 'Diamond Eternity Band',
-    category: 'Rings',
-    price: 165000,
-    weight: '5.8g',
-    purity: '18K',
-    image: '/products/ring-2.jpg',
-    isNew: false,
-    description: 'Exquisite diamond eternity band featuring brilliant-cut diamonds set all around in 18K white gold. Perfect as a wedding band or anniversary gift.',
-    inStock: true,
-  },
-  {
-    id: '8',
-    name: 'Charm Bracelet',
-    category: 'Bracelets',
-    price: 55000,
-    weight: '15.2g',
-    purity: '22K',
-    image: '/products/bracelet-1.jpg',
-    isNew: true,
-    description: 'Delightful charm bracelet in 22K gold featuring various symbolic charms. Each charm tells a story, making this bracelet a meaningful gift or personal treasure.',
-    inStock: true,
-  },
-];
+// Use shared product data as source of truth
+const products: Product[] = MOCK_PRODUCTS.map((p) => ({
+  id: p.id,
+  name: p.name,
+  category: p.category,
+  price: p.price,
+  weight: p.weight,
+  purity: p.purity,
+  image: p.images[0] || '/products/placeholder.jpg',
+  isNew: p.newArrival,
+  description: p.description,
+  inStock: p.inStock,
+}));
 
-const categories = ['All', 'Necklaces', 'Earrings', 'Rings', 'Bracelets', 'Gold Bars'];
+const categories = ['All', ...new Set(MOCK_PRODUCTS.map((p) => p.category))];
 const sortOptions = ['Featured', 'Price: Low to High', 'Price: High to Low', 'Newest First'];
 const purityOptions = ['All', '24K', '22K', '18K', '14K'];
 
@@ -148,8 +65,13 @@ const countryConfig = {
 
 export default function CollectionsPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const country = (params.country as 'in' | 'ae' | 'uk') || 'in';
   const config = countryConfig[country];
+
+  // Read search query from URL (set by search bar)
+  const urlSearch = searchParams.get('search') || '';
+  const urlCategory = searchParams.get('category') || '';
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -161,8 +83,47 @@ export default function CollectionsPage() {
   const [quantity, setQuantity] = useState(1);
   const [addedToCart, setAddedToCart] = useState(false);
   const [addedToWishlist, setAddedToWishlist] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(urlSearch);
+  const [searchCorrection, setSearchCorrection] = useState<string | null>(null);
 
-  const filteredProducts = products.filter((product) => {
+  // Sync URL search param on mount
+  useEffect(() => {
+    if (urlSearch) setSearchQuery(urlSearch);
+    if (urlCategory) {
+      // Map URL slug to category name (e.g., "traditional-bridal" -> try matching)
+      const matchingCat = categories.find(
+        (c) => c.toLowerCase() === urlCategory.toLowerCase() || c.toLowerCase().replace(/\s+/g, '-') === urlCategory.toLowerCase()
+      );
+      if (matchingCat) setSelectedCategory(matchingCat);
+    }
+  }, [urlSearch, urlCategory]);
+
+  // Compute search results & correction (pure computation, no setState during render)
+  const { searchPool, computedCorrection } = (() => {
+    if (!searchQuery.trim()) return { searchPool: products, computedCorrection: null };
+    const { results, correction } = fuzzySearchProducts(searchQuery.trim());
+    if (results.length > 0) {
+      const matchIds = new Set(results.map((r) => r.id));
+      return { searchPool: products.filter((p) => matchIds.has(p.id)), computedCorrection: correction };
+    }
+    return { searchPool: [] as Product[], computedCorrection: correction };
+  })();
+
+  // Sync correction state via useEffect (avoids setState during render)
+  useEffect(() => {
+    setSearchCorrection(computedCorrection);
+  }, [computedCorrection]);
+
+  // Dynamic page title
+  useEffect(() => {
+    const parts = ['Collections'];
+    if (searchQuery) parts.push(`Search: ${searchQuery}`);
+    if (selectedCategory !== 'All') parts.push(selectedCategory);
+    document.title = `${parts.join(' - ')} | GrandGold`;
+  }, [searchQuery, selectedCategory]);
+
+  // Apply category / purity / price filters
+  const filteredProducts = searchPool.filter((product) => {
     if (selectedCategory !== 'All' && product.category !== selectedCategory) return false;
     if (selectedPurity !== 'All' && product.purity !== selectedPurity) return false;
     if (product.price < priceRange[0] || product.price > priceRange[1]) return false;
@@ -198,9 +159,50 @@ export default function CollectionsPage() {
       <section className="py-8">
         <div className="container mx-auto px-4">
           {/* Visual Search */}
-          <div className="mb-8 max-w-md">
+          <div className="mb-6 max-w-md">
             <VisualSearch country={country} />
           </div>
+
+          {/* Search bar (pre-filled from header search) */}
+          {(searchQuery || urlSearch) && (
+            <div className="mb-6">
+              <div className="relative max-w-lg">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search products..."
+                  className="w-full pl-12 pr-12 py-3 border border-cream-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gold-500 bg-white"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-cream-100 rounded text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              {searchCorrection && (
+                <p className="mt-2 text-sm text-gray-500">
+                  Showing results for{' '}
+                  <button
+                    onClick={() => setSearchQuery(searchCorrection)}
+                    className="font-semibold text-gold-600 hover:text-gold-700 underline underline-offset-2"
+                  >
+                    &ldquo;{searchCorrection}&rdquo;
+                  </button>
+                  {' '}instead of &ldquo;{searchQuery}&rdquo;
+                </p>
+              )}
+              {searchQuery && filteredProducts.length > 0 && (
+                <p className="mt-2 text-sm text-gray-500">
+                  {filteredProducts.length} result{filteredProducts.length !== 1 ? 's' : ''} for &ldquo;{searchCorrection || searchQuery}&rdquo;
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Category Pills */}
           <div className="flex gap-2 overflow-x-auto pb-4 mb-6 scrollbar-hide">

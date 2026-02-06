@@ -5,6 +5,7 @@ import { Footer } from '@/components/layout/footer';
 import { SkipLink } from '@/components/a11y/skip-link';
 import { CartProvider } from '@/contexts/cart-context';
 import { WishlistProvider } from '@/contexts/wishlist-context';
+import { GoldRateProvider } from '@/contexts/gold-rate-context';
 
 const ChatWidget = dynamic(() => import('@/components/chat/chat-widget').then((m) => ({ default: m.ChatWidget })), {
   ssr: false,
@@ -33,16 +34,18 @@ export default function CountryLayout({ children, params }: CountryLayoutProps) 
   const country = params.country as 'in' | 'ae' | 'uk';
 
   return (
-    <CartProvider country={country}>
-      <WishlistProvider country={country}>
-        <SkipLink />
-        <Header country={country} />
-        <main id="main-content" tabIndex={-1}>
-          {children}
-        </main>
-        <Footer country={country} />
-        <ChatWidget />
-      </WishlistProvider>
-    </CartProvider>
+    <GoldRateProvider country={country}>
+      <CartProvider country={country}>
+        <WishlistProvider country={country}>
+          <SkipLink />
+          <Header country={country} />
+          <main id="main-content" tabIndex={-1}>
+            {children}
+          </main>
+          <Footer country={country} />
+          <ChatWidget />
+        </WishlistProvider>
+      </CartProvider>
+    </GoldRateProvider>
   );
 }

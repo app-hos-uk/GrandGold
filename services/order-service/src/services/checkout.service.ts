@@ -3,33 +3,14 @@ import type { Country } from '@grandgold/types';
 import { CartService } from './cart.service';
 import { TaxService } from './tax.service';
 import { AbandonedCartService } from './abandoned-cart.service';
+import type { CheckoutRecord, CartItem, OrderRecord, ShippingAddress } from '../types/internal';
 
 // In-memory store for demo
-const checkoutStore = new Map<string, any>();
-
-interface ShippingAddress {
-  line1: string;
-  line2?: string;
-  city: string;
-  state?: string;
-  postalCode: string;
-  country: Country;
-  coordinates?: { lat: number; lng: number };
-}
-
-interface BillingAddress {
-  sameAsShipping: boolean;
-  line1?: string;
-  line2?: string;
-  city?: string;
-  state?: string;
-  postalCode?: string;
-  country?: Country;
-}
+const checkoutStore = new Map<string, CheckoutRecord>();
 
 interface CheckoutInput {
-  shippingAddress: ShippingAddress;
-  billingAddress: BillingAddress;
+  shippingAddress: CheckoutRecord['shippingAddress'];
+  billingAddress: { sameAsShipping: boolean; line1?: string; line2?: string; city?: string; state?: string; postalCode?: string; country?: Country };
   deliveryOption: 'standard' | 'express' | 'click_collect';
   notes?: string;
   giftWrapping?: boolean;
@@ -47,7 +28,7 @@ export class CheckoutService {
   /**
    * Initiate checkout
    */
-  async initiateCheckout(userId: string, input: CheckoutInput): Promise<any> {
+  async initiateCheckout(userId: string, input: CheckoutInput): Promise<CheckoutRecord> {
     const cart = await cartService.getCart(userId);
     
     if (cart.items.length === 0) {
@@ -131,7 +112,7 @@ export class CheckoutService {
   /**
    * Get checkout
    */
-  async getCheckout(checkoutId: string, userId: string): Promise<any> {
+  async getCheckout(checkoutId: string, userId: string): Promise<CheckoutRecord> {
     const checkout = checkoutStore.get(checkoutId);
     
     if (!checkout || checkout.userId !== userId) {
@@ -149,7 +130,7 @@ export class CheckoutService {
   /**
    * Calculate totals
    */
-  async calculateTotals(checkoutId: string, userId: string, promoCode?: string): Promise<any> {
+  async calculateTotals(checkoutId: string, userId: string, promoCode?: string): Promise<Record<string, unknown>> {
     const checkout = await this.getCheckout(checkoutId, userId);
     
     // Recalculate with potentially updated prices
@@ -181,7 +162,7 @@ export class CheckoutService {
   /**
    * Apply promo code
    */
-  async applyPromoCode(checkoutId: string, userId: string, code: string): Promise<any> {
+  async applyPromoCode(checkoutId: string, userId: string, code: string): Promise<Record<string, unknown>> {
     const checkout = await this.getCheckout(checkoutId, userId);
     
     const promoResult = await this.validatePromoCode(code, checkout.subtotal);
@@ -204,7 +185,7 @@ export class CheckoutService {
   /**
    * Remove promo code
    */
-  async removePromoCode(checkoutId: string, userId: string): Promise<any> {
+  async removePromoCode(checkoutId: string, userId: string): Promise<Record<string, unknown>> {
     const checkout = await this.getCheckout(checkoutId, userId);
     
     checkout.promoCode = null;
@@ -224,7 +205,7 @@ export class CheckoutService {
     checkoutId: string,
     userId: string,
     payment: { paymentIntentId: string; paymentMethod: string }
-  ): Promise<any> {
+  ): Promise<OrderRecord> {
     const checkout = await this.getCheckout(checkoutId, userId);
     
     // Verify payment (mock - in production, verify with payment service)
@@ -237,13 +218,13 @@ export class CheckoutService {
     // Generate order number
     const orderNumber = this.generateOrderNumber(checkout.shippingAddress.country);
     
-    const order = {
+    const order: OrderRecord = {
       id: generateId('ord'),
       orderNumber,
       invoiceNumber: `INV-${orderNumber}`,
       checkoutId,
       customerId: userId,
-      items: checkout.cart.items.map((item: any) => ({
+      items: checkout.cart.items.map((item: CartItem) => ({
         productId: item.productId,
         productName: item.name,
         productImage: item.image,
@@ -292,7 +273,7 @@ export class CheckoutService {
   /**
    * Get shipping options
    */
-  async getShippingOptions(checkoutId: string, userId: string): Promise<any[]> {
+  async getShippingOptions(checkoutId: string, userId: string): Promise<Record<string, unknown>[]> {
     const checkout = await this.getCheckout(checkoutId, userId);
     const country = checkout.shippingAddress.country;
     
@@ -314,7 +295,7 @@ export class CheckoutService {
     ];
     
     // Add click & collect if available
-    if (checkout.cart.items.some((i: any) => i.hasClickCollect)) {
+    if (checkout.cart.items.some((i: CartItem) => i.hasClickCollect)) {
       options.push({
         id: 'click_collect',
         name: 'Click & Collect',
@@ -334,7 +315,7 @@ export class CheckoutService {
     checkoutId: string,
     userId: string,
     data: { storeId: string; collectionDate: string; collectionTime: string }
-  ): Promise<any> {
+  ): Promise<CheckoutRecord> {
     const checkout = await this.getCheckout(checkoutId, userId);
     
     checkout.deliveryOption = 'click_collect';

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { ValidationError, NotFoundError } from '@grandgold/utils';
 import { authenticate, authorize } from '../middleware/auth';
-import type { UserRole, JwtPayload } from '@grandgold/types';
+import type { UserRole } from '@grandgold/types';
 
 const router = Router();
 const ADMIN_ROLES: UserRole[] = ['super_admin', 'country_admin', 'manager', 'staff'];

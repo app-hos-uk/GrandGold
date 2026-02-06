@@ -62,34 +62,53 @@ gcloud builds submit \
 # Deploy to Cloud Run
 echo -e "${YELLOW}Deploying to Cloud Run...${NC}"
 
-# Build environment variables string based on service
-# JWT_SECRET is required for all services that authenticate
-# You can set JWT_SECRET in GCP Secret Manager and reference it here
+# Build environment variables string (non-secret)
 ENV_VARS="NODE_ENV=production"
 
-# Check if JWT_SECRET is set (required for authentication across services)
+# Optional: pass secrets from Secret Manager (recommended for DATABASE_URL and JWT_SECRET)
+# Set DATABASE_SECRET_NAME (e.g. grandgold-db-url) and/or JWT_SECRET_NAME (e.g. JWT_SECRET) to use secrets.
+SECRETS_ARGS=""
+if [ -n "${DATABASE_SECRET_NAME}" ]; then
+    SECRETS_ARGS="${SECRETS_ARGS}DATABASE_URL=${DATABASE_SECRET_NAME}:latest"
+fi
+if [ -n "${JWT_SECRET_NAME}" ]; then
+    [ -n "${SECRETS_ARGS}" ] && SECRETS_ARGS="${SECRETS_ARGS},"
+    SECRETS_ARGS="${SECRETS_ARGS}JWT_SECRET=${JWT_SECRET_NAME}:latest"
+fi
+
+# Or pass as plain env vars (less secure; avoid for production)
 if [ -n "${JWT_SECRET}" ]; then
     ENV_VARS="${ENV_VARS},JWT_SECRET=${JWT_SECRET}"
 fi
-
-# Check if DATABASE_URL is set (required for services that need database access)
 if [ -n "${DATABASE_URL}" ]; then
     ENV_VARS="${ENV_VARS},DATABASE_URL=${DATABASE_URL}"
 fi
-
-# Check if CLOUD_SQL_CONNECTION_NAME is set (for Cloud SQL socket connection)
 if [ -n "${CLOUD_SQL_CONNECTION_NAME}" ]; then
     ENV_VARS="${ENV_VARS},CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME}"
 fi
-
-# Check if REDIS_URL is set
 if [ -n "${REDIS_URL}" ]; then
     ENV_VARS="${ENV_VARS},REDIS_URL=${REDIS_URL}"
 fi
 
-echo -e "${YELLOW}Environment variables: ${ENV_VARS}${NC}"
+echo -e "${YELLOW}Environment: ${ENV_VARS}${NC}"
+[ -n "${SECRETS_ARGS}" ] && echo -e "${YELLOW}Secrets: ${SECRETS_ARGS}${NC}"
 
-gcloud run deploy ${SERVICE_NAME} \
+if [ -n "${SECRETS_ARGS}" ]; then
+  gcloud run deploy ${SERVICE_NAME} \
+    --image ${IMAGE_NAME} \
+    --platform managed \
+    --region ${REGION} \
+    --allow-unauthenticated \
+    --memory 512Mi \
+    --cpu 1 \
+    --min-instances 0 \
+    --max-instances 10 \
+    --concurrency 80 \
+    --timeout 60s \
+    --set-env-vars "${ENV_VARS}" \
+    --set-secrets "${SECRETS_ARGS}"
+else
+  gcloud run deploy ${SERVICE_NAME} \
     --image ${IMAGE_NAME} \
     --platform managed \
     --region ${REGION} \
@@ -101,6 +120,7 @@ gcloud run deploy ${SERVICE_NAME} \
     --concurrency 80 \
     --timeout 60s \
     --set-env-vars "${ENV_VARS}"
+fi
 
 # Get the service URL
 SERVICE_URL=$(gcloud run services describe ${SERVICE_NAME} --region ${REGION} --format 'value(status.url)')

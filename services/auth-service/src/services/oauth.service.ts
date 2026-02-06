@@ -7,7 +7,7 @@ import {
   createOAuthAccount,
   findOAuthAccount,
 } from '@grandgold/database';
-import type { TokenPair, Country } from '@grandgold/types';
+import type { TokenPair, Country, UserRole } from '@grandgold/types';
 import { SessionService } from './session.service';
 
 interface GoogleAuthData {
@@ -53,7 +53,7 @@ export class OAuthService {
   /**
    * Handle Google OAuth authentication
    */
-  async handleGoogleAuth(data: GoogleAuthData): Promise<any> {
+  async handleGoogleAuth(data: GoogleAuthData): Promise<Record<string, unknown>> {
     // Check if user exists by Google ID
     let user = await findUserByOAuthId('google', data.id);
 
@@ -114,7 +114,7 @@ export class OAuthService {
   /**
    * Handle Facebook OAuth authentication
    */
-  async handleFacebookAuth(data: FacebookAuthData): Promise<any> {
+  async handleFacebookAuth(data: FacebookAuthData): Promise<Record<string, unknown>> {
     // Check if user exists by Facebook ID
     let user = await findUserByOAuthId('facebook', data.id);
 
@@ -173,7 +173,7 @@ export class OAuthService {
   /**
    * Handle Apple Sign In authentication
    */
-  async handleAppleAuth(data: AppleAuthData): Promise<any> {
+  async handleAppleAuth(data: AppleAuthData): Promise<Record<string, unknown>> {
     // Decode and verify Apple ID token
     // This would require jwt verification with Apple's public keys
     // For now, we'll use a simplified version
@@ -234,21 +234,21 @@ export class OAuthService {
    * Generate tokens for authenticated OAuth user
    */
   async generateTokensForUser(
-    user: any,
+    user: Record<string, unknown>,
     context: LoginContext
   ): Promise<{ tokens: TokenPair }> {
     const tokens = generateTokenPair({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      tenantId: user.tenantId || undefined,
-      country: user.country,
-      permissions: this.getUserPermissions(user.role),
+      sub: user.id as string,
+      email: user.email as string,
+      role: user.role as UserRole,
+      tenantId: (user.tenantId as string) || undefined,
+      country: user.country as Country,
+      permissions: this.getUserPermissions(user.role as string),
     });
 
     // Create session
     await this.sessionService.createSession({
-      userId: user.id,
+      userId: user.id as string,
       refreshToken: tokens.refreshToken,
       ipAddress: context.ipAddress,
       userAgent: context.userAgent,

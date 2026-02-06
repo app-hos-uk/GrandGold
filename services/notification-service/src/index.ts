@@ -38,8 +38,21 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 const PORT = parseInt(process.env.PORT || '4011');
-app.listen(PORT, () => {
-  console.log(`Notification service started on port ${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0';
+const server = app.listen(PORT, HOST, () => {
+  console.log(`Notification service started on ${HOST}:${PORT}`);
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down...');
+  server.close(() => process.exit(0));
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  server.close(() => process.exit(1));
 });
 
 export { app };

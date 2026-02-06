@@ -1,7 +1,24 @@
-import { NotFoundError } from '@grandgold/utils';
-
 // In-memory store for demo
-const trackingStore = new Map<string, any>();
+const trackingStore = new Map<string, TrackingRecord>();
+
+interface TrackingEvent {
+  status: string;
+  location: string;
+  timestamp: Date;
+  description: string;
+}
+
+interface TrackingRecord {
+  orderId: string;
+  carrier?: string;
+  trackingNumber?: string;
+  status?: string;
+  currentLocation?: string;
+  lastUpdate?: Date;
+  estimatedDelivery?: Date;
+  events: TrackingEvent[];
+  [key: string]: unknown;
+}
 
 interface TrackingUpdate {
   carrier: string;
@@ -17,7 +34,7 @@ export class TrackingService {
   /**
    * Get tracking for an order
    */
-  async getTracking(orderId: string, userId: string): Promise<any> {
+  async getTracking(orderId: string, _userId: string): Promise<TrackingRecord> {
     // Mock tracking data
     return {
       orderId,
@@ -56,7 +73,7 @@ export class TrackingService {
   /**
    * Get tracking by tracking number
    */
-  async getTrackingByNumber(trackingNumber: string): Promise<any> {
+  async getTrackingByNumber(trackingNumber: string): Promise<Record<string, unknown>> {
     // In production, call carrier API
     return {
       trackingNumber,
@@ -112,7 +129,7 @@ export class TrackingService {
   /**
    * Get full tracking timeline
    */
-  async getTimeline(orderId: string, userId: string): Promise<any[]> {
+  async getTimeline(orderId: string, userId: string): Promise<Record<string, unknown>[]> {
     const tracking = await this.getTracking(orderId, userId);
     
     // Build comprehensive timeline including order events
@@ -138,7 +155,7 @@ export class TrackingService {
         description: 'Order is being processed',
         icon: 'settings',
       },
-      ...tracking.events.map((event: any) => ({
+      ...tracking.events.map((event: TrackingEvent) => ({
         type: 'shipping',
         status: event.status,
         timestamp: event.timestamp,
@@ -163,7 +180,7 @@ export class TrackingService {
     const tracking = await this.getTracking(orderId, userId);
     
     return {
-      estimatedDate: tracking.estimatedDelivery,
+      estimatedDate: tracking.estimatedDelivery ?? new Date(),
       estimatedTimeRange: '10:00 AM - 6:00 PM',
       confidence: 'high',
       factors: [

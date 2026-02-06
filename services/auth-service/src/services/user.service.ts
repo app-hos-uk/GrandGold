@@ -15,7 +15,7 @@ import {
   updateUserAddress,
   deleteUserAddress,
 } from '@grandgold/database';
-import type { UserProfile, UpdateProfileRequest, UserPreferences, Address } from '@grandgold/types';
+import type { UserProfile, UpdateProfileRequest, UserPreferences, Address, Country } from '@grandgold/types';
 import { SessionService } from './session.service';
 
 export class UserService {
@@ -275,20 +275,20 @@ export class UserService {
     // TODO: Schedule data deletion after grace period
   }
 
-  private mapAddress(address: any): Address {
+  private mapAddress(address: Record<string, unknown>): Address {
     return {
-      id: address.id,
-      line1: address.line1,
-      line2: address.line2 || undefined,
-      city: address.city,
-      state: address.state || '',
-      postalCode: address.postalCode,
-      country: address.country,
+      id: address.id as string,
+      line1: address.line1 as string,
+      line2: (address.line2 as string) || undefined,
+      city: address.city as string,
+      state: (address.state as string) || '',
+      postalCode: address.postalCode as string,
+      country: address.country as Country,
       location: address.latitude && address.longitude ? {
-        latitude: parseFloat(address.latitude),
-        longitude: parseFloat(address.longitude),
+        latitude: parseFloat(address.latitude as string),
+        longitude: parseFloat(address.longitude as string),
       } : undefined,
-      isDefault: address.isDefault,
+      isDefault: address.isDefault as boolean,
       label: address.label as 'home' | 'work' | 'other' | undefined,
     };
   }

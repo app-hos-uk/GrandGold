@@ -1,9 +1,10 @@
 import { generateId, NotFoundError, ValidationError, AuthorizationError } from '@grandgold/utils';
 import type { Country, OrderStatus } from '@grandgold/types';
 import { addNotification } from '../lib/notification-store';
+import type { OrderRecord, OrderItem, ReturnRequest } from '../types/internal';
 
 // In-memory store for demo
-const orderStore = new Map<string, any>();
+const orderStore = new Map<string, OrderRecord>();
 
 interface OrderFilters {
   status?: string;
@@ -22,7 +23,7 @@ export class OrderService {
   /**
    * Get customer's orders
    */
-  async getCustomerOrders(userId: string, filters: OrderFilters): Promise<{ data: any[]; total: number }> {
+  async getCustomerOrders(userId: string, filters: OrderFilters): Promise<{ data: OrderRecord[]; total: number }> {
     let orders = Array.from(orderStore.values())
       .filter((o) => o.customerId === userId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -41,7 +42,7 @@ export class OrderService {
   /**
    * Get order by ID
    */
-  async getOrder(orderId: string, userId: string): Promise<any> {
+  async getOrder(orderId: string, userId: string): Promise<OrderRecord> {
     const order = orderStore.get(orderId);
     
     if (!order || order.customerId !== userId) {
@@ -54,7 +55,7 @@ export class OrderService {
   /**
    * Get invoice for order
    */
-  async getInvoice(orderId: string, userId: string): Promise<any> {
+  async getInvoice(orderId: string, userId: string): Promise<Record<string, unknown>> {
     const order = await this.getOrder(orderId, userId);
     
     return {
@@ -67,7 +68,7 @@ export class OrderService {
         email: order.customerEmail,
         address: order.shippingAddress,
       },
-      items: order.items.map((item: any) => ({
+      items: order.items.map((item: OrderItem) => ({
         description: item.productName,
         quantity: item.quantity,
         unitPrice: item.price,
@@ -86,12 +87,12 @@ export class OrderService {
   /**
    * Cancel an order
    */
-  async cancelOrder(orderId: string, userId: string, reason: string): Promise<any> {
+  async cancelOrder(orderId: string, userId: string, reason: string): Promise<OrderRecord> {
     const order = await this.getOrder(orderId, userId);
     
     // Check if order can be cancelled
     const cancellableStatuses: OrderStatus[] = ['pending', 'confirmed', 'processing'];
-    if (!cancellableStatuses.includes(order.status)) {
+    if (!cancellableStatuses.includes(order.status as OrderStatus)) {
       throw new ValidationError('Order cannot be cancelled at this stage');
     }
     
@@ -112,7 +113,7 @@ export class OrderService {
     orderId: string,
     userId: string,
     data: { items: string[]; reason: string; images?: string[] }
-  ): Promise<any> {
+  ): Promise<ReturnRequest> {
     const order = await this.getOrder(orderId, userId);
     
     if (order.status !== 'delivered') {
@@ -120,7 +121,7 @@ export class OrderService {
     }
     
     // Check if return window is still open (e.g., 7 days)
-    const deliveryDate = new Date(order.deliveredAt);
+    const deliveryDate = new Date(order.deliveredAt as Date);
     const daysSinceDelivery = (Date.now() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24);
     if (daysSinceDelivery > 7) {
       throw new ValidationError('Return window has expired');
@@ -152,7 +153,7 @@ export class OrderService {
     orderId: string,
     userId: string,
     data: { productId: string; rating: number; title?: string; content?: string; images?: string[] }
-  ): Promise<any> {
+  ): Promise<Record<string, unknown>> {
     const order = await this.getOrder(orderId, userId);
     
     if (order.status !== 'delivered') {
@@ -160,7 +161,7 @@ export class OrderService {
     }
     
     // Check if product exists in order
-    const item = order.items.find((i: any) => i.productId === data.productId);
+    const item = order.items.find((i: OrderItem) => i.productId === data.productId);
     if (!item) {
       throw new ValidationError('Product not found in order');
     }
@@ -184,7 +185,7 @@ export class OrderService {
   /**
    * Get all orders (Admin)
    */
-  async getAllOrders(filters: AdminOrderFilters): Promise<{ data: any[]; total: number }> {
+  async getAllOrders(filters: AdminOrderFilters): Promise<{ data: OrderRecord[]; total: number }> {
     let orders = Array.from(orderStore.values())
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     
@@ -222,7 +223,7 @@ export class OrderService {
     adminUserId: string,
     note?: string,
     adminCountry?: Country // Undefined for super_admin (global access)
-  ): Promise<any> {
+  ): Promise<OrderRecord> {
     const order = orderStore.get(orderId);
     
     if (!order) {

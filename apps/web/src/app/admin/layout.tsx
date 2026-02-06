@@ -31,6 +31,7 @@ import {
   Mail,
   Truck,
   Sparkles,
+  TrendingUp,
 } from 'lucide-react';
 import { adminApi, authApi, ApiError, type CurrentUserProfile } from '@/lib/api';
 import { Logo } from '@/components/brand/logo';
@@ -47,6 +48,7 @@ const ALL_NAV = [
   { name: 'Finance', href: '/admin/finance', icon: Wallet, roles: ['super_admin', 'country_admin'] },
   { name: 'Promotions', href: '/admin/promotions', icon: Tag, roles: ['super_admin', 'country_admin'] },
   { name: 'Marketing', href: '/admin/marketing', icon: Mail, roles: ['super_admin', 'country_admin'] },
+  { name: 'Metal Pricing', href: '/admin/pricing', icon: TrendingUp, roles: ['super_admin', 'country_admin'] },
   { name: 'Influencer Marketing', href: '/admin/influencers', icon: Sparkles, roles: ['super_admin', 'country_admin'] },
   { name: 'Support', href: '/admin/support', icon: Headphones, roles: ['super_admin', 'country_admin'] },
   { name: 'KYC', href: '/admin/kyc', icon: ShieldCheck, roles: ['super_admin', 'country_admin'] },

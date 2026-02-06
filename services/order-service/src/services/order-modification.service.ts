@@ -1,8 +1,16 @@
 import { generateId, NotFoundError, ValidationError } from '@grandgold/utils';
 import type { OrderStatus } from '@grandgold/types';
 
+interface ModificationRecord {
+  id: string; orderId: string; userId: string;
+  changes: Record<string, unknown>; status: string;
+  requestedAt: Date; approvedAt: Date | null; rejectedAt: Date | null;
+  rejectionReason: string | null;
+  [key: string]: unknown;
+}
+
 // In-memory store for demo
-const modificationStore = new Map<string, any>();
+const modificationStore = new Map<string, ModificationRecord>();
 
 interface ModifyOrderInput {
   orderId: string;
@@ -25,7 +33,7 @@ export class OrderModificationService {
   /**
    * Request order modification
    */
-  async requestModification(input: ModifyOrderInput): Promise<any> {
+  async requestModification(input: ModifyOrderInput): Promise<ModificationRecord> {
     // In production, verify order exists and belongs to user
     const order = { id: input.orderId, status: 'confirmed' }; // Mock
 
@@ -57,7 +65,7 @@ export class OrderModificationService {
   /**
    * Get order modifications
    */
-  async getOrderModifications(orderId: string, userId: string): Promise<any[]> {
+  async getOrderModifications(orderId: string, userId: string): Promise<ModificationRecord[]> {
     const modifications = Array.from(modificationStore.values())
       .filter((m) => m.orderId === orderId && m.userId === userId)
       .sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime());
@@ -71,7 +79,7 @@ export class OrderModificationService {
   async approveModification(
     modificationId: string,
     approverId: string
-  ): Promise<any> {
+  ): Promise<ModificationRecord> {
     const modification = modificationStore.get(modificationId);
 
     if (!modification) {
@@ -101,7 +109,7 @@ export class OrderModificationService {
     modificationId: string,
     approverId: string,
     reason: string
-  ): Promise<any> {
+  ): Promise<ModificationRecord> {
     const modification = modificationStore.get(modificationId);
 
     if (!modification) {

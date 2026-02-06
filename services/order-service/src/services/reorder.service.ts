@@ -66,9 +66,9 @@ export class ReorderService {
   /**
    * Get reorder suggestions
    */
-  async getReorderSuggestions(userId: string): Promise<{
-    recentOrders: any[];
-    frequentlyOrdered: any[];
+  async getReorderSuggestions(_userId: string): Promise<{
+    recentOrders: Record<string, unknown>[];
+    frequentlyOrdered: Record<string, unknown>[];
   }> {
     // In production, fetch from order history
     return {

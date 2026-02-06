@@ -212,7 +212,7 @@ export class DocumentAIService {
   }> {
     // Check for common forgery indicators
     const flags: string[] = [];
-    let confidence = 0.9;
+    const confidence = 0.9;
 
     // In production, use advanced document verification
     // Check for:

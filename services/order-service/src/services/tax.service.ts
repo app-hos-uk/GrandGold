@@ -1,4 +1,5 @@
 import type { Country } from '@grandgold/types';
+import type { TaxableItem } from '../types/internal';
 
 interface TaxRule {
   category: string;
@@ -43,7 +44,7 @@ export class TaxService {
    * Calculate tax for cart items
    */
   async calculateTax(
-    items: any[],
+    items: TaxableItem[],
     destination: Country
   ): Promise<{
     totalTax: number;

@@ -26,210 +26,47 @@ import {
 import { Recommendations } from '@/components/product/recommendations';
 import { CompleteTheLook } from '@/components/product/complete-the-look';
 import { TrustBadges } from '@/components/product/trust-badges';
+import { MOCK_PRODUCTS, type MockProduct } from '@/lib/product-data';
 
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  weight: string;
-  purity: string;
-  description: string;
+/* ------------------------------------------------------------------ */
+/*  Extended product info (rating, reviews, features, sku, images)      */
+/*  Kept here until the product-service API provides these fields.      */
+/* ------------------------------------------------------------------ */
+
+interface ProductDetail {
   features: string[];
   images: string[];
-  isNew: boolean;
-  inStock: boolean;
   rating: number;
   reviews: number;
   sku: string;
 }
 
-const allProducts: Record<string, Product> = {
-  '1': {
-    id: '1',
-    name: 'Traditional Kundan Necklace Set',
-    category: 'Necklaces',
-    price: 185000,
-    weight: '45.5g',
-    purity: '22K',
-    description: 'Exquisite handcrafted Kundan necklace set featuring intricate meenakari work. This stunning piece combines traditional craftsmanship with timeless elegance, perfect for weddings and special occasions. Each stone is carefully set by master artisans using centuries-old techniques passed down through generations.',
-    features: [
-      'Handcrafted by master artisans',
-      'Genuine Kundan stones with meenakari work',
-      'Comes with matching earrings',
-      'BIS Hallmarked 22K gold',
-      'Certificate of authenticity included',
-      'Elegant presentation box',
-    ],
-    images: ['/products/necklace-1.jpg', '/products/necklace-1-2.jpg', '/products/necklace-1-3.jpg'],
-    isNew: true,
-    inStock: true,
-    rating: 4.8,
-    reviews: 124,
-    sku: 'GG-NK-001',
-  },
-  '2': {
-    id: '2',
-    name: 'Diamond Studded Jhumkas',
-    category: 'Earrings',
-    price: 78500,
-    weight: '12.3g',
-    purity: '18K',
-    description: 'Beautiful diamond-studded jhumkas crafted in 18K gold. These elegant earrings feature sparkling diamonds set in a classic jhumka design, perfect for both traditional and contemporary outfits. The intricate detailing and premium diamonds make these a treasured addition to any jewelry collection.',
-    features: [
-      'Natural diamonds (VS clarity, G-H color)',
-      'Total diamond weight: 0.85 carats',
-      '18K gold with rhodium plating',
-      'Secure lever-back closure',
-      'IGI certified diamonds',
-      'Lifetime free polishing',
-    ],
-    images: ['/products/earring-1.jpg', '/products/earring-1-2.jpg'],
-    isNew: false,
-    inStock: true,
-    rating: 4.9,
-    reviews: 89,
-    sku: 'GG-ER-002',
-  },
-  '3': {
-    id: '3',
-    name: 'Solitaire Engagement Ring',
-    category: 'Rings',
-    price: 245000,
-    weight: '8.2g',
-    purity: '18K',
-    description: 'Stunning solitaire engagement ring featuring a brilliant-cut diamond set in 18K white gold. The timeless design symbolizes eternal love and commitment. This exquisite ring features a 1-carat center stone with exceptional brilliance and fire.',
-    features: [
-      '1.0 carat brilliant-cut diamond',
-      'GIA certified (Excellent cut)',
-      'D-F color, VVS1-VS2 clarity',
-      '18K white gold setting',
-      'Comfort fit band',
-      'Ring sizing available',
-    ],
-    images: ['/products/ring-1.jpg', '/products/ring-1-2.jpg'],
-    isNew: true,
-    inStock: true,
-    rating: 5.0,
-    reviews: 67,
-    sku: 'GG-RG-003',
-  },
-  '4': {
-    id: '4',
-    name: 'Classic Gold Bangle Set',
-    category: 'Bracelets',
-    price: 125000,
-    weight: '35.0g',
-    purity: '22K',
-    description: 'Set of 4 classic gold bangles in 22K gold with intricate filigree work. These versatile bangles are perfect for everyday wear or special occasions. The traditional design with modern craftsmanship makes these bangles a timeless addition to your collection.',
-    features: [
-      'Set of 4 matching bangles',
-      '22K pure gold',
-      'Intricate filigree patterns',
-      'Comfortable rounded edges',
-      'BIS Hallmarked',
-      'Available in multiple sizes',
-    ],
-    images: ['/products/bangle-1.jpg', '/products/bangle-1-2.jpg'],
-    isNew: false,
-    inStock: true,
-    rating: 4.7,
-    reviews: 156,
-    sku: 'GG-BR-004',
-  },
-  '5': {
-    id: '5',
-    name: 'Temple Design Choker',
-    category: 'Necklaces',
-    price: 295000,
-    weight: '58.2g',
-    purity: '22K',
-    description: 'Magnificent temple design choker necklace inspired by ancient South Indian temple architecture. Hand-crafted in 22K gold with divine motifs and intricate detailing. This masterpiece celebrates the rich heritage of Indian craftsmanship.',
-    features: [
-      'Inspired by temple architecture',
-      'Divine motifs and deity designs',
-      '22K pure gold construction',
-      'Adjustable back chain',
-      'Matching earrings available',
-      'Comes with authenticity certificate',
-    ],
-    images: ['/products/necklace-2.jpg', '/products/necklace-2-2.jpg'],
-    isNew: true,
-    inStock: false,
-    rating: 4.9,
-    reviews: 43,
-    sku: 'GG-NK-005',
-  },
-  '6': {
-    id: '6',
-    name: 'Pearl Drop Earrings',
-    category: 'Earrings',
-    price: 45000,
-    weight: '8.5g',
-    purity: '18K',
-    description: 'Elegant pearl drop earrings featuring lustrous freshwater pearls set in 18K gold. A timeless accessory that adds sophistication to any ensemble. Perfect for office wear or evening occasions.',
-    features: [
-      'AAA grade freshwater pearls',
-      '18K yellow gold setting',
-      'Secure post and butterfly back',
-      'Pearl size: 8-9mm',
-      'Hypoallergenic',
-      'Perfect for sensitive ears',
-    ],
-    images: ['/products/earring-2.jpg'],
-    isNew: false,
-    inStock: true,
-    rating: 4.6,
-    reviews: 78,
-    sku: 'GG-ER-006',
-  },
-  '7': {
-    id: '7',
-    name: 'Diamond Eternity Band',
-    category: 'Rings',
-    price: 165000,
-    weight: '5.8g',
-    purity: '18K',
-    description: 'Exquisite diamond eternity band featuring brilliant-cut diamonds set all around in 18K white gold. Perfect as a wedding band or anniversary gift. The continuous circle of diamonds symbolizes never-ending love.',
-    features: [
-      '2.5 carats total diamond weight',
-      'Brilliant-cut diamonds',
-      '18K white gold',
-      'Shared prong setting',
-      'IGI certified',
-      'Comfort fit design',
-    ],
-    images: ['/products/ring-2.jpg'],
-    isNew: false,
-    inStock: true,
-    rating: 4.8,
-    reviews: 92,
-    sku: 'GG-RG-007',
-  },
-  '8': {
-    id: '8',
-    name: 'Charm Bracelet',
-    category: 'Bracelets',
-    price: 55000,
-    weight: '15.2g',
-    purity: '22K',
-    description: 'Delightful charm bracelet in 22K gold featuring various symbolic charms. Each charm tells a story, making this bracelet a meaningful gift or personal treasure. Add more charms over time to create your unique story.',
-    features: [
-      '5 beautiful gold charms included',
-      'Expandable chain design',
-      '22K pure gold',
-      'Secure lobster clasp',
-      'Additional charms available',
-      'Adjustable length',
-    ],
-    images: ['/products/bracelet-1.jpg'],
-    isNew: true,
-    inStock: true,
-    rating: 4.5,
-    reviews: 34,
-    sku: 'GG-BR-008',
-  },
+const productExtras: Record<string, ProductDetail> = {
+  '1': { features: ['Handcrafted by master artisans', 'Genuine Kundan stones with meenakari work', 'Comes with matching earrings', 'BIS Hallmarked 22K gold', 'Certificate of authenticity included', 'Elegant presentation box'], images: ['/products/necklace-1.jpg', '/products/necklace-1-2.jpg', '/products/necklace-1-3.jpg'], rating: 4.8, reviews: 124, sku: 'GG-NK-001' },
+  '2': { features: ['Natural diamonds (VS clarity, G-H color)', 'Total diamond weight: 0.85 carats', '18K gold with rhodium plating', 'Secure lever-back closure', 'IGI certified diamonds', 'Lifetime free polishing'], images: ['/products/earring-1.jpg', '/products/earring-1-2.jpg'], rating: 4.9, reviews: 89, sku: 'GG-ER-002' },
+  '3': { features: ['1.0 carat brilliant-cut diamond', 'GIA certified (Excellent cut)', 'D-F color, VVS1-VS2 clarity', '18K white gold setting', 'Comfort fit band', 'Ring sizing available'], images: ['/products/ring-1.jpg', '/products/ring-1-2.jpg'], rating: 5.0, reviews: 67, sku: 'GG-RG-003' },
+  '4': { features: ['Set of 4 matching bangles', '22K pure gold', 'Intricate filigree patterns', 'Comfortable rounded edges', 'BIS Hallmarked', 'Available in multiple sizes'], images: ['/products/bangle-1.jpg', '/products/bangle-1-2.jpg'], rating: 4.7, reviews: 156, sku: 'GG-BR-004' },
+  '5': { features: ['Inspired by temple architecture', 'Divine motifs and deity designs', '22K pure gold construction', 'Adjustable back chain', 'Matching earrings available', 'Comes with authenticity certificate'], images: ['/products/necklace-2.jpg', '/products/necklace-2-2.jpg'], rating: 4.9, reviews: 43, sku: 'GG-NK-005' },
+  '6': { features: ['AAA grade freshwater pearls', '18K yellow gold setting', 'Secure post and butterfly back', 'Pearl size: 8-9mm', 'Hypoallergenic', 'Perfect for sensitive ears'], images: ['/products/earring-2.jpg'], rating: 4.6, reviews: 78, sku: 'GG-ER-006' },
+  '7': { features: ['2.5 carats total diamond weight', 'Brilliant-cut diamonds', '18K white gold', 'Shared prong setting', 'IGI certified', 'Comfort fit design'], images: ['/products/ring-2.jpg'], rating: 4.8, reviews: 92, sku: 'GG-RG-007' },
+  '8': { features: ['5 beautiful gold charms included', 'Expandable chain design', '22K pure gold', 'Secure lobster clasp', 'Additional charms available', 'Adjustable length'], images: ['/products/bracelet-1.jpg'], rating: 4.5, reviews: 34, sku: 'GG-BR-008' },
+  '9': { features: ['Classic platinum band', 'Brushed center with polished edges', '950 platinum', 'Durable and scratch-resistant', 'Comfort fit', 'Available in multiple sizes'], images: ['/products/platinum-band-1.jpg'], rating: 4.7, reviews: 56, sku: 'GG-RG-009' },
+  '10': { features: ['18K rose gold', 'Diamond accents', 'Heart-shaped design', 'Adjustable chain length', 'Gift-ready packaging', 'Certificate of authenticity included'], images: ['/products/heart-pendant-1.jpg'], rating: 4.9, reviews: 112, sku: 'GG-PD-010' },
 };
+
+/** Combine MOCK_PRODUCTS source-of-truth with detail extras */
+function getProduct(id: string) {
+  const base = MOCK_PRODUCTS.find((p) => p.id === id);
+  if (!base) return null;
+  const extras = productExtras[id] || {
+    features: [`${base.purity} ${base.metalType === 'gold' ? 'Gold' : base.metalType}`, 'BIS Hallmarked', 'Certificate of authenticity included'],
+    images: base.images,
+    rating: 4.5,
+    reviews: 0,
+    sku: `GG-${base.category.substring(0, 2).toUpperCase()}-${id.padStart(3, '0')}`,
+  };
+  return { ...base, ...extras, isNew: base.newArrival };
+}
 
 const countryConfig = {
   in: { currency: '₹', country: 'IN' as const },
@@ -245,7 +82,7 @@ export default function ProductPage() {
   const { addItem: addToCart } = useCart();
   const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
 
-  const product = allProducts[productId];
+  const product = getProduct(productId);
   const inWishlist = isInWishlist(productId);
 
   const [quantity, setQuantity] = useState(1);
@@ -253,6 +90,66 @@ export default function ProductPage() {
   const [addedToCart, setAddedToCart] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
   const [activeTab, setActiveTab] = useState<'description' | 'features' | 'shipping'>('description');
+
+  // Dynamic page title
+  useEffect(() => {
+    if (product) {
+      document.title = `${product.name} - ${product.purity} ${product.category} | GrandGold`;
+    } else {
+      document.title = 'Product Not Found | GrandGold';
+    }
+  }, [product]);
+
+  // JSON-LD structured data for SEO (product rich snippets)
+  useEffect(() => {
+    if (!product) return;
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: product.name,
+      description: product.description,
+      sku: product.sku,
+      image: product.images?.[0] || 'https://thegrandgold.com/og-image.jpg',
+      brand: {
+        '@type': 'Brand',
+        name: 'GrandGold',
+      },
+      offers: {
+        '@type': 'Offer',
+        url: `https://thegrandgold.com/${country}/product/${product.id}`,
+        priceCurrency: config.country === 'IN' ? 'INR' : config.country === 'AE' ? 'AED' : 'GBP',
+        price: product.price,
+        availability: product.inStock
+          ? 'https://schema.org/InStock'
+          : 'https://schema.org/OutOfStock',
+        seller: {
+          '@type': 'Organization',
+          name: 'GrandGold',
+        },
+      },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: product.rating,
+        reviewCount: product.reviews,
+        bestRating: 5,
+        worstRating: 1,
+      },
+      material: `${product.purity} ${product.metalType === 'gold' ? 'Gold' : product.metalType}`,
+      weight: product.weight,
+    };
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.textContent = JSON.stringify(jsonLd);
+    script.id = 'product-jsonld';
+    // Remove any existing one first
+    const existing = document.getElementById('product-jsonld');
+    if (existing) existing.remove();
+    document.head.appendChild(script);
+    return () => {
+      const el = document.getElementById('product-jsonld');
+      if (el) el.remove();
+    };
+  }, [product, country, config.country]);
 
   const handleAddToCart = async () => {
     if (!product?.inStock) return;
@@ -663,7 +560,7 @@ export default function ProductPage() {
             country={country}
             currentProductId={product.id}
             currentCategory={product.category}
-            products={Object.values(allProducts).map((p) => ({
+            products={MOCK_PRODUCTS.filter((p) => p.inStock).map((p) => ({
               id: p.id,
               name: p.name,
               category: p.category,
@@ -678,7 +575,7 @@ export default function ProductPage() {
               category: product.category,
               price: product.price,
             }}
-            suggestions={Object.values(allProducts).map((p) => ({
+            suggestions={MOCK_PRODUCTS.filter((p) => p.inStock).map((p) => ({
               id: p.id,
               name: p.name,
               category: p.category,

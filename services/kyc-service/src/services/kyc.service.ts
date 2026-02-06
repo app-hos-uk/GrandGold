@@ -112,7 +112,7 @@ export class KycService {
    * Submit Tier 2 KYC
    */
   async submitTier2(userId: string, data: Tier2Data): Promise<{ status: string }> {
-    let kyc = kycStore.get(userId);
+    const kyc = kycStore.get(userId);
     
     if (!kyc || kyc.tier === 'none') {
       throw new ValidationError('Please complete Tier 1 KYC first');

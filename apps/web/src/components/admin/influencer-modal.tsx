@@ -60,19 +60,23 @@ export function InfluencerModal({
 }: InfluencerModalProps) {
   const isEdit = initialRack !== null;
   const [form, setForm] = useState<InfluencerFormData>(defaultForm);
+  const [commissionEnabled, setCommissionEnabled] = useState(true);
 
   useEffect(() => {
     if (initialRack) {
+      const rate = initialRack.commissionRate ?? 5;
       setForm({
         slug: initialRack.slug,
         name: initialRack.name,
         bio: initialRack.bio ?? '',
-        commissionRate: initialRack.commissionRate ?? 5,
-        commissionType: (initialRack as InfluencerFormData).commissionType ?? 'total_price',
+        commissionRate: rate,
+        commissionType: (initialRack as InfluencerFormData & { commissionType?: string }).commissionType ?? 'total_price',
         productIds: initialRack.productIds ?? [],
       });
+      setCommissionEnabled(rate > 0);
     } else {
       setForm(defaultForm);
+      setCommissionEnabled(true);
     }
   }, [initialRack]);
 
@@ -89,12 +93,13 @@ export function InfluencerModal({
     const slug = form.slug.trim();
     const name = form.name.trim();
     if (!slug || !name) return;
+    const rate = commissionEnabled ? Math.min(100, Math.max(0, form.commissionRate)) : 0;
     onSubmit({
       ...form,
       slug: slug.toLowerCase().replace(/[^a-z0-9-_]/g, '-'),
       name,
       bio: form.bio.trim(),
-      commissionRate: Math.min(100, Math.max(0, form.commissionRate)),
+      commissionRate: rate,
       productIds: form.productIds.filter(Boolean),
     });
   };
@@ -195,35 +200,77 @@ export function InfluencerModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Commission Rate (%)</label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.5}
-                value={form.commissionRate}
-                onChange={(e) => setForm((prev) => ({ ...prev, commissionRate: Number(e.target.value) || 0 }))}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Commission Based On</label>
-              <select
-                value={form.commissionType}
-                onChange={(e) => setForm((prev) => ({ ...prev, commissionType: e.target.value as InfluencerFormData['commissionType'] }))}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border border-gray-200 p-4 bg-gray-50/50">
+              <div>
+                <p className="font-medium text-gray-900 text-sm">Earn commission on sales</p>
+                <p className="text-xs text-gray-500 mt-0.5">When enabled, this influencer gets a percentage of qualifying sales</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={commissionEnabled}
+                onClick={() => setCommissionEnabled((e) => !e)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-gold-500 focus:ring-offset-2 ${
+                  commissionEnabled ? 'bg-gold-500' : 'bg-gray-200'
+                }`}
               >
-                {COMMISSION_TYPES.map((ct) => (
-                  <option key={ct.value} value={ct.value}>{ct.label}</option>
-                ))}
-              </select>
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+                    commissionEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
             </div>
+
+            {commissionEnabled && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Commission Rate (%)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={form.commissionRate}
+                      onChange={(e) => setForm((prev) => ({ ...prev, commissionRate: Number(e.target.value) || 0 }))}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Commission based on</label>
+                  <p className="text-xs text-gray-500 mb-2">Select how commission is calculated (one option)</p>
+                  <div className="space-y-2">
+                    {COMMISSION_TYPES.map((ct) => (
+                      <label
+                        key={ct.value}
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          form.commissionType === ct.value
+                            ? 'border-gold-500 bg-gold-50/50'
+                            : 'border-gray-200 hover:bg-gray-50/50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="commissionType"
+                          value={ct.value}
+                          checked={form.commissionType === ct.value}
+                          onChange={() => setForm((prev) => ({ ...prev, commissionType: ct.value }))}
+                          className="mt-1 h-4 w-4 border-gray-300 text-gold-600 focus:ring-gold-500"
+                        />
+                        <div>
+                          <span className="font-medium text-gray-900 text-sm">{ct.label}</span>
+                          <p className="text-xs text-gray-500 mt-0.5">{ct.description}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-          <p className="text-xs text-gray-500 -mt-2">
-            {COMMISSION_TYPES.find(ct => ct.value === form.commissionType)?.description}
-          </p>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Featured Products</label>
@@ -237,6 +284,10 @@ export function InfluencerModal({
             <p className="text-xs text-gray-500 mt-1">
               Enter comma-separated Product IDs. Find IDs in <a href="/admin/products" target="_blank" className="text-gold-600 hover:underline">Products</a> page (shown in each product row).
             </p>
+          </div>
+
+          <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm text-amber-800">
+            <strong>Influencer KYC:</strong> Users with the Influencer role must complete Tier 2 KYC before they can receive commissions. Review submissions in <a href="/admin/kyc" className="text-gold-600 hover:underline font-medium">Admin → KYC</a>.
           </div>
 
           <div className="flex gap-3 pt-4">

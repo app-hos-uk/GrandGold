@@ -22,7 +22,7 @@ export class StripeService {
   }): Promise<{ id: string; clientSecret: string; status: string }> {
     if (stripe) {
       // Real Stripe integration
-      let stripeCustomerId = await this.getOrCreateCustomer(data.customerId);
+      const stripeCustomerId = await this.getOrCreateCustomer(data.customerId);
       
       const paymentIntent = await stripe.paymentIntents.create({
         amount: data.amount,

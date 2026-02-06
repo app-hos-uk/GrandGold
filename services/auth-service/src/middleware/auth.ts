@@ -110,7 +110,7 @@ export function restrictToCountry(...allowedCountries: Country[]) {
 /**
  * KYC tier restriction middleware
  */
-export function requireKycTier(minTier: 1 | 2) {
+export function requireKycTier(_minTier: 1 | 2) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
       next(new AuthenticationError('Authentication required'));

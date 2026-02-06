@@ -33,6 +33,7 @@ export class RazorpayService {
     if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
       try {
         // Dynamic import to avoid errors if package not installed
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const Razorpay = require('razorpay');
         this.razorpay = new Razorpay({
           key_id: process.env.RAZORPAY_KEY_ID,

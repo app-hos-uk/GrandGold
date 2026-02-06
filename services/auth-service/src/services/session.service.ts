@@ -115,7 +115,7 @@ export class SessionService {
   /**
    * Invalidate session by token
    */
-  async invalidateByToken(userId: string, token: string): Promise<void> {
+  async invalidateByToken(userId: string, _token: string): Promise<void> {
     // Hash the token to find the session
     // In a real implementation, you'd store and compare hashed tokens
     const sessions = await getUserActiveSessions(userId);

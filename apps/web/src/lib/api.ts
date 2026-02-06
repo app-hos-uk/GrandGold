@@ -276,10 +276,26 @@ export const influencerApi = {
   listRacks: (): Promise<InfluencerRack[]> =>
     api.get<{ data: { racks: InfluencerRack[] } }>('/api/influencers').then((d) => d?.data?.racks ?? []),
   /** Create influencer rack (admin) */
-  createRack: (body: { slug: string; name: string; bio?: string; productIds?: string[]; commissionRate?: number }): Promise<InfluencerRack> =>
+  createRack: (body: {
+    slug: string;
+    name: string;
+    bio?: string;
+    productIds?: string[];
+    commissionRate?: number;
+    commissionType?: 'total_price' | 'making_charge' | 'metal_value' | 'stone_value';
+  }): Promise<InfluencerRack> =>
     api.post<{ data: { rack: InfluencerRack } }>('/api/influencers', body).then((d) => d?.data?.rack),
   /** Update influencer rack (admin) */
-  updateRack: (slug: string, body: { name?: string; bio?: string; productIds?: string[]; commissionRate?: number }): Promise<InfluencerRack> =>
+  updateRack: (
+    slug: string,
+    body: {
+      name?: string;
+      bio?: string;
+      productIds?: string[];
+      commissionRate?: number;
+      commissionType?: 'total_price' | 'making_charge' | 'metal_value' | 'stone_value';
+    }
+  ): Promise<InfluencerRack> =>
     api.put<{ data: { rack: InfluencerRack } }>(`/api/influencers/${slug}`, body).then((d) => d?.data?.rack),
 };
 
@@ -372,15 +388,19 @@ export const adminApi = {
   },
   updateOrderStatus: (orderId: string, status: string, note?: string) =>
     api.patch<unknown>(`/api/orders/admin/${orderId}/status`, { status, note }),
-  getUsers: (params?: { page?: number; limit?: number; country?: string; role?: string; search?: string }) => {
+  getUsers: (params?: { page?: number; limit?: number; country?: string; role?: string; search?: string; ids?: string[] }) => {
     const q = new URLSearchParams();
     if (params?.page) q.set('page', String(params.page));
     if (params?.limit) q.set('limit', String(params.limit));
     if (params?.country) q.set('country', params.country);
     if (params?.role) q.set('role', params.role);
     if (params?.search) q.set('search', params.search);
-    return api.get<{ users: unknown[]; total: number }>(`/api/user/admin/list?${q.toString()}`);
+    if (params?.ids?.length) q.set('ids', params.ids.join(','));
+    return api.get<{ data: { users: unknown[]; total: number } }>(`/api/user/admin/list?${q.toString()}`);
   },
+  /** Fetch users by IDs (for KYC enrichment). Response shape: { data: { users, total } } */
+  getUsersByIds: (ids: string[]) =>
+    api.get<{ data: { users: unknown[]; total: number } }>(`/api/user/admin/list?limit=500&ids=${ids.join(',')}`),
   // KYC (admin)
   getKycPending: (params?: { page?: number; limit?: number; country?: string; tier?: string }) => {
     const q = new URLSearchParams();
@@ -388,12 +408,22 @@ export const adminApi = {
     if (params?.limit) q.set('limit', String(params.limit));
     if (params?.country) q.set('country', params.country);
     if (params?.tier) q.set('tier', params.tier);
-    return api.get<{ applications: unknown[]; total: number }>(`/api/kyc/pending?${q.toString()}`);
+    return api.get<{ data?: unknown[]; applications?: unknown[]; total?: number }>(`/api/kyc/pending?${q.toString()}`);
+  },
+  /** Get one user's KYC details (admin). Returns null if 404. */
+  getUserKyc: async (userId: string): Promise<unknown | null> => {
+    try {
+      const res = await api.get<unknown>(`/api/kyc/${userId}`);
+      return res as unknown;
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'status' in e && (e as { status: number }).status === 404) return null;
+      throw e;
+    }
   },
   approveKyc: (userId: string, tier: number, notes?: string) =>
-    api.post<unknown>(`/api/kyc/${userId}/approve`, { tier, notes }),
+    api.post<unknown>(`/api/kyc/${userId}/approve`, { tier: tier === 1 ? 'tier1' : 'tier2', notes }),
   rejectKyc: (userId: string, tier: number, reason: string) =>
-    api.post<unknown>(`/api/kyc/${userId}/reject`, { tier, reason }),
+    api.post<unknown>(`/api/kyc/${userId}/reject`, { tier: tier === 1 ? 'tier1' : 'tier2', reason }),
   // Refunds (admin)
   getRefundsPending: (params?: { page?: number; limit?: number }) => {
     const q = new URLSearchParams({ admin: '1' });

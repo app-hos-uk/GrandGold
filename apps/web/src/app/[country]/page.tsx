@@ -1,11 +1,13 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Sparkles, Shield, TrendingUp } from 'lucide-react';
 import { TrendingProducts } from '@/components/home/trending-products';
 import { PersonalizedSection } from '@/components/home/personalized-section';
+import { useGoldRates } from '@/contexts/gold-rate-context';
 import { getFeaturedProducts, getBestsellers, type MockProduct } from '@/lib/product-data';
 
 // Get products from shared data file (edit product-data.ts to update)
@@ -63,6 +65,17 @@ export default function HomePage() {
   const country = (params.country as 'in' | 'ae' | 'uk') || 'in';
   const content = countryContent[country] || countryContent.in;
 
+  // Use shared gold rate context (single fetch, shared with header)
+  const { rates, symbol } = useGoldRates();
+
+  const fmtRate = (n: number) => (n >= 1000 ? n.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : n.toFixed(2));
+
+  // Dynamic page title for SEO
+  useEffect(() => {
+    const countryName = country === 'in' ? 'India' : country === 'ae' ? 'UAE' : 'UK';
+    document.title = `GrandGold - Luxury Gold & Diamond Jewellery | ${countryName}`;
+  }, [country]);
+
   return (
     <main className="min-h-screen">
       {/* Hero Section */}
@@ -83,7 +96,7 @@ export default function HomePage() {
             >
               <span className="inline-flex items-center gap-2 px-4 py-2 bg-gold-500/10 rounded-full text-gold-700 text-sm font-medium mb-6 border border-burgundy-500/30">
                 <Sparkles className="w-4 h-4" />
-                Premium Collection 2025
+                Premium Collection 2026
               </span>
               
               <h1 className="font-display text-5xl lg:text-7xl font-semibold text-gray-900 mb-6 leading-tight tracking-wide">
@@ -138,7 +151,7 @@ export default function HomePage() {
                 className="absolute top-10 right-10 bg-white rounded-xl shadow-luxury p-4"
               >
                 <div className="text-sm text-gray-500">Gold Rate</div>
-                <div className="text-xl font-bold text-gold-600">{content.currency}6,150/g</div>
+                <div className="text-xl font-bold text-gold-600">{symbol}{fmtRate(rates.rate24k)}/g</div>
               </motion.div>
               
               <motion.div
@@ -187,20 +200,18 @@ export default function HomePage() {
             <div key={i} className="flex items-center gap-8 whitespace-nowrap">
               <span className="flex items-center gap-2">
                 <span className="text-gold-400">24K Gold:</span>
-                <span className="font-bold">{content.currency}6,150/g</span>
-                <span className="text-green-400 text-sm">+0.5%</span>
+                <span className="font-bold">{symbol}{fmtRate(rates.rate24k)}/g</span>
+                <span className="text-green-400 text-sm">▲ Live</span>
               </span>
               <span className="text-gray-500">|</span>
               <span className="flex items-center gap-2">
                 <span className="text-gold-400">22K Gold:</span>
-                <span className="font-bold">{content.currency}5,638/g</span>
-                <span className="text-green-400 text-sm">+0.4%</span>
+                <span className="font-bold">{symbol}{fmtRate(rates.rate22k)}/g</span>
               </span>
               <span className="text-gray-500">|</span>
               <span className="flex items-center gap-2">
                 <span className="text-gold-400">18K Gold:</span>
-                <span className="font-bold">{content.currency}4,613/g</span>
-                <span className="text-red-400 text-sm">-0.2%</span>
+                <span className="font-bold">{symbol}{fmtRate(rates.rate18k)}/g</span>
               </span>
               <span className="text-gray-500">|</span>
             </div>
@@ -233,24 +244,32 @@ export default function HomePage() {
           </div>
           
           <div className="grid md:grid-cols-3 gap-8">
-            {['Traditional Bridal', 'Contemporary', 'Everyday Elegance'].map((collection, i) => (
+            {[
+              { name: 'Traditional Bridal', slug: 'traditional-bridal' },
+              { name: 'Contemporary', slug: 'contemporary' },
+              { name: 'Everyday Elegance', slug: 'everyday-elegance' },
+            ].map((collection, i) => (
               <motion.div
-                key={collection}
+                key={collection.name}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: i * 0.1 }}
                 viewport={{ once: true }}
-                className="group cursor-pointer"
               >
-                <div className="aspect-[4/5] bg-gradient-to-br from-gold-100 to-cream-200 rounded-2xl mb-4 overflow-hidden relative">
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-6">
-                    <span className="text-white font-medium flex items-center gap-2">
-                      View Collection <ArrowRight className="w-4 h-4" />
-                    </span>
+                <Link
+                  href={`/${country}/collections?category=${collection.slug}`}
+                  className="group block"
+                >
+                  <div className="aspect-[4/5] bg-gradient-to-br from-gold-100 to-cream-200 rounded-2xl mb-4 overflow-hidden relative">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-6">
+                      <span className="text-white font-medium flex items-center gap-2">
+                        View Collection <ArrowRight className="w-4 h-4" />
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <h3 className="text-xl font-semibold">{collection}</h3>
-                <p className="text-gray-600">Starting from {content.currency}15,000</p>
+                  <h3 className="text-xl font-semibold">{collection.name}</h3>
+                  <p className="text-gray-600">Starting from {content.currency}15,000</p>
+                </Link>
               </motion.div>
             ))}
           </div>

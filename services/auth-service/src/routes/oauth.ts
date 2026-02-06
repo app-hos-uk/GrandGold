@@ -82,7 +82,7 @@ router.get('/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: '/login?error=google_failed' }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const user = req.user as any;
+      const user = req.user as Record<string, unknown> | undefined;
       
       if (!user) {
         throw new AuthenticationError('Google authentication failed');
@@ -140,7 +140,7 @@ router.get('/facebook/callback',
   passport.authenticate('facebook', { session: false, failureRedirect: '/login?error=facebook_failed' }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const user = req.user as any;
+      const user = req.user as Record<string, unknown> | undefined;
       
       if (!user) {
         throw new AuthenticationError('Facebook authentication failed');
@@ -231,7 +231,8 @@ router.post('/apple/callback', async (req: Request, res: Response, next: NextFun
 router.post('/link/:provider', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { provider } = req.params;
-    const { accessToken, idToken } = req.body;
+    // Tokens to be verified with provider in production
+    // const { accessToken, idToken } = req.body;
     
     if (!['google', 'facebook', 'apple'].includes(provider)) {
       throw new AuthenticationError('Invalid OAuth provider');

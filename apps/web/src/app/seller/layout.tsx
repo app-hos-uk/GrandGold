@@ -21,7 +21,7 @@ import {
   HelpCircle,
   FileCheck,
 } from 'lucide-react';
-import { authApi, getStoredToken, ApiError } from '@/lib/api';
+import { authApi, getStoredToken, ApiError, type CurrentUserProfile } from '@/lib/api';
 
 const navigation = [
   { name: 'Dashboard', href: '/seller', icon: LayoutDashboard },
@@ -42,6 +42,7 @@ export default function SellerLayout({
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authChecked, setAuthChecked] = useState(pathname === '/seller/login');
+  const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
   const profileFetchedRef = useRef(false);
   const isRedirectingRef = useRef(false);
 
@@ -63,6 +64,7 @@ export default function SellerLayout({
         router.replace('/seller/login');
         return;
       }
+      setProfile(user);
       setAuthChecked(true);
       profileFetchedRef.current = true;
     } catch (error) {
@@ -147,7 +149,9 @@ export default function SellerLayout({
               <Store className="w-5 h-5 text-gold-600" />
             </div>
             <div>
-              <p className="font-medium text-gray-900">Royal Jewellers</p>
+              <p className="font-medium text-gray-900">
+                {profile?.fullName || profile?.firstName || 'Seller'}
+              </p>
               <p className="text-xs text-green-600 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
                 Verified Seller
@@ -233,10 +237,14 @@ export default function SellerLayout({
               
               <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
                 <div className="w-9 h-9 bg-gold-100 rounded-full flex items-center justify-center">
-                  <span className="text-gold-600 font-semibold">R</span>
+                  <span className="text-gold-600 font-semibold">
+                    {profile?.firstName?.[0] || profile?.email?.[0]?.toUpperCase() || 'S'}
+                  </span>
                 </div>
                 <div className="hidden sm:block">
-                  <p className="text-sm font-medium text-gray-900">Ravi Kumar</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || profile.email : 'Seller'}
+                  </p>
                   <p className="text-xs text-gray-500">Store Owner</p>
                 </div>
                 <ChevronDown className="w-4 h-4 text-gray-400" />

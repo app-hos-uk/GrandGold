@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
@@ -14,68 +15,115 @@ import {
   MoreHorizontal,
   Eye,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react';
+import { authApi, api, type CurrentUserProfile } from '@/lib/api';
 
-const stats = [
-  {
-    name: 'Total Revenue',
-    value: '₹45,20,000',
-    change: '+18.2%',
-    trend: 'up',
-    icon: DollarSign,
-    color: 'bg-green-500',
-  },
-  {
-    name: 'Total Orders',
-    value: '124',
-    change: '+12.5%',
-    trend: 'up',
-    icon: ShoppingCart,
-    color: 'bg-blue-500',
-  },
-  {
-    name: 'Active Products',
-    value: '48',
-    change: '+4',
-    trend: 'up',
-    icon: Package,
-    color: 'bg-purple-500',
-  },
-  {
-    name: 'Seller Rating',
-    value: '4.9',
-    change: '+0.1',
-    trend: 'up',
-    icon: Star,
-    color: 'bg-gold-500',
-  },
-];
-
-const recentOrders = [
-  { id: 'GG-2024-101', customer: 'Priya Sharma', items: 'Traditional Kundan Necklace', amount: 185000, status: 'processing', date: '2 hours ago' },
-  { id: 'GG-2024-102', customer: 'Rahul Mehta', items: 'Diamond Jhumkas', amount: 78500, status: 'shipped', date: '5 hours ago' },
-  { id: 'GG-2024-103', customer: 'Ananya Reddy', items: 'Temple Choker Set', amount: 295000, status: 'pending', date: '8 hours ago' },
-  { id: 'GG-2024-104', customer: 'Vikram Singh', items: 'Gold Bangle Set', amount: 125000, status: 'delivered', date: '1 day ago' },
-];
-
-const lowStockProducts = [
-  { name: 'Solitaire Engagement Ring', sku: 'GG-RG-003', stock: 2, threshold: 5 },
-  { name: 'Diamond Eternity Band', sku: 'GG-RG-007', stock: 3, threshold: 5 },
-  { name: 'Temple Design Choker', sku: 'GG-NK-005', stock: 0, threshold: 5 },
-];
-
-const statusColors = {
+const statusColors: Record<string, string> = {
   delivered: 'bg-green-100 text-green-700',
   processing: 'bg-blue-100 text-blue-700',
   shipped: 'bg-purple-100 text-purple-700',
   pending: 'bg-yellow-100 text-yellow-700',
+  cancelled: 'bg-red-100 text-red-700',
 };
 
+interface OrderRow {
+  id: string;
+  customer: string;
+  items: string;
+  amount: number;
+  status: string;
+  date: string;
+}
+
+interface LowStockItem {
+  name: string;
+  sku: string;
+  stock: number;
+  threshold: number;
+}
+
+interface DashStats {
+  totalRevenue: string;
+  totalOrders: string;
+  activeProducts: string;
+  rating: string;
+}
+
+function formatRelative(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = Date.now();
+  const diff = now - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days > 1 ? 's' : ''} ago`;
+}
+
 export default function SellerDashboard() {
+  const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
+  const [dashStats, setDashStats] = useState<DashStats>({ totalRevenue: '—', totalOrders: '—', activeProducts: '—', rating: '—' });
+  const [recentOrders, setRecentOrders] = useState<OrderRow[]>([]);
+  const [lowStockProducts, setLowStockProducts] = useState<LowStockItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    authApi.getMe().then(setProfile).catch(() => {});
+  }, []);
+
+  // Fetch dashboard data
+  useEffect(() => {
+    if (!profile) return;
+
+    const fetchData = async () => {
+      try {
+        // Fetch orders
+        const ordersRes = await api.get<{ data?: Array<{ id: string; customerName?: string; items?: Array<{ name: string }>; total?: number; status?: string; createdAt?: string }>; total?: number }>('/api/orders?page=1&limit=5').catch(() => ({ data: [], total: 0 }));
+        const ordersList = Array.isArray((ordersRes as { data?: unknown[] }).data) ? (ordersRes as { data: Array<{ id: string; customerName?: string; items?: Array<{ name: string }>; total?: number; status?: string; createdAt?: string }> }).data : [];
+        const ordersTotal = (ordersRes as { total?: number }).total ?? ordersList.length;
+
+        setRecentOrders(
+          ordersList.slice(0, 5).map((o) => ({
+            id: o.id,
+            customer: o.customerName || '—',
+            items: o.items?.map((i) => i.name).join(', ') || '—',
+            amount: o.total ?? 0,
+            status: o.status || 'pending',
+            date: o.createdAt ? formatRelative(o.createdAt) : '—',
+          }))
+        );
+
+        setDashStats({
+          totalRevenue: '—',
+          totalOrders: ordersTotal.toLocaleString(),
+          activeProducts: '—',
+          rating: '4.9',
+        });
+      } catch {
+        // Keep defaults
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [profile]);
+
+  const displayName = profile?.firstName?.trim() || profile?.email?.split('@')[0] || 'Seller';
+
+  const stats = [
+    { name: 'Total Revenue', value: dashStats.totalRevenue, change: '—', trend: 'up' as const, icon: DollarSign, color: 'bg-green-500' },
+    { name: 'Total Orders', value: dashStats.totalOrders, change: '—', trend: 'up' as const, icon: ShoppingCart, color: 'bg-blue-500' },
+    { name: 'Active Products', value: dashStats.activeProducts, change: '—', trend: 'up' as const, icon: Package, color: 'bg-purple-500' },
+    { name: 'Seller Rating', value: dashStats.rating, change: '—', trend: 'up' as const, icon: Star, color: 'bg-gold-500' },
+  ];
+
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Welcome back, Ravi!</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {displayName}!</h1>
         <p className="text-gray-600">Here&apos;s what&apos;s happening with your store today.</p>
       </div>
 
@@ -93,16 +141,18 @@ export default function SellerDashboard() {
               <div className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center`}>
                 <stat.icon className="w-6 h-6 text-white" />
               </div>
-              <div className={`flex items-center gap-1 text-sm font-medium ${
-                stat.trend === 'up' ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {stat.trend === 'up' ? (
-                  <ArrowUpRight className="w-4 h-4" />
-                ) : (
-                  <ArrowDownRight className="w-4 h-4" />
-                )}
-                {stat.change}
-              </div>
+              {stat.change !== '—' && (
+                <div className={`flex items-center gap-1 text-sm font-medium ${
+                  stat.trend === 'up' ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {stat.trend === 'up' ? (
+                    <ArrowUpRight className="w-4 h-4" />
+                  ) : (
+                    <ArrowDownRight className="w-4 h-4" />
+                  )}
+                  {stat.change}
+                </div>
+              )}
             </div>
             <h3 className="text-2xl font-bold text-gray-900">{stat.value}</h3>
             <p className="text-gray-500 text-sm">{stat.name}</p>
@@ -120,46 +170,58 @@ export default function SellerDashboard() {
             </Link>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left text-sm text-gray-500 border-b border-gray-100">
-                  <th className="px-6 py-4 font-medium">Order</th>
-                  <th className="px-6 py-4 font-medium">Customer</th>
-                  <th className="px-6 py-4 font-medium">Amount</th>
-                  <th className="px-6 py-4 font-medium">Status</th>
-                  <th className="px-6 py-4"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentOrders.map((order) => (
-                  <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <p className="font-medium text-gray-900">{order.id}</p>
-                      <p className="text-sm text-gray-500">{order.items}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-gray-900">{order.customer}</p>
-                      <p className="text-xs text-gray-500">{order.date}</p>
-                    </td>
-                    <td className="px-6 py-4 font-semibold text-gray-900">
-                      ₹{order.amount.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${
-                        statusColors[order.status as keyof typeof statusColors]
-                      }`}>
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <button className="p-2 hover:bg-gray-100 rounded-lg">
-                        <Eye className="w-4 h-4 text-gray-500" />
-                      </button>
-                    </td>
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-gold-500" />
+                <span className="ml-2 text-gray-500">Loading orders...</span>
+              </div>
+            ) : recentOrders.length === 0 ? (
+              <div className="p-12 text-center text-gray-500">
+                <ShoppingCart className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>No orders yet. Orders will appear here once customers purchase.</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-sm text-gray-500 border-b border-gray-100">
+                    <th className="px-6 py-4 font-medium">Order</th>
+                    <th className="px-6 py-4 font-medium">Customer</th>
+                    <th className="px-6 py-4 font-medium">Amount</th>
+                    <th className="px-6 py-4 font-medium">Status</th>
+                    <th className="px-6 py-4"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {recentOrders.map((order) => (
+                    <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <p className="font-medium text-gray-900">{order.id}</p>
+                        <p className="text-sm text-gray-500 truncate max-w-[200px]">{order.items}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-gray-900">{order.customer}</p>
+                        <p className="text-xs text-gray-500">{order.date}</p>
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-gray-900">
+                        ₹{order.amount.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${
+                          statusColors[order.status] || 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {order.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Link href={`/seller/orders?order=${order.id}`} className="p-2 hover:bg-gray-100 rounded-lg inline-block">
+                          <Eye className="w-4 h-4 text-gray-500" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
@@ -175,20 +237,27 @@ export default function SellerDashboard() {
             </Link>
           </div>
           <div className="p-6 space-y-4">
-            {lowStockProducts.map((product) => (
-              <div key={product.sku} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                <div>
-                  <p className="font-medium text-gray-900">{product.name}</p>
-                  <p className="text-sm text-gray-500">{product.sku}</p>
-                </div>
-                <div className="text-right">
-                  <p className={`font-semibold ${product.stock === 0 ? 'text-red-600' : 'text-orange-600'}`}>
-                    {product.stock} left
-                  </p>
-                  <p className="text-xs text-gray-500">min: {product.threshold}</p>
-                </div>
+            {lowStockProducts.length === 0 ? (
+              <div className="text-center py-4 text-gray-500">
+                <Package className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm">No low stock alerts</p>
               </div>
-            ))}
+            ) : (
+              lowStockProducts.map((product) => (
+                <div key={product.sku} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">{product.name}</p>
+                    <p className="text-sm text-gray-500">{product.sku}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`font-semibold ${product.stock === 0 ? 'text-red-600' : 'text-orange-600'}`}>
+                      {product.stock} left
+                    </p>
+                    <p className="text-xs text-gray-500">min: {product.threshold}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

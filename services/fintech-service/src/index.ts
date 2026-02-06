@@ -88,10 +88,11 @@ priceScheduler.start();
 
 // Start server
 const PORT = parseInt(process.env.PORT || '4003');
+const HOST = process.env.HOST || '0.0.0.0';
 
-server.listen(PORT, () => {
-  logger.info(`Fintech service started on port ${PORT}`);
-  logger.info(`WebSocket server running on ws://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  logger.info(`Fintech service started on ${HOST}:${PORT}`);
+  logger.info(`WebSocket server running on ws://${HOST}:${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
 });
 
@@ -103,6 +104,14 @@ process.on('SIGTERM', async () => {
     logger.info('Server closed');
     process.exit(0);
   });
+});
+process.on('unhandledRejection', (reason) => {
+  logger.error({ err: reason }, 'Unhandled rejection');
+});
+process.on('uncaughtException', (err) => {
+  logger.error({ err }, 'Uncaught exception — shutting down');
+  priceScheduler.stop();
+  server.close(() => process.exit(1));
 });
 
 export { app, server };

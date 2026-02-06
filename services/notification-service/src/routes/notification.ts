@@ -14,7 +14,7 @@ const sendEmailSchema = z.object({
 
 router.post('/send/email', (req: Request, res: Response, next: NextFunction) => {
   try {
-    const payload = sendEmailSchema.parse(req.body);
+    sendEmailSchema.parse(req.body); // validate
     // TODO: Resend/SendGrid integration
     // await emailProvider.send(payload);
     res.json({ success: true, data: { id: `email-${Date.now()}`, status: 'queued' } });
@@ -37,7 +37,7 @@ const sendWhatsAppSchema = z.object({
 
 router.post('/send/whatsapp', (req: Request, res: Response, next: NextFunction) => {
   try {
-    const payload = sendWhatsAppSchema.parse(req.body);
+    sendWhatsAppSchema.parse(req.body); // validate
     // TODO: WhatsApp Business API
     res.json({ success: true, data: { id: `wa-${Date.now()}`, status: 'queued' } });
   } catch (e) {
@@ -57,7 +57,7 @@ const sendSMSSchema = z.object({
 
 router.post('/send/sms', (req: Request, res: Response, next: NextFunction) => {
   try {
-    const payload = sendSMSSchema.parse(req.body);
+    sendSMSSchema.parse(req.body); // validate
     // TODO: Twilio/MSG91
     res.json({ success: true, data: { id: `sms-${Date.now()}`, status: 'queued' } });
   } catch (e) {

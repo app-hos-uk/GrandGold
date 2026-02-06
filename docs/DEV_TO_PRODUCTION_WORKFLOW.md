@@ -250,6 +250,132 @@ gcloud run deploy web \
 - **Web**: Cloud Run → **web** → URL (e.g. `https://web-xxx.run.app`).
 - Test: open web URL, log in, browse, checkout (use test Stripe/Razorpay keys if needed).
 
+### 2.6b Point local web app at deployed auth-service
+
+To run the web app **locally** (e.g. `pnpm dev` in `apps/web`) but have it use the **deployed** auth-service on Cloud Run, set the auth URL in `apps/web/.env.local`:
+
+- **New file:** run from repo root:
+  ```bash
+  echo 'NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app' > apps/web/.env.local
+  ```
+- **Existing file:** open `apps/web/.env.local` and set or change:
+  `NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth-service-484382472654.asia-south1.run.app`
+
+Restart the Next.js dev server after changing so rewrites pick it up.
+
+### 2.7 Set DATABASE_URL and JWT_SECRET on auth-service (Cloud Run)
+
+Auth-service needs a database and JWT secret for login to work. Use **Secret Manager** (recommended) or plain env vars.
+
+**Important:** Run each command below in your terminal **one at a time** (copy-paste one block, press Enter, then the next). Pasting the whole section at once can cause `zsh: permission denied` or `zsh: command not found: #` from comment lines.
+
+**Option A — Secret Manager (recommended)**
+
+1. **Create the JWT secret** (one-time; use a strong random value):
+
+   ```bash
+   # Generate a random secret (e.g. 32 bytes hex)
+   openssl rand -hex 32
+   # Create the secret (paste the value from above, or use your own)
+   echo -n "YOUR_JWT_SECRET_VALUE" | gcloud secrets create JWT_SECRET --data-file=- --project=grandmarketplace
+   ```
+
+   If the secret already exists, add a new version:
+
+   ```bash
+   echo -n "YOUR_JWT_SECRET_VALUE" | gcloud secrets versions add JWT_SECRET --data-file=- --project=grandmarketplace
+   ```
+
+2. **Database URL**: If you ran `./infrastructure/gcp/setup-database.sh`, the secret **grandgold-db-url** already exists. If not, create it with your PostgreSQL connection string (e.g. Cloud SQL):
+
+   ```bash
+   echo -n "postgresql://USER:PASSWORD@/DB_NAME?host=/cloudsql/PROJECT:REGION:INSTANCE" | gcloud secrets create grandgold-db-url --data-file=- --project=grandmarketplace
+   ```
+
+3. **Grant Cloud Run access** to the secrets (replace `grandmarketplace` and region if different). Run these **one at a time**:
+
+   ```bash
+   export GCP_PROJECT_ID=grandmarketplace
+   ```
+   ```bash
+   PROJECT_NUMBER=$(gcloud projects describe $GCP_PROJECT_ID --format='value(projectNumber)')
+   SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+   gcloud secrets add-iam-policy-binding JWT_SECRET --member="serviceAccount:${SA}" --role="roles/secretmanager.secretAccessor" --project=$GCP_PROJECT_ID
+   ```
+   ```bash
+   gcloud secrets add-iam-policy-binding grandgold-db-url --member="serviceAccount:${SA}" --role="roles/secretmanager.secretAccessor" --project=$GCP_PROJECT_ID
+   ```
+
+4. **Update auth-service** to use the secrets (no image rebuild; new revision only). Run this **only after** the secret `grandgold-db-url` exists and IAM is granted (step 3), otherwise the deploy will fail with "Permission denied on secret":
+
+   ```bash
+   gcloud run services update auth-service \
+     --region asia-south1 \
+     --project grandmarketplace \
+     --set-secrets="DATABASE_URL=grandgold-db-url:latest,JWT_SECRET=JWT_SECRET:latest"
+   ```
+
+   If you use Cloud SQL with a Unix socket, also set the connection name (get it from Cloud SQL → instance → Connection name):
+
+   ```bash
+   gcloud run services update auth-service \
+     --region asia-south1 \
+     --project grandmarketplace \
+     --set-secrets="DATABASE_URL=grandgold-db-url:latest,JWT_SECRET=JWT_SECRET:latest" \
+     --set-env-vars="CLOUD_SQL_CONNECTION_NAME=grandmarketplace:asia-south1:YOUR_INSTANCE_NAME"
+   ```
+
+**If deployment already failed** (e.g. "Permission denied on secret grandgold-db-url" or "Secret grandgold-db-url not found"): the secret must exist and IAM must be granted before updating auth-service. To get auth-service back to a working revision using only JWT_SECRET, run:
+
+```bash
+gcloud run services update auth-service --region asia-south1 --project grandmarketplace --set-secrets="JWT_SECRET=JWT_SECRET:latest"
+```
+
+Then create the DB secret (see "Full sequence with setup-database.sh" below), grant IAM for `grandgold-db-url`, and run the update again with both secrets.
+
+**Full sequence with setup-database.sh** (creates Cloud SQL + secret `grandgold-db-url`). Run from repo root, **one command at a time**:
+
+```bash
+export GCP_PROJECT_ID=grandmarketplace
+```
+```bash
+bash infrastructure/gcp/setup-database.sh
+```
+(If you get "permission denied", run: `chmod +x infrastructure/gcp/setup-database.sh` then `./infrastructure/gcp/setup-database.sh`.)
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe grandmarketplace --format='value(projectNumber)')
+SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+```
+```bash
+gcloud secrets add-iam-policy-binding grandgold-db-url --member="serviceAccount:${SA}" --role="roles/secretmanager.secretAccessor" --project=grandmarketplace
+```
+```bash
+gcloud run services update auth-service --region asia-south1 --project grandmarketplace --set-secrets="DATABASE_URL=grandgold-db-url:latest,JWT_SECRET=JWT_SECRET:latest"
+```
+
+**Option B — Env vars (quick test only; avoid in production)**
+
+```bash
+export GCP_PROJECT_ID=grandmarketplace
+export JWT_SECRET="your-strong-random-jwt-secret"
+export DATABASE_URL="postgresql://user:pass@host:5432/dbname"
+# Optional for Cloud SQL socket:
+# export CLOUD_SQL_CONNECTION_NAME="project:region:instance"
+./infrastructure/gcp/deploy-service.sh auth-service
+```
+
+**Option C — Future deploys using Secret Manager**
+
+When you run the deploy script, you can pass secret names so new revisions get the secrets automatically:
+
+```bash
+export GCP_PROJECT_ID=grandmarketplace
+export DATABASE_SECRET_NAME=grandgold-db-url
+export JWT_SECRET_NAME=JWT_SECRET
+./infrastructure/gcp/deploy-service.sh auth-service
+```
+
 ---
 
 ## Phase 3: Live Testing Checklist
@@ -326,7 +452,8 @@ pnpm gcp:deploy
 | Push to your dev repo (Sabuanchuparayil) | `git push sabuj main` |
 | Push to HOS repo (production) | `git push origin main` |
 | Deploy all services (live test / same GCP) | `GCP_PROJECT_ID=xxx pnpm gcp:deploy` |
-| Deploy one service | `./infrastructure/gcp/deploy-service.sh <service-name> asia-south1` |
+| Deploy one service | `GCP_PROJECT_ID=xxx ./infrastructure/gcp/deploy-service.sh <service-name> asia-south1` |
+| Set auth-service DATABASE_URL + JWT_SECRET | See [2.7 Set DATABASE_URL and JWT_SECRET](#27-set-database_url-and-jwt_secret-on-auth-service-cloud-run) |
 | Deploy web app | `gcloud builds submit --tag gcr.io/$GCP_PROJECT_ID/web .` then `gcloud run deploy web ...` |
 
 ---

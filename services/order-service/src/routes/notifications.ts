@@ -6,7 +6,6 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { optionalAuth, authenticate } from '../middleware/auth';
 import {
   getNotifications,
-  addNotification,
   markNotificationRead,
   markAllRead,
   savePushSubscription,

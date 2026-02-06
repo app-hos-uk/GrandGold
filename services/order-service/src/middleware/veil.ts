@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import type { OrderStatus } from '@grandgold/types';
 import { VeilService } from '../services/veil.service';
 
 const veilService = new VeilService();
@@ -8,16 +9,17 @@ const veilService = new VeilService();
  * Prevents "inspect element" leakage of seller data
  * Applies VeilService.sanitizeResponse to API responses
  */
-export function veilResponseMiddleware(revealLevel: 'none' | 'partial' | 'full' = 'none') {
+export function veilResponseMiddleware(_revealLevel: 'none' | 'partial' | 'full' = 'none') {
   return (req: Request, res: Response, next: NextFunction) => {
     const originalJson = res.json.bind(res);
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     res.json = function (body: any) {
       if (body && typeof body === 'object' && body.data) {
         const context = {
-          stage: (req as any).checkoutStage || 'browsing',
-          userRole: (req as any).user?.role,
-          orderStatus: body.data?.status,
+          stage: ((req as Request & { checkoutStage?: string }).checkoutStage || 'browsing') as 'browsing',
+          userRole: (req as Request & { user?: { role?: string } }).user?.role,
+          orderStatus: body.data?.status as OrderStatus | undefined,
         };
         const level = veilService.shouldRevealSeller(context);
         body.data = veilService.sanitizeResponse(body.data, level);

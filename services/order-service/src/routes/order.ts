@@ -1,8 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import type { OrderStatus } from '@grandgold/types';
 import { OrderService } from '../services/order.service';
 import { VeilService } from '../services/veil.service';
 import { ReorderService } from '../services/reorder.service';
-import { authenticate, authorize, optionalAuth } from '../middleware/auth';
+import { authenticate, authorize } from '../middleware/auth';
 
 const router = Router();
 const orderService = new OrderService();
@@ -51,7 +52,7 @@ router.get('/:id', authenticate, async (req: Request, res: Response, next: NextF
     const order = await orderService.getOrder(req.params.id, req.user.sub);
     
     // Apply Veil Logic - strip seller details until payment
-    const veiledOrder = veilService.veilOrder(order, order.status);
+    const veiledOrder = veilService.veilOrder(order as Record<string, unknown>, order.status as OrderStatus);
     
     res.json({
       success: true,

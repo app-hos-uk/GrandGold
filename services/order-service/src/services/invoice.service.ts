@@ -1,7 +1,8 @@
 import { generateId, NotFoundError } from '@grandgold/utils';
+import type { InvoiceRecord } from '../types/internal';
 
 // In-memory store for demo
-const invoiceStore = new Map<string, any>();
+const invoiceStore = new Map<string, InvoiceRecord>();
 
 interface InvoiceData {
   orderId: string;
@@ -53,7 +54,8 @@ export class InvoiceService {
   /**
    * Generate invoice for order
    */
-  async generateInvoice(orderId: string, orderData: any): Promise<{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async generateInvoice(orderId: string, orderData: Record<string, any>): Promise<{
     invoiceNumber: string;
     invoiceUrl: string;
     pdfUrl: string;
@@ -123,7 +125,7 @@ export class InvoiceService {
   /**
    * Get invoice
    */
-  async getInvoice(invoiceId: string, userId: string): Promise<any> {
+  async getInvoice(invoiceId: string, _userId: string): Promise<InvoiceRecord> {
     const invoice = invoiceStore.get(invoiceId);
 
     if (!invoice) {
@@ -138,7 +140,7 @@ export class InvoiceService {
   /**
    * Get invoice by order ID
    */
-  async getInvoiceByOrder(orderId: string): Promise<any> {
+  async getInvoiceByOrder(orderId: string): Promise<InvoiceRecord> {
     const invoice = Array.from(invoiceStore.values()).find(
       (inv) => inv.orderId === orderId
     );
@@ -153,7 +155,7 @@ export class InvoiceService {
   /**
    * Generate PDF invoice
    */
-  private async generatePDF(invoiceData: InvoiceData): Promise<string> {
+  private async generatePDF(_invoiceData: InvoiceData): Promise<string> {
     // In production, use PDF library
     // For now, return mock URL
     const invoiceId = generateId('inv');
@@ -173,7 +175,8 @@ export class InvoiceService {
    * Download invoice PDF
    */
   async downloadInvoice(invoiceId: string, userId: string): Promise<Buffer> {
-    const invoice = await this.getInvoice(invoiceId, userId);
+    // Verify user has access (getInvoice throws if not found)
+    await this.getInvoice(invoiceId, userId);
 
     // In production, fetch PDF from Cloud Storage
     // For now, return mock buffer

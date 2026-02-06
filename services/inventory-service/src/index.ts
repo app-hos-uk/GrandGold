@@ -75,5 +75,12 @@ process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down...');
   process.exit(0);
 });
+process.on('unhandledRejection', (reason) => {
+  logger.error({ err: reason }, 'Unhandled rejection');
+});
+process.on('uncaughtException', (err) => {
+  logger.error({ err }, 'Uncaught exception — shutting down');
+  process.exit(1);
+});
 
 export { app };

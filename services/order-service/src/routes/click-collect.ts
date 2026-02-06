@@ -5,7 +5,7 @@ import { getStores } from '../lib/click-collect-stores';
 const router = Router();
 
 /** Generate time slots for next 7 days */
-function getTimeSlots(storeId: string): { date: string; slots: string[] }[] {
+function getTimeSlots(_storeId: string): { date: string; slots: string[] }[] {
   const slots = ['10:00', '10:30', '11:00', '11:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'];
   const result: { date: string; slots: string[] }[] = [];
   for (let i = 0; i < 7; i++) {

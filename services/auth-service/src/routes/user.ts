@@ -25,13 +25,15 @@ router.get(
       let country = req.query.country as string | undefined;
       const role = req.query.role as string;
       const search = req.query.search as string;
+      const idsParam = req.query.ids as string | undefined;
+      const ids = idsParam ? idsParam.split(',').map((id) => id.trim()).filter(Boolean) : undefined;
 
       // Country admin can only see users in their country
       if (req.user?.role === 'country_admin' && req.user?.country) {
         country = req.user.country;
       }
 
-      const { users: userList, total } = await listUsers({ page, limit, country, role, search });
+      const { users: userList, total } = await listUsers({ page, limit, country, role, search, ids });
 
       const data = userList.map((u) => ({
         id: u.id,

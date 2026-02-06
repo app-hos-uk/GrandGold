@@ -23,6 +23,7 @@ import {
   Activity,
   ChevronRight,
   UserCog,
+  Zap,
 } from 'lucide-react';
 import { adminApi, api } from '@/lib/api';
 import { formatRelativeDate, formatCurrency } from '@/lib/format';
@@ -102,6 +103,7 @@ export default function AdminDashboard() {
   const [countryAdmins, setCountryAdmins] = useState<CountryAdmin[]>([]);
   const [countryAdminsLoading, setCountryAdminsLoading] = useState(true);
   const [topSellers, setTopSellers] = useState<Array<{ name: string; sales: string; orders: number; rating: number }>>([]);
+  const [liveGoldRates, setLiveGoldRates] = useState<{ gold: Record<string, number>; provider: string; pricingMode?: string; updatedAt: string | null } | null>(null);
 
   const isSuperAdmin = profile?.role === 'super_admin';
   const country = profile?.role === 'country_admin' && profile?.country ? profile.country : undefined;
@@ -195,6 +197,14 @@ export default function AdminDashboard() {
       .catch(() => setCountryAdmins([]))
       .finally(() => setCountryAdminsLoading(false));
   }, [profile, isSuperAdmin]);
+
+  // Fetch live gold rates
+  useEffect(() => {
+    fetch('/api/rates/metals')
+      .then((r) => r.json())
+      .then((data) => setLiveGoldRates(data))
+      .catch(() => {});
+  }, []);
 
   // Fetch recent orders
   useEffect(() => {
@@ -333,6 +343,59 @@ export default function AdminDashboard() {
           </Link>
         ))}
       </div>
+
+      {/* Live Gold Rates Card */}
+      {liveGoldRates && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 bg-gradient-to-r from-amber-50 to-gold-50 border border-amber-200 rounded-xl p-5"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-amber-600" />
+              <span className="font-semibold text-gray-900">Live Gold Rates (24K/g)</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                liveGoldRates.pricingMode === 'manual' ? 'bg-amber-200 text-amber-800' :
+                liveGoldRates.pricingMode === 'mixed' ? 'bg-blue-200 text-blue-800' :
+                'bg-green-200 text-green-800'
+              }`}>
+                {liveGoldRates.pricingMode || liveGoldRates.provider}
+              </span>
+            </div>
+            <Link
+              href="/admin/pricing"
+              className="text-sm text-gold-600 hover:text-gold-700 font-medium"
+            >
+              Manage Pricing
+            </Link>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { flag: '🇮🇳', code: 'INR', symbol: '₹', name: 'India' },
+              { flag: '🇦🇪', code: 'AED', symbol: 'AED ', name: 'UAE' },
+              { flag: '🇬🇧', code: 'GBP', symbol: '£', name: 'UK' },
+            ].map((c) => (
+              <div key={c.code} className="flex items-center gap-2">
+                <span className="text-lg">{c.flag}</span>
+                <span className="font-bold text-gray-900">
+                  {c.symbol}
+                  {liveGoldRates.gold[c.code] != null
+                    ? liveGoldRates.gold[c.code] >= 1000
+                      ? liveGoldRates.gold[c.code].toLocaleString('en-IN')
+                      : liveGoldRates.gold[c.code].toFixed(2)
+                    : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+          {liveGoldRates.updatedAt && (
+            <p className="text-xs text-gray-400 mt-2">
+              Updated: {new Date(liveGoldRates.updatedAt).toLocaleString()}
+            </p>
+          )}
+        </motion.div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

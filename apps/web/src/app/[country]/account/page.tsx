@@ -17,54 +17,30 @@ import {
   Edit2,
   Sparkles,
   Shield,
+  Loader2,
 } from 'lucide-react';
-
-const user = {
-  name: 'Priya Sharma',
-  email: 'priya.sharma@email.com',
-  phone: '+91 98765 43210',
-  memberSince: 'January 2024',
-  tier: 'Gold Member',
-};
-
-const recentOrders = [
-  {
-    id: 'GG-2024-001',
-    date: '15 Jan 2024',
-    total: 185000,
-    status: 'Delivered',
-    items: 1,
-  },
-  {
-    id: 'GG-2024-002',
-    date: '28 Jan 2024',
-    total: 78500,
-    status: 'Processing',
-    items: 2,
-  },
-];
+import { authApi, type CurrentUserProfile } from '@/lib/api';
 
 const menuItems = [
-  { icon: Package, label: 'My Orders', href: '/account/orders', badge: '2' },
+  { icon: Package, label: 'My Orders', href: '/account/orders' },
   { icon: MapPin, label: 'Addresses', href: '/account/addresses' },
-  { icon: Heart, label: 'Wishlist', href: '/wishlist', badge: '5' },
+  { icon: Heart, label: 'Wishlist', href: '/wishlist' },
   { icon: CreditCard, label: 'Payment Methods', href: '/account/payments' },
   { icon: Bell, label: 'Notifications', href: '/account/notifications' },
   { icon: Settings, label: 'Account Settings', href: '/account/settings' },
 ];
 
-const countryConfig = {
-  in: { currency: '₹' },
-  ae: { currency: 'AED ' },
-  uk: { currency: '£' },
-};
-
 export default function AccountPage() {
   const params = useParams();
   const router = useRouter();
   const country = (params.country as 'in' | 'ae' | 'uk') || 'in';
-  const config = countryConfig[country];
-  const [authChecked, setAuthChecked] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
+
+  // Dynamic page title
+  useEffect(() => {
+    document.title = 'My Account | GrandGold';
+  }, []);
 
   useEffect(() => {
     const token =
@@ -75,23 +51,32 @@ export default function AccountPage() {
       router.replace(`/${country}/login?redirect=${encodeURIComponent(`/${country}/account`)}`);
       return;
     }
-    setAuthChecked(true);
+    authApi.getMe()
+      .then((user) => setProfile(user))
+      .catch(() => {
+        router.replace(`/${country}/login?redirect=${encodeURIComponent(`/${country}/account`)}`);
+      })
+      .finally(() => setLoading(false));
   }, [country, router]);
 
-  const formatPrice = (price: number) => {
-    return `${config.currency}${price.toLocaleString()}`;
+  const handleSignOut = () => {
+    authApi.logout();
+    router.replace(`/${country}/login`);
+    router.refresh();
   };
 
-  if (!authChecked) {
+  if (loading || !profile) {
     return (
       <main className="min-h-screen bg-cream-50 flex items-center justify-center">
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <div className="w-12 h-12 bg-gold-500 rounded-xl" />
-          <p className="text-gray-500 font-medium">Loading...</p>
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-gold-500" />
+          <p className="text-gray-500 font-medium">Loading your account...</p>
         </div>
       </main>
     );
   }
+
+  const displayName = profile.fullName || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || profile.email;
 
   return (
     <main className="min-h-screen bg-cream-50">
@@ -108,18 +93,22 @@ export default function AccountPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-semibold text-gray-900">{user.name}</h1>
+                <h1 className="text-2xl font-semibold text-gray-900">{displayName}</h1>
                 <span className="px-2 py-0.5 bg-gold-500 text-white text-xs font-medium rounded-full flex items-center gap-1">
                   <Sparkles className="w-3 h-3" />
-                  {user.tier}
+                  Member
                 </span>
               </div>
-              <p className="text-gray-600">{user.email}</p>
-              <p className="text-sm text-gray-500">Member since {user.memberSince}</p>
+              <p className="text-gray-600">{profile.email}</p>
+              {profile.kycStatus === 'approved' && (
+                <p className="text-sm text-green-600 flex items-center gap-1">
+                  <Shield className="w-3 h-3" /> KYC Verified
+                </p>
+              )}
             </div>
-            <button className="ml-auto p-2 bg-white rounded-full hover:bg-cream-100 transition-colors">
+            <Link href={`/${country}/account/settings`} className="ml-auto p-2 bg-white rounded-full hover:bg-cream-100 transition-colors">
               <Edit2 className="w-5 h-5 text-gray-600" />
-            </button>
+            </Link>
           </motion.div>
         </div>
       </section>
@@ -130,7 +119,7 @@ export default function AccountPage() {
             {/* Left Column - Navigation */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl overflow-hidden">
-                {menuItems.map((item, index) => (
+                {menuItems.map((item) => (
                   <Link
                     key={item.label}
                     href={`/${country}${item.href}`}
@@ -140,18 +129,14 @@ export default function AccountPage() {
                       <item.icon className="w-5 h-5 text-gray-500" />
                       <span className="font-medium text-gray-900">{item.label}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {item.badge && (
-                        <span className="px-2 py-0.5 bg-gold-100 text-gold-700 text-xs font-medium rounded-full">
-                          {item.badge}
-                        </span>
-                      )}
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
-                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
                   </Link>
                 ))}
                 
-                <button className="w-full flex items-center gap-4 px-6 py-4 text-red-600 hover:bg-red-50 transition-colors">
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center gap-4 px-6 py-4 text-red-600 hover:bg-red-50 transition-colors"
+                >
                   <LogOut className="w-5 h-5" />
                   <span className="font-medium">Sign Out</span>
                 </button>
@@ -180,40 +165,25 @@ export default function AccountPage() {
               {/* Recent Orders */}
               <div className="bg-white rounded-2xl p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold">Recent Orders</h2>
+                  <h2 className="text-lg font-semibold">My Orders</h2>
                   <Link
                     href={`/${country}/account/orders`}
                     className="text-gold-600 text-sm font-medium hover:text-gold-700"
                   >
-                    View All
+                    View All Orders
                   </Link>
                 </div>
 
-                <div className="space-y-4">
-                  {recentOrders.map((order) => (
-                    <Link
-                      key={order.id}
-                      href={`/${country}/account/orders/${order.id}`}
-                      className="block p-4 bg-cream-50 rounded-xl hover:bg-cream-100 transition-colors"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-gray-900">{order.id}</span>
-                        <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                          order.status === 'Delivered'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {order.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm text-gray-600">
-                        <span>{order.date} • {order.items} item(s)</span>
-                        <span className="font-medium text-gray-900">
-                          {formatPrice(order.total)}
-                        </span>
-                      </div>
-                    </Link>
-                  ))}
+                <div className="text-center py-8">
+                  <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 mb-4">View and track your orders</p>
+                  <Link
+                    href={`/${country}/account/orders`}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors text-sm font-medium"
+                  >
+                    <Package className="w-4 h-4" />
+                    View Orders
+                  </Link>
                 </div>
               </div>
 
@@ -222,20 +192,21 @@ export default function AccountPage() {
                 <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { icon: Package, label: 'Track Order', color: 'bg-blue-100 text-blue-600' },
-                    { icon: Heart, label: 'Wishlist', color: 'bg-red-100 text-red-600' },
-                    { icon: Bell, label: 'Price Alerts', color: 'bg-gold-100 text-gold-600' },
-                    { icon: User, label: 'Edit Profile', color: 'bg-purple-100 text-purple-600' },
+                    { icon: Package, label: 'Track Order', color: 'bg-blue-100 text-blue-600', href: `/${country}/account/orders` },
+                    { icon: Heart, label: 'Wishlist', color: 'bg-red-100 text-red-600', href: `/${country}/wishlist` },
+                    { icon: Bell, label: 'Price Alerts', color: 'bg-gold-100 text-gold-600', href: `/${country}/price-alerts` },
+                    { icon: User, label: 'Edit Profile', color: 'bg-purple-100 text-purple-600', href: `/${country}/account/settings` },
                   ].map((action) => (
-                    <button
+                    <Link
                       key={action.label}
+                      href={action.href}
                       className="flex flex-col items-center gap-2 p-4 rounded-xl hover:bg-cream-50 transition-colors"
                     >
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${action.color}`}>
                         <action.icon className="w-6 h-6" />
                       </div>
                       <span className="text-sm font-medium text-gray-700">{action.label}</span>
-                    </button>
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -251,27 +222,35 @@ export default function AccountPage() {
                     Manage
                   </Link>
                 </div>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="p-4 bg-cream-50 rounded-xl border-2 border-gold-500">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-medium">Home</span>
-                      <span className="px-2 py-0.5 bg-gold-100 text-gold-700 text-xs rounded">Default</span>
-                    </div>
-                    <p className="text-sm text-gray-600">
-                      123 Gold Street, Bandra West<br />
-                      Mumbai, Maharashtra 400050
-                    </p>
+                {profile.addresses && profile.addresses.length > 0 ? (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {(profile.addresses as Array<{ label?: string; line1?: string; city?: string; state?: string; postalCode?: string; isDefault?: boolean }>).slice(0, 2).map((addr, idx) => (
+                      <div key={idx} className={`p-4 bg-cream-50 rounded-xl ${addr.isDefault ? 'border-2 border-gold-500' : ''}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-medium">{addr.label || 'Address'}</span>
+                          {addr.isDefault && (
+                            <span className="px-2 py-0.5 bg-gold-100 text-gold-700 text-xs rounded">Default</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          {addr.line1}<br />
+                          {addr.city}{addr.state ? `, ${addr.state}` : ''} {addr.postalCode}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                  <div className="p-4 bg-cream-50 rounded-xl">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-medium">Office</span>
-                    </div>
-                    <p className="text-sm text-gray-600">
-                      456 Business Park<br />
-                      Mumbai, Maharashtra 400093
-                    </p>
+                ) : (
+                  <div className="text-center py-6">
+                    <MapPin className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-500 text-sm mb-3">No saved addresses yet</p>
+                    <Link
+                      href={`/${country}/account/addresses`}
+                      className="text-gold-600 text-sm font-medium hover:text-gold-700"
+                    >
+                      Add an address
+                    </Link>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
