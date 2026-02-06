@@ -22,7 +22,11 @@ const sslOption = process.env.DATABASE_SSL_NO_VERIFY === '1' ? { rejectUnauthori
  */
 function parseConnectionString(url: string): { username: string; password: string; database: string } | null {
   try {
-    const parsed = new URL(url);
+    // Replace the postgresql:// scheme with http:// for WHATWG URL parsing.
+    // postgresql:// is not a "special" scheme and new URL() may reject empty hosts
+    // (e.g. postgresql://user:pass@/dbname) on some runtimes.
+    const normalisedUrl = url.replace(/^postgres(ql)?:\/\//, 'http://');
+    const parsed = new URL(normalisedUrl);
     const username = decodeURIComponent(parsed.username);
     const password = decodeURIComponent(parsed.password);
     // pathname is e.g. "/grandgold" → strip leading "/"
@@ -30,9 +34,10 @@ function parseConnectionString(url: string): { username: string; password: strin
     if (!username || !database) return null;
     return { username, password, database };
   } catch {
-    // Fallback: try regex for non-standard URLs (e.g. socket-only)
+    // Fallback: try regex for non-standard URLs (e.g. socket-only, empty host)
     try {
-      const match = url.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@[^/]+\/([^?]+)/);
+      // Allow empty host: @/ or @host/
+      const match = url.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@[^/]*\/([^?]+)/);
       if (match) {
         return { username: match[1], password: match[2], database: match[3] };
       }
