@@ -143,15 +143,16 @@ jobs:
       - name: Deploy to Cloud Run
         if: env.SKIP != 'true'
         run: |
-          ENV_VARS="NODE_ENV=production,CLOUD_SQL_CONNECTION_NAME=${{ env.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:grandgold-db"
+          PN=${{ env.GCP_PROJECT_NUMBER }}
+          REGION=${{ env.GCP_REGION }}
+          WEB_URL="https://web-${PN}.${REGION}.run.app"
 
-          # Add optional env vars if secrets are set
-          if [ -n "${{ secrets.JWT_SECRET }}" ]; then
-            ENV_VARS="${ENV_VARS},JWT_SECRET=${{ secrets.JWT_SECRET }}"
-          fi
-          if [ -n "${{ secrets.REDIS_URL }}" ]; then
-            ENV_VARS="${ENV_VARS},REDIS_URL=${{ secrets.REDIS_URL }}"
-          fi
+          ENV_VARS="NODE_ENV=production"
+          ENV_VARS="${ENV_VARS},CLOUD_SQL_CONNECTION_NAME=${{ env.GCP_PROJECT_ID }}:${REGION}:grandgold-db"
+          ENV_VARS="${ENV_VARS},REDIS_URL=redis://10.10.168.107:6379"
+
+          # CORS — use # delimiter so commas in the value aren't split
+          CORS="${WEB_URL},http://localhost:3000"
 
           # Use --update-env-vars to preserve secret-mounted vars (DATABASE_URL, JWT_SECRET via Secret Manager)
           gcloud run deploy ${{ matrix.service }} \
@@ -165,7 +166,7 @@ jobs:
             --max-instances 10 \
             --concurrency 80 \
             --timeout 60s \
-            --update-env-vars "${ENV_VARS}" \
+            --update-env-vars "^#^${ENV_VARS}#CORS_ORIGINS=${CORS}" \
             --add-cloudsql-instances "${{ env.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:grandgold-db" \
             --vpc-connector "projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.GCP_REGION }}/connectors/grandgold-connector" \
             --vpc-egress private-ranges-only \
