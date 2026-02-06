@@ -545,3 +545,41 @@ After each deployment, the workflow writes a summary to the GitHub Actions "Summ
 4. **Production**: Push to **app-hos-uk/GrandGold** (`git push origin main`) → GitHub Actions deploys automatically.
 
 For full deployment details (env vars, secrets, DB, Redis), see [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md).
+
+---
+
+## Production Infrastructure Status
+
+### Integrated (Real Secrets — Working)
+
+| Secret | Service | Status |
+|--------|---------|--------|
+| `grandgold-db-url` | auth, order, seller, product, payment, kyc, fintech, inventory, promotion | Mounted via Secret Manager |
+| `grandgold-db-password` | Direct DB access | Available |
+| `JWT_SECRET` | auth, order, seller, product, payment, kyc, fintech, inventory, promotion, ai | Mounted via Secret Manager |
+| `meilisearch-master-key` | product-service | Mounted via Secret Manager |
+| Cloud SQL socket | All DB services | `CLOUD_SQL_CONNECTION_NAME` set |
+| Memorystore Redis | auth, order, seller | `REDIS_URL=redis://10.10.168.107:6379` |
+| VPC Connector | All services | `grandgold-connector` attached |
+| CORS Origins | All services | Web app URL + localhost |
+| Service URLs | web | All 11 `NEXT_PUBLIC_*_SERVICE_URL` set |
+| Database | Cloud SQL | 30 tables migrated |
+
+### Remaining TODO — Placeholder Secrets (Need Real Keys)
+
+| # | Secret | Service | How to get | Command to update |
+|---|--------|---------|-----------|-------------------|
+| 1 | `stripe-secret-key` | payment-service | [Stripe Dashboard → API Keys](https://dashboard.stripe.com/apikeys) | `echo -n 'sk_live_xxx' \| gcloud secrets versions add stripe-secret-key --data-file=-` |
+| 2 | `stripe-publishable-key` | payment-service | Same Stripe Dashboard | `echo -n 'pk_live_xxx' \| gcloud secrets versions add stripe-publishable-key --data-file=-` |
+| 3 | `razorpay-key-id` | payment-service | [Razorpay Dashboard → Settings → API Keys](https://dashboard.razorpay.com/app/keys) | `echo -n 'rzp_live_xxx' \| gcloud secrets versions add razorpay-key-id --data-file=-` |
+| 4 | `razorpay-key-secret` | payment-service | Same Razorpay Dashboard | `echo -n 'secret_xxx' \| gcloud secrets versions add razorpay-key-secret --data-file=-` |
+| 5 | `resend-api-key` | notification-service | [Resend Dashboard → API Keys](https://resend.com/api-keys) | `echo -n 're_xxx' \| gcloud secrets versions add resend-api-key --data-file=-` |
+| 6 | `google-client-id` | auth-service | [GCP Console → APIs & Services → Credentials → OAuth 2.0](https://console.cloud.google.com/apis/credentials) | `echo -n 'xxx.apps.googleusercontent.com' \| gcloud secrets versions add google-client-id --data-file=-` |
+| 7 | `google-client-secret` | auth-service | Same GCP OAuth page | `echo -n 'GOCSPX-xxx' \| gcloud secrets versions add google-client-secret --data-file=-` |
+| 8 | `facebook-app-id` | auth-service | [Facebook Developers → App Settings](https://developers.facebook.com/apps/) | `echo -n '123456789' \| gcloud secrets versions add facebook-app-id --data-file=-` |
+| 9 | `facebook-app-secret` | auth-service | Same Facebook App page | `echo -n 'abc123xxx' \| gcloud secrets versions add facebook-app-secret --data-file=-` |
+| 10 | Custom domain | web service | Register domain + DNS | `gcloud beta run domain-mappings create --service web --domain yourdomain.com --region asia-south1` |
+
+> **Note:** After updating any secret, the service will automatically pick up the new value on its next cold start. To force immediate pickup, redeploy: `gcloud run services update <service> --region asia-south1 --quiet`
+
+> **Note:** All payment and OAuth services work in **demo/mock mode** until real keys are configured. This means registration, login, cart, orders, and AI chat are fully functional. Only real payment processing and social login require the above keys.
