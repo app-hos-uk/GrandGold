@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -64,6 +64,14 @@ const countryConfig = {
 };
 
 export default function CollectionsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading collections...</div></div>}>
+      <CollectionsContent />
+    </Suspense>
+  );
+}
+
+function CollectionsContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const country = (params.country as 'in' | 'ae' | 'uk') || 'in';

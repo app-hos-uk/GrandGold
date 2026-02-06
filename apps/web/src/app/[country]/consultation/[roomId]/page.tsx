@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Video, VideoOff, Mic, MicOff, PhoneOff, Monitor, Square } from 'lucide-react';
@@ -9,6 +9,14 @@ import { api } from '@/lib/api';
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 export default function VideoConsultationPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading consultation...</div></div>}>
+      <VideoConsultationContent />
+    </Suspense>
+  );
+}
+
+function VideoConsultationContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
