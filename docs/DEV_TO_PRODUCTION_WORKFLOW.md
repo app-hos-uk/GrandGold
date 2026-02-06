@@ -445,23 +445,103 @@ pnpm gcp:deploy
 
 ---
 
+## GitHub Actions CI/CD (Automatic Deployment)
+
+A GitHub Actions workflow (`.github/workflows/deploy-gcp.yml`) is configured for automatic deployment to GCP Cloud Run.
+
+### How it works
+
+| Trigger | What happens |
+|---------|-------------|
+| **Push to `main`** | Auto-detects changed files. Deploys only what changed (web, services, or both). |
+| **Manual dispatch** | Go to Actions tab → "Deploy to GCP Cloud Run" → Run workflow. Choose: `all`, `web-only`, `services-only`, or `single-service`. |
+
+### Smart change detection
+
+- If only `apps/web/` changed → only the web app is rebuilt and deployed
+- If only `services/` changed → only backend services are rebuilt and deployed
+- If both changed → both are deployed in parallel
+- Backend services build in parallel (up to 4 at a time) for speed
+
+### Required GitHub Secrets
+
+Set these in **Settings → Secrets and variables → Actions**:
+
+| Secret | Description | Example |
+|--------|-------------|---------|
+| `GCP_SA_KEY` | **Required.** Service account JSON key with roles: Cloud Run Admin, Cloud Build Editor, Storage Admin | `{ "type": "service_account", ... }` |
+| `GCP_PROJECT_ID` | GCP project ID | `grandmarketplace` |
+| `GCP_PROJECT_NUMBER` | GCP project number (for Cloud Run URLs) | `484382472654` |
+| `GCP_REGION` | Primary deploy region | `asia-south1` |
+| `DATABASE_URL` | PostgreSQL connection string (optional) | `postgresql://...` |
+| `JWT_SECRET` | JWT signing key (optional) | `your-jwt-secret` |
+| `REDIS_URL` | Redis connection string (optional) | `redis://...` |
+
+### Setting up the GCP Service Account
+
+```bash
+# Create service account
+gcloud iam service-accounts create github-deploy \
+  --display-name="GitHub Actions Deploy"
+
+# Grant required roles
+PROJECT_ID=grandmarketplace
+SA_EMAIL=github-deploy@${PROJECT_ID}.iam.gserviceaccount.com
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/run.admin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/cloudbuild.builds.editor"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/storage.admin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/iam.serviceAccountUser"
+
+# Create and download key
+gcloud iam service-accounts keys create key.json \
+  --iam-account=${SA_EMAIL}
+
+# Copy the contents of key.json into GitHub secret GCP_SA_KEY
+cat key.json
+```
+
+### Deployment summary
+
+After each deployment, the workflow writes a summary to the GitHub Actions "Summary" tab showing:
+- Which services were deployed
+- Docker image tags used
+- Cloud Run URLs for each service
+
+---
+
 ## Quick reference
 
 | Task | Command |
 |------|--------|
 | Push to your dev repo (Sabuanchuparayil) | `git push sabuj main` |
 | Push to HOS repo (production) | `git push origin main` |
-| Deploy all services (live test / same GCP) | `GCP_PROJECT_ID=xxx pnpm gcp:deploy` |
-| Deploy one service | `GCP_PROJECT_ID=xxx ./infrastructure/gcp/deploy-service.sh <service-name> asia-south1` |
+| Push to both repos | `git push origin main && git push sabuj main` |
+| **Auto-deploy (push to main)** | Just `git push origin main` — GitHub Actions handles the rest |
+| **Manual deploy (web only)** | GitHub → Actions → Deploy to GCP → Run workflow → `web-only` |
+| **Manual deploy (single service)** | GitHub → Actions → Deploy to GCP → Run workflow → `single-service` → enter name |
+| Deploy all services (CLI fallback) | `GCP_PROJECT_ID=xxx pnpm gcp:deploy` |
+| Deploy one service (CLI fallback) | `GCP_PROJECT_ID=xxx ./infrastructure/gcp/deploy-service.sh <service-name> asia-south1` |
 | Set auth-service DATABASE_URL + JWT_SECRET | See [2.7 Set DATABASE_URL and JWT_SECRET](#27-set-database_url-and-jwt_secret-on-auth-service-cloud-run) |
-| Deploy web app | `gcloud builds submit --tag gcr.io/$GCP_PROJECT_ID/web .` then `gcloud run deploy web ...` |
 
 ---
 
 ## Summary
 
-1. **GitHub**: Use **Sabuanchuparayil/GrandGold** for development (add remote **sabuj**, push there daily).
-2. **Live testing**: Use your **existing GCP** (same project for HOS); `pnpm gcp:deploy` + deploy web, then test.
-3. **Production**: Push to **app-hos-uk/GrandGold** (`git push origin main`), then deploy from **HOS GCP** (or same project with production config).
+1. **GitHub**: Use **Sabuanchuparayil/GrandMarketPlace** for development (remote **sabuj**), **app-hos-uk/GrandGold** for production (remote **origin**).
+2. **CI/CD**: Push to `main` on either repo triggers GitHub Actions → auto-deploys to GCP Cloud Run (once secrets are configured).
+3. **Live testing**: Use your **existing GCP** (same project for HOS); push to trigger auto-deploy, or manually: `pnpm gcp:deploy` + deploy web.
+4. **Production**: Push to **app-hos-uk/GrandGold** (`git push origin main`) → GitHub Actions deploys automatically.
 
 For full deployment details (env vars, secrets, DB, Redis), see [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md).

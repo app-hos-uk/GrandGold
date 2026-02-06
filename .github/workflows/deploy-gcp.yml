@@ -1,0 +1,285 @@
+# GrandGold — Deploy to GCP Cloud Run
+#
+# Triggers:
+#   - Push to main  → builds & deploys ALL services + web app
+#   - Manual dispatch → choose what to deploy (web-only, services-only, or all)
+#
+# Required GitHub Secrets:
+#   GCP_PROJECT_ID        — e.g. "grandmarketplace"
+#   GCP_SA_KEY            — Service account JSON key with Cloud Run Admin, Cloud Build Editor, Storage Admin
+#   GCP_PROJECT_NUMBER    — e.g. "484382472654" (for Cloud Run service URLs)
+#   GCP_REGION            — e.g. "asia-south1" (primary deploy region)
+#
+# Optional Secrets (for backend services):
+#   DATABASE_URL          — PostgreSQL connection string
+#   JWT_SECRET            — JWT signing key
+#   REDIS_URL             — Redis connection string
+
+name: Deploy to GCP Cloud Run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'What to deploy'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - web-only
+          - services-only
+          - single-service
+      single_service_name:
+        description: 'Service name (only if deploy_target = single-service)'
+        required: false
+        default: ''
+        type: string
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'grandmarketplace' }}
+  GCP_REGION: ${{ secrets.GCP_REGION || 'asia-south1' }}
+  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER || '484382472654' }}
+
+jobs:
+  # ─────────────────────────────────────────────────────
+  # Job 1: Detect what changed (skip unchanged services)
+  # ─────────────────────────────────────────────────────
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      services: ${{ steps.filter.outputs.services }}
+      services_list: ${{ steps.services-list.outputs.list }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'apps/web/**'
+              - 'packages/**'
+              - 'tsconfig.base.json'
+              - 'pnpm-lock.yaml'
+            services:
+              - 'services/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+
+      - name: Determine services to deploy
+        id: services-list
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TARGET="${{ github.event.inputs.deploy_target }}"
+            if [[ "$TARGET" == "single-service" ]]; then
+              echo "list=[\"${{ github.event.inputs.single_service_name }}\"]" >> $GITHUB_OUTPUT
+            elif [[ "$TARGET" == "web-only" ]]; then
+              echo "list=[]" >> $GITHUB_OUTPUT
+            else
+              echo 'list=["auth-service","kyc-service","seller-service","fintech-service","order-service","payment-service","product-service","inventory-service","promotion-service","notification-service","ai-service"]' >> $GITHUB_OUTPUT
+            fi
+          elif [[ "${{ steps.filter.outputs.services }}" == "true" ]]; then
+            echo 'list=["auth-service","kyc-service","seller-service","fintech-service","order-service","payment-service","product-service","inventory-service","promotion-service","notification-service","ai-service"]' >> $GITHUB_OUTPUT
+          else
+            echo "list=[]" >> $GITHUB_OUTPUT
+          fi
+
+  # ─────────────────────────────────────────────────────
+  # Job 2: Build & deploy backend services
+  # ─────────────────────────────────────────────────────
+  deploy-services:
+    name: Deploy ${{ matrix.service }}
+    needs: changes
+    if: needs.changes.outputs.services_list != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.services_list) }}
+      fail-fast: false
+      max-parallel: 4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker --quiet
+
+      - name: Check Dockerfile exists
+        run: |
+          if [ ! -f "./services/${{ matrix.service }}/Dockerfile" ]; then
+            echo "::warning::Dockerfile not found for ${{ matrix.service }}, skipping"
+            echo "SKIP=true" >> $GITHUB_ENV
+          fi
+
+      - name: Build Docker image
+        if: env.SKIP != 'true'
+        run: |
+          docker build \
+            -t gcr.io/${{ env.GCP_PROJECT_ID }}/${{ matrix.service }}:${{ github.sha }} \
+            -t gcr.io/${{ env.GCP_PROJECT_ID }}/${{ matrix.service }}:latest \
+            -f ./services/${{ matrix.service }}/Dockerfile \
+            .
+
+      - name: Push Docker image
+        if: env.SKIP != 'true'
+        run: |
+          docker push gcr.io/${{ env.GCP_PROJECT_ID }}/${{ matrix.service }}:${{ github.sha }}
+          docker push gcr.io/${{ env.GCP_PROJECT_ID }}/${{ matrix.service }}:latest
+
+      - name: Deploy to Cloud Run
+        if: env.SKIP != 'true'
+        run: |
+          ENV_VARS="NODE_ENV=production"
+
+          # Add optional env vars if secrets are set
+          if [ -n "${{ secrets.JWT_SECRET }}" ]; then
+            ENV_VARS="${ENV_VARS},JWT_SECRET=${{ secrets.JWT_SECRET }}"
+          fi
+          if [ -n "${{ secrets.DATABASE_URL }}" ]; then
+            ENV_VARS="${ENV_VARS},DATABASE_URL=${{ secrets.DATABASE_URL }}"
+          fi
+          if [ -n "${{ secrets.REDIS_URL }}" ]; then
+            ENV_VARS="${ENV_VARS},REDIS_URL=${{ secrets.REDIS_URL }}"
+          fi
+
+          gcloud run deploy ${{ matrix.service }} \
+            --image gcr.io/${{ env.GCP_PROJECT_ID }}/${{ matrix.service }}:${{ github.sha }} \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 512Mi \
+            --cpu 1 \
+            --min-instances 0 \
+            --max-instances 10 \
+            --concurrency 80 \
+            --timeout 60s \
+            --set-env-vars "${ENV_VARS}" \
+            --quiet
+
+      - name: Get service URL
+        if: env.SKIP != 'true'
+        run: |
+          URL=$(gcloud run services describe ${{ matrix.service }} \
+            --region ${{ env.GCP_REGION }} \
+            --format 'value(status.url)' 2>/dev/null || echo "N/A")
+          echo "### ${{ matrix.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: \`gcr.io/${{ env.GCP_PROJECT_ID }}/${{ matrix.service }}:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- URL: ${URL}" >> $GITHUB_STEP_SUMMARY
+          echo "- Region: ${{ env.GCP_REGION }}" >> $GITHUB_STEP_SUMMARY
+
+  # ─────────────────────────────────────────────────────
+  # Job 3: Build & deploy web app
+  # ─────────────────────────────────────────────────────
+  deploy-web:
+    name: Deploy Web App
+    needs: changes
+    if: >
+      needs.changes.outputs.web == 'true' ||
+      github.event.inputs.deploy_target == 'all' ||
+      github.event.inputs.deploy_target == 'web-only'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker --quiet
+
+      - name: Build Web Docker image
+        run: |
+          PN=${{ env.GCP_PROJECT_NUMBER }}
+          REGION=${{ env.GCP_REGION }}
+
+          docker build \
+            -t gcr.io/${{ env.GCP_PROJECT_ID }}/web:${{ github.sha }} \
+            -t gcr.io/${{ env.GCP_PROJECT_ID }}/web:latest \
+            -f ./apps/web/Dockerfile \
+            --build-arg NEXT_PUBLIC_AUTH_SERVICE_URL=https://auth-service-${PN}.${REGION}.run.app \
+            --build-arg NEXT_PUBLIC_ORDER_SERVICE_URL=https://order-service-${PN}.${REGION}.run.app \
+            --build-arg NEXT_PUBLIC_PRODUCT_SERVICE_URL=https://product-service-${PN}.${REGION}.run.app \
+            --build-arg NEXT_PUBLIC_KYC_SERVICE_URL=https://kyc-service-${PN}.${REGION}.run.app \
+            --build-arg NEXT_PUBLIC_SELLER_SERVICE_URL=https://seller-service-${PN}.${REGION}.run.app \
+            --build-arg NEXT_PUBLIC_FINTECH_SERVICE_URL=https://fintech-service-${PN}.${REGION}.run.app \
+            --build-arg NEXT_PUBLIC_PAYMENT_SERVICE_URL=https://payment-service-${PN}.${REGION}.run.app \
+            --build-arg NEXT_PUBLIC_INVENTORY_SERVICE_URL=https://inventory-service-${PN}.${REGION}.run.app \
+            --build-arg NEXT_PUBLIC_AI_SERVICE_URL=https://ai-service-${PN}.${REGION}.run.app \
+            --build-arg NEXT_PUBLIC_PROMOTION_SERVICE_URL=https://promotion-service-${PN}.${REGION}.run.app \
+            --build-arg NEXT_PUBLIC_NOTIFICATION_SERVICE_URL=https://notification-service-${PN}.${REGION}.run.app \
+            .
+
+      - name: Push Web Docker image
+        run: |
+          docker push gcr.io/${{ env.GCP_PROJECT_ID }}/web:${{ github.sha }}
+          docker push gcr.io/${{ env.GCP_PROJECT_ID }}/web:latest
+
+      - name: Deploy Web to Cloud Run
+        run: |
+          gcloud run deploy web \
+            --image gcr.io/${{ env.GCP_PROJECT_ID }}/web:${{ github.sha }} \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 1Gi \
+            --cpu 1 \
+            --min-instances 0 \
+            --max-instances 10 \
+            --concurrency 80 \
+            --timeout 120s \
+            --set-env-vars "NODE_ENV=production" \
+            --quiet
+
+      - name: Get Web URL
+        run: |
+          URL=$(gcloud run services describe web \
+            --region ${{ env.GCP_REGION }} \
+            --format 'value(status.url)' 2>/dev/null || echo "N/A")
+          echo "### Web App" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: \`gcr.io/${{ env.GCP_PROJECT_ID }}/web:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- URL: ${URL}" >> $GITHUB_STEP_SUMMARY
+          echo "- Region: ${{ env.GCP_REGION }}" >> $GITHUB_STEP_SUMMARY
+
+  # ─────────────────────────────────────────────────────
+  # Job 4: Summary
+  # ─────────────────────────────────────────────────────
+  summary:
+    name: Deployment Summary
+    needs: [changes, deploy-services, deploy-web]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Triggered by | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Web changed | ${{ needs.changes.outputs.web }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Services changed | ${{ needs.changes.outputs.services }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Services job | ${{ needs.deploy-services.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Web job | ${{ needs.deploy-web.result }} |" >> $GITHUB_STEP_SUMMARY
