@@ -10,7 +10,6 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY turbo.json ./
 
-COPY packages/types/package.json ./packages/types/
 COPY packages/utils/package.json ./packages/utils/
 COPY services/notification-service/package.json ./services/notification-service/
 
@@ -33,8 +32,6 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 grandgold
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY --from=builder /app/packages/types/dist ./packages/types/dist
-COPY --from=builder /app/packages/types/package.json ./packages/types/
 COPY --from=builder /app/packages/utils/dist ./packages/utils/dist
 COPY --from=builder /app/packages/utils/package.json ./packages/utils/
 COPY --from=builder /app/services/notification-service/dist ./services/notification-service/dist

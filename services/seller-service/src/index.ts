@@ -7,16 +7,6 @@ import { rateLimit } from 'express-rate-limit';
 import pino from 'pino';
 import pinoHttp from 'pino-http';
 
-import { onboardingRouter } from './routes/onboarding';
-import { sellerRouter } from './routes/seller';
-import { productRouter } from './routes/product';
-import { settlementRouter } from './routes/settlement';
-import { ratingRouter } from './routes/rating';
-import { supportRouter } from './routes/support';
-import { notificationRouter } from './routes/notifications';
-import { errorHandler } from './middleware/error-handler';
-import { notFoundHandler } from './middleware/not-found';
-
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
   transport: process.env.NODE_ENV === 'development' 
@@ -46,7 +36,7 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Health check
+// Health check — register first so Cloud Run can reach it before DB-dependent routes load
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'healthy', 
@@ -55,25 +45,52 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API routes
-app.use('/api/sellers/onboarding', onboardingRouter);
-app.use('/api/sellers', sellerRouter);
-app.use('/api/sellers/products', productRouter);
-app.use('/api/sellers/settlements', settlementRouter);
-app.use('/api/sellers/ratings', ratingRouter);
-app.use('/api/sellers/support', supportRouter);
-app.use('/api/sellers/notifications', notificationRouter);
-
-// Error handling
-app.use(notFoundHandler);
-app.use(errorHandler);
-
+// Start server immediately so Cloud Run sees the port (required for startup probe)
 const PORT = parseInt(process.env.PORT || '4002');
 const HOST = process.env.HOST || '0.0.0.0';
 
 const server = app.listen(PORT, HOST, () => {
-  logger.info(`Seller service started on ${HOST}:${PORT}`);
+  logger.info(`Seller service listening on ${HOST}:${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
+
+  // Mount DB-dependent routes after we are already listening (avoids blocking startup)
+  Promise.all([
+    import('./routes/onboarding'),
+    import('./routes/seller'),
+    import('./routes/product'),
+    import('./routes/settlement'),
+    import('./routes/rating'),
+    import('./routes/support'),
+    import('./routes/notifications'),
+    import('./middleware/error-handler'),
+    import('./middleware/not-found'),
+  ])
+    .then(([
+      { onboardingRouter },
+      { sellerRouter },
+      { productRouter },
+      { settlementRouter },
+      { ratingRouter },
+      { supportRouter },
+      { notificationRouter },
+      { errorHandler },
+      { notFoundHandler },
+    ]) => {
+      app.use('/api/sellers/onboarding', onboardingRouter);
+      app.use('/api/sellers', sellerRouter);
+      app.use('/api/sellers/products', productRouter);
+      app.use('/api/sellers/settlements', settlementRouter);
+      app.use('/api/sellers/ratings', ratingRouter);
+      app.use('/api/sellers/support', supportRouter);
+      app.use('/api/sellers/notifications', notificationRouter);
+      app.use(notFoundHandler);
+      app.use(errorHandler);
+      logger.info('API routes mounted');
+    })
+    .catch((err) => {
+      logger.error({ err }, 'Failed to mount routes');
+      process.exitCode = 1;
+    });
 });
 
 process.on('SIGTERM', () => {
