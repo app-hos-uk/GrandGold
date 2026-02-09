@@ -5,7 +5,7 @@
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM_EMAIL = process.env.ABANDONED_CART_FROM_EMAIL || 'GrandGold <noreply@grandgold.com>';
-const WEB_URL = process.env.WEB_URL || 'http://localhost:3000';
+const WEB_URL = process.env.NEXT_PUBLIC_WEB_URL || process.env.WEB_URL || 'http://localhost:3000';
 
 export interface AbandonedCartNotifyPayload {
   email?: string;

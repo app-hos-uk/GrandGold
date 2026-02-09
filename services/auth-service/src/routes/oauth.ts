@@ -106,7 +106,7 @@ router.get('/google/callback',
       });
       
       // Redirect to frontend with tokens
-      const redirectUrl = new URL(process.env.FRONTEND_URL || 'http://localhost:3000');
+      const redirectUrl = new URL(process.env.NEXT_PUBLIC_WEB_URL || process.env.FRONTEND_URL || 'http://localhost:3000');
       redirectUrl.pathname = `/${country.toLowerCase()}/auth/callback`;
       redirectUrl.searchParams.set('token', result.tokens.accessToken);
       redirectUrl.searchParams.set('refresh', result.tokens.refreshToken);
@@ -164,7 +164,7 @@ router.get('/facebook/callback',
       });
       
       // Redirect to frontend with tokens
-      const redirectUrl = new URL(process.env.FRONTEND_URL || 'http://localhost:3000');
+      const redirectUrl = new URL(process.env.NEXT_PUBLIC_WEB_URL || process.env.FRONTEND_URL || 'http://localhost:3000');
       redirectUrl.pathname = `/${country.toLowerCase()}/auth/callback`;
       redirectUrl.searchParams.set('token', result.tokens.accessToken);
       redirectUrl.searchParams.set('refresh', result.tokens.refreshToken);
@@ -213,7 +213,7 @@ router.post('/apple/callback', async (req: Request, res: Response, next: NextFun
     });
     
     // Redirect to frontend with tokens
-    const redirectUrl = new URL(process.env.FRONTEND_URL || 'http://localhost:3000');
+    const redirectUrl = new URL(process.env.NEXT_PUBLIC_WEB_URL || process.env.FRONTEND_URL || 'http://localhost:3000');
     redirectUrl.pathname = '/auth/callback';
     redirectUrl.searchParams.set('token', result.tokens.accessToken);
     redirectUrl.searchParams.set('refresh', result.tokens.refreshToken);

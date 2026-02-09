@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { generateId, NotFoundError, ValidationError, ConflictError } from '@grandgold/utils';
 import type { Country } from '@grandgold/types';
+import { EmailService } from './email.service';
 
 interface OnboardingStartInput {
   userId: string;
@@ -104,6 +105,23 @@ export class OnboardingService {
 
     onboardingStore.set(onboardingId, onboarding);
 
+    // Send onboarding started email (non-blocking - don't fail if email sends fails)
+    const firstName = input.email.split('@')[0]; // Fallback to email prefix
+    try {
+      await EmailService.sendOnboardingStartedEmail(
+        input.email,
+        firstName,
+        input.businessName
+      );
+    } catch (emailErr) {
+      // Log but don't fail - onboarding should not be blocked by email failures
+      console.error('[ONBOARDING] Failed to send onboarding started email:', {
+        userId: input.userId,
+        email: input.email,
+        error: emailErr instanceof Error ? emailErr.message : String(emailErr),
+      });
+    }
+
     return { sellerId, onboardingId };
   }
 
@@ -189,6 +207,24 @@ export class OnboardingService {
     onboarding.completedSteps.push('documents');
     onboarding.pendingSteps = onboarding.pendingSteps.filter((s: string) => s !== 'documents');
     onboarding.updatedAt = new Date();
+
+    // Send document upload confirmation (non-blocking)
+    try {
+      const documentNames = uploaded.map(doc => 
+        doc.charAt(0).toUpperCase() + doc.slice(1).replace(/([A-Z])/g, ' $1')
+      );
+      await EmailService.sendDocumentUploadedEmail(
+        onboarding.email,
+        onboarding.email.split('@')[0],
+        documentNames
+      );
+    } catch (emailErr) {
+      console.error('[ONBOARDING] Failed to send document uploaded email:', {
+        onboardingId: onboarding.id,
+        email: onboarding.email,
+        error: emailErr instanceof Error ? emailErr.message : String(emailErr),
+      });
+    }
 
     return { uploaded };
   }
@@ -330,6 +366,24 @@ export class OnboardingService {
     // Create actual seller record (would be in database)
     // This is where tenant creation would happen
 
+    // Send approval email (non-blocking)
+    try {
+      const dashboardUrl = `${process.env.NEXT_PUBLIC_WEB_URL || process.env.WEB_URL || 'http://localhost:3000'}/seller`;
+      await EmailService.sendApprovalEmail(
+        onboarding.email,
+        onboarding.email.split('@')[0],
+        onboarding.businessName,
+        dashboardUrl
+      );
+    } catch (emailErr) {
+      console.error('[ONBOARDING] Failed to send approval email:', {
+        onboardingId: onboarding.id,
+        email: onboarding.email,
+        error: emailErr instanceof Error ? emailErr.message : String(emailErr),
+      });
+      // Email failure should not prevent approval from being saved
+    }
+
     return { sellerId: onboarding.sellerId };
   }
 
@@ -352,6 +406,22 @@ export class OnboardingService {
     onboarding.rejectionReasons = [reason];
     onboarding.rejectedAt = new Date();
     onboarding.updatedAt = new Date();
+
+    // Send rejection email (non-blocking)
+    try {
+      await EmailService.sendRejectionEmail(
+        onboarding.email,
+        onboarding.email.split('@')[0],
+        reason
+      );
+    } catch (emailErr) {
+      console.error('[ONBOARDING] Failed to send rejection email:', {
+        onboardingId: onboarding.id,
+        email: onboarding.email,
+        error: emailErr instanceof Error ? emailErr.message : String(emailErr),
+      });
+      // Email failure should not prevent rejection from being saved
+    }
 
     return { status: 'rejected' };
   }
