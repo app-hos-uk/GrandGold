@@ -140,15 +140,16 @@ export default function CategoriesPage() {
   const [createModal, setCreateModal] = useState<{ parentId: string | null } | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Load categories from API
+  // Load categories from API (tree=true returns nested children)
   const loadCategories = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await adminApi.getCategories();
-      const data = res?.data || [];
+      const res = await adminApi.getCategories({ tree: true });
+      // res is the categories array (handleResponse unwraps single-data responses)
+      const data: CategoryData[] = Array.isArray(res) ? res : [];
       setCategories(data.map(mapCategoryData));
       // Auto-expand top-level categories
-      setExpandedIds(new Set(data.filter((c) => !c.parentId).slice(0, 3).map((c) => c.id)));
+      setExpandedIds(new Set(data.filter((c: CategoryData) => !c.parentId).slice(0, 3).map((c: CategoryData) => c.id)));
     } catch (err) {
       console.error('Failed to load categories:', err);
       toast.error('Failed to load categories');

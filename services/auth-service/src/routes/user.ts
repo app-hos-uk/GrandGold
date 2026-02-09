@@ -58,7 +58,7 @@ router.get(
   }
 );
 
-const ALLOWED_ADMIN_ROLES: UserRole[] = ['super_admin', 'country_admin', 'manager', 'staff', 'seller', 'customer'];
+const ALLOWED_ADMIN_ROLES: UserRole[] = ['super_admin', 'country_admin', 'manager', 'staff', 'support', 'seller', 'influencer', 'consultant', 'customer'];
 const COUNTRY_VALUES: Country[] = ['IN', 'AE', 'UK'];
 
 /**
@@ -129,7 +129,7 @@ router.patch(
 );
 
 // Roles that country admins can assign (non-admin roles only)
-const COUNTRY_ADMIN_ASSIGNABLE_ROLES: UserRole[] = ['customer', 'seller', 'influencer', 'consultant', 'staff', 'manager'];
+const COUNTRY_ADMIN_ASSIGNABLE_ROLES: UserRole[] = ['customer', 'seller', 'influencer', 'consultant', 'staff', 'support', 'manager'];
 
 /**
  * PATCH /api/user/admin/:userId/role

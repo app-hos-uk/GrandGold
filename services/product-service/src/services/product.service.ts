@@ -40,10 +40,10 @@ function getRedis(): Redis | null {
   return redisClient;
 }
 
-// Initialize Meilisearch
+// Initialize Meilisearch (accept both MEILISEARCH_* and MEILI_* env var names)
 const meilisearch = new MeiliSearch({
-  host: process.env.MEILISEARCH_URL || 'http://localhost:7700',
-  apiKey: process.env.MEILISEARCH_MASTER_KEY,
+  host: process.env.MEILISEARCH_URL || process.env.MEILI_URL || 'http://localhost:7700',
+  apiKey: process.env.MEILISEARCH_MASTER_KEY || process.env.MEILI_MASTER_KEY,
 });
 
 const productIndex = meilisearch.index('products');

@@ -8,26 +8,36 @@ const router = Router();
 const productService = new ProductService();
 
 // Create product schema
+// Accepts both frontend field names (basePrice, stockQuantity, etc.) and
+// canonical backend names (price, stock) so the admin form and seller form both work.
 const createProductSchema = z.object({
   name: z.string().min(1).max(200),
-  description: z.string().min(10),
+  description: z.string().optional().default(''),
   category: z.string().min(1),
   subcategory: z.string().optional(),
-  images: z.array(z.string().url()).min(1),
+  images: z.array(z.string().url()).optional().default([]),
+  // Accept both "price" and "basePrice"
   price: z.number().positive().optional(),
-  pricingModel: z.enum(['fixed', 'dynamic']),
+  basePrice: z.number().positive().optional(),
+  currency: z.string().optional(),
+  // Accept 'fixed' | 'dynamic' | 'live_rate'
+  pricingModel: z.enum(['fixed', 'dynamic', 'live_rate']).optional().default('fixed'),
   goldWeight: z.number().positive().optional(),
   purity: z.enum(['24K', '22K', '21K', '18K', '14K', '10K']).optional(),
+  metalType: z.string().optional(),
   stones: z.array(z.object({
     type: z.string(),
     weight: z.number().positive(),
     count: z.number().int().positive(),
   })).optional(),
   laborCost: z.number().positive().optional(),
-  sku: z.string().min(1),
-  stock: z.number().int().min(0),
+  sku: z.string().optional().default(''),
+  slug: z.string().optional(),
+  // Accept both "stock" and "stockQuantity"
+  stock: z.number().int().min(0).optional(),
+  stockQuantity: z.number().int().min(0).optional(),
   countries: z.array(z.enum(['IN', 'AE', 'UK'])).min(1),
-  arEnabled: z.boolean(),
+  arEnabled: z.boolean().optional().default(false),
   video360: z.string().url().optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -42,12 +52,34 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
       throw new Error('User not authenticated');
     }
 
-    const data = createProductSchema.parse(req.body);
-    const sellerId = req.user.sub; // In production, get actual seller ID
+    const raw = createProductSchema.parse(req.body);
+
+    // Normalise frontend field names → canonical backend names
+    const sellerId = req.user.sub;
+    const price = raw.price ?? raw.basePrice;
+    const stock = raw.stock ?? raw.stockQuantity ?? 0;
+    const pricingModel = raw.pricingModel === 'live_rate' ? 'dynamic' as const : (raw.pricingModel ?? 'fixed' as const);
+    const sku = raw.sku || raw.slug || `${raw.category}-${Date.now()}`;
 
     const product = await productService.createProduct({
       sellerId,
-      ...data,
+      name: raw.name,
+      description: raw.description || '',
+      category: raw.category,
+      subcategory: raw.subcategory,
+      images: raw.images || [],
+      price,
+      pricingModel,
+      goldWeight: raw.goldWeight,
+      purity: raw.purity,
+      stones: raw.stones,
+      laborCost: raw.laborCost,
+      sku,
+      stock,
+      countries: raw.countries,
+      arEnabled: raw.arEnabled ?? false,
+      video360: raw.video360,
+      tags: raw.tags,
     });
 
     res.status(201).json({

@@ -104,7 +104,19 @@ async function handleResponse<T>(res: Response, retryFn?: () => Promise<Response
     );
   }
   
-  return data.data ?? data;
+  // Smart unwrap: if the response has `.data` AND sibling metadata fields
+  // (like `total`, `message`), keep the wrapper so callers can access both
+  // `.data` and `.total`. Otherwise unwrap `.data` directly.
+  if (data.data !== undefined) {
+    const metadataKeys = Object.keys(data).filter(k => k !== 'success' && k !== 'data' && k !== 'message');
+    if (metadataKeys.length > 0) {
+      // Return { data: ..., total: ..., etc. } — preserves pagination metadata
+      const { success: _s, ...rest } = data;
+      return rest as T;
+    }
+    return data.data as T;
+  }
+  return data as T;
 }
 
 export const api = {
@@ -480,11 +492,12 @@ export const adminApi = {
     api.patch<{ role: RoleData }>(`/api/roles/${roleId}`, data),
   deleteRole: (roleId: string) => api.delete<void>(`/api/roles/${roleId}`),
   // Categories CRUD
-  getCategories: (params?: { flat?: boolean; country?: string }) => {
+  getCategories: (params?: { flat?: boolean; tree?: boolean; country?: string }) => {
     const q = new URLSearchParams();
     if (params?.flat) q.set('flat', 'true');
+    if (params?.tree) q.set('tree', 'true');
     if (params?.country) q.set('country', params.country);
-    return api.get<{ data: CategoryData[]; total: number }>(`/api/categories?${q.toString()}`);
+    return api.get<CategoryData[]>(`/api/categories?${q.toString()}`);
   },
   getCategory: (idOrSlug: string) => api.get<{ data: CategoryData & { children?: CategoryData[] } }>(`/api/categories/${idOrSlug}`),
   createCategory: (data: { name: string; slug?: string; description?: string; parentId?: string | null; image?: string; icon?: string; isActive?: boolean; order?: number; metaTitle?: string; metaDescription?: string; countries?: string[] }) =>

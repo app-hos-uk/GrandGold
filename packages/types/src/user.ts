@@ -8,6 +8,7 @@ export type UserRole =
   | 'country_admin'
   | 'manager'
   | 'staff'
+  | 'support'
   | 'seller'
   | 'influencer'
   | 'consultant'
