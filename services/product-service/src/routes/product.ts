@@ -16,9 +16,9 @@ const createProductSchema = z.object({
   category: z.string().min(1),
   subcategory: z.string().optional(),
   images: z.array(z.string().url()).optional().default([]),
-  // Accept both "price" and "basePrice"
-  price: z.number().positive().optional(),
-  basePrice: z.number().positive().optional(),
+  // Accept both "price" and "basePrice" (allow 0 for draft/free listings)
+  price: z.number().nonnegative().optional(),
+  basePrice: z.number().nonnegative().optional(),
   currency: z.string().optional(),
   // Accept 'fixed' | 'dynamic' | 'live_rate'
   pricingModel: z.enum(['fixed', 'dynamic', 'live_rate']).optional().default('fixed'),
@@ -56,10 +56,10 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
 
     // Normalise frontend field names → canonical backend names
     const sellerId = req.user.sub;
-    const price = raw.price ?? raw.basePrice;
+    const price = raw.price ?? raw.basePrice ?? 0;
     const stock = raw.stock ?? raw.stockQuantity ?? 0;
     const pricingModel = raw.pricingModel === 'live_rate' ? 'dynamic' as const : (raw.pricingModel ?? 'fixed' as const);
-    const sku = raw.sku || raw.slug || `${raw.category}-${Date.now()}`;
+    const sku = (raw.sku && String(raw.sku).trim()) ? String(raw.sku).trim() : (raw.slug && String(raw.slug).trim()) ? String(raw.slug).trim() : `${raw.category}-${Date.now()}`;
 
     const product = await productService.createProduct({
       sellerId,

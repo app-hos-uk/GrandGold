@@ -6,8 +6,11 @@ import {
   InventoryCSVMapper,
   ERPBridge,
   InventoryForecasting,
+  type InventoryAdminItem,
 } from '../services/inventory.service';
 import { authenticate, optionalAuth, authorize } from '../middleware/auth';
+
+const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL || 'http://localhost:4007';
 
 const router = Router();
 const inventoryService = new InventoryService();
@@ -30,8 +33,78 @@ const reserveSchema = z.object({
 });
 
 /**
+ * Fetch products from product-service and map to inventory items.
+ * Used when Redis has no stock records so admin still sees all products with catalog stock.
+ */
+async function getInventoryFromProducts(
+  authHeader: string | undefined,
+  params: { page: number; limit: number; status?: string; country?: string; search?: string }
+): Promise<{ items: InventoryAdminItem[]; total: number }> {
+  if (!authHeader) return { items: [], total: 0 };
+  try {
+    const url = `${PRODUCT_SERVICE_URL}/api/search/admin?limit=${params.limit}&page=${params.page}`;
+    const res = await fetch(url, {
+      headers: { Authorization: authHeader },
+      cache: 'no-store',
+    });
+    if (!res.ok) return { items: [], total: 0 };
+    const json = await res.json();
+    const productList = json?.data?.data ?? json?.data ?? [];
+    const products = Array.isArray(productList) ? productList : [];
+
+    const reorderPoint = 5;
+    const items: InventoryAdminItem[] = products.map((p: { id: string; name?: string; category?: string; sku?: string; stock?: number; countries?: string[]; updatedAt?: string }) => {
+      const quantity = typeof p.stock === 'number' ? p.stock : 0;
+      const available = quantity;
+      let status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'reserved' = 'in_stock';
+      if (quantity === 0) status = 'out_of_stock';
+      else if (available <= reorderPoint) status = 'low_stock';
+      const country = (p.countries && p.countries[0]) || 'IN';
+      const location = country === 'IN' ? 'Mumbai Warehouse' : country === 'AE' ? 'Dubai Warehouse' : country === 'UK' ? 'London Warehouse' : 'Main Warehouse';
+      return {
+        id: p.id,
+        productId: p.id,
+        sku: p.sku || p.id,
+        productName: p.name || `Product ${p.id}`,
+        category: p.category || 'Jewelry',
+        location,
+        quantity,
+        reserved: 0,
+        available,
+        reorderPoint,
+        status,
+        lastUpdated: p.updatedAt ? (typeof p.updatedAt === 'string' ? p.updatedAt : new Date(p.updatedAt).toISOString()) : new Date().toISOString(),
+        country,
+      };
+    });
+
+    let filtered = items;
+    if (params.country) {
+      filtered = filtered.filter((i) => i.country === params.country);
+    }
+    if (params.status) {
+      filtered = filtered.filter((i) => i.status === params.status);
+    }
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      filtered = filtered.filter(
+        (i) =>
+          i.productName.toLowerCase().includes(q) ||
+          i.sku.toLowerCase().includes(q) ||
+          i.category.toLowerCase().includes(q)
+      );
+    }
+    const totalFromApi = typeof json?.data?.total === 'number' ? json.data.total : products.length;
+    return { items: filtered, total: totalFromApi };
+  } catch {
+    return { items: [], total: 0 };
+  }
+}
+
+/**
  * GET /api/inventory/admin
- * List all inventory items (admin only)
+ * List all inventory items (admin only).
+ * When Redis has no stock records, derives list from product-service so admin sees all products.
  */
 router.get(
   '/admin',
@@ -45,13 +118,24 @@ router.get(
       const country = req.query.country as string;
       const search = req.query.search as string;
 
-      const result = await inventoryService.listAllInventory({
+      let result = await inventoryService.listAllInventory({
         page,
         limit,
         status,
         country,
         search,
       });
+
+      if (result.total === 0) {
+        const authHeader = req.headers.authorization;
+        result = await getInventoryFromProducts(authHeader, {
+          page,
+          limit,
+          status,
+          country,
+          search,
+        });
+      }
 
       res.json({
         success: true,

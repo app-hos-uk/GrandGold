@@ -577,8 +577,26 @@ export const adminApi = {
     api.patch<{ data: SupportTicket }>(`/api/support/tickets/${ticketId}`, data),
   addTicketReply: (ticketId: string, content: string, isInternal?: boolean) =>
     api.post<void>(`/api/support/tickets/${ticketId}/reply`, { content, isInternal }),
-  createTicket: (data: { subject: string; category: string; priority: string; customerEmail?: string; customerName?: string; orderId?: string; description: string }) =>
-    api.post<{ data: SupportTicket }>('/api/support/tickets', data),
+  createTicket: (data: { subject: string; category: string; priority: string; customerEmail?: string; customerName?: string; orderId?: string; description: string }) => {
+    const categoryToType: Record<string, string> = {
+      order: 'order',
+      payment: 'payment',
+      product: 'product',
+      account: 'account',
+      returns: 'return',
+      shipping: 'shipping',
+      technical: 'technical',
+      other: 'other',
+    };
+    const type = categoryToType[data.category] ?? 'other';
+    return api.post<{ data: SupportTicket }>('/api/support/tickets', {
+      subject: data.subject,
+      type,
+      priority: data.priority as 'low' | 'medium' | 'high' | 'urgent',
+      message: data.description,
+      relatedOrderId: data.orderId || undefined,
+    });
+  },
   // Marketing
   getCampaigns: (params?: { page?: number; limit?: number; status?: string; channel?: string }) => {
     const q = new URLSearchParams();

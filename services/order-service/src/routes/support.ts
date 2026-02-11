@@ -25,7 +25,7 @@ interface SupportTicket {
   id: string;
   subject: string;
   customer: { id: string; name: string; email: string };
-  type: 'order' | 'return' | 'payment' | 'product' | 'account' | 'other';
+  type: 'order' | 'return' | 'payment' | 'product' | 'account' | 'shipping' | 'technical' | 'other';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   status: 'open' | 'pending' | 'in_progress' | 'resolved' | 'closed';
   channel: 'chat' | 'email' | 'phone' | 'whatsapp';
@@ -51,7 +51,7 @@ interface SupportAgent {
 
 const createTicketSchema = z.object({
   subject: z.string().min(1).max(200),
-  type: z.enum(['order', 'return', 'payment', 'product', 'account', 'other']),
+  type: z.enum(['order', 'return', 'payment', 'product', 'account', 'shipping', 'technical', 'other']),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
   channel: z.enum(['chat', 'email', 'phone', 'whatsapp']).optional().default('chat'),
   message: z.string().min(1),

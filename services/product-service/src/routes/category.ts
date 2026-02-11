@@ -3,8 +3,10 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { ValidationError, NotFoundError } from '@grandgold/utils';
 import { authenticate, authorize } from '../middleware/auth';
+import { ProductService } from '../services/product.service';
 
 const router = Router();
+const productService = new ProductService();
 
 const ADMIN_ROLES = ['super_admin', 'country_admin', 'manager'];
 
@@ -174,6 +176,20 @@ function buildTree(categories: Category[]): (Category & { children: Category[] }
   return roots;
 }
 
+/** Enrich categories with real product counts from the product index (aligns with Products list). */
+async function enrichWithProductCounts(
+  items: (Category & { children?: Category[] })[]
+): Promise<void> {
+  for (const cat of items) {
+    try {
+      cat.productCount = await productService.getProductCountByCategory(cat.slug);
+    } catch {
+      cat.productCount = 0;
+    }
+    if (cat.children?.length) await enrichWithProductCounts(cat.children);
+  }
+}
+
 /**
  * GET /api/categories
  * List all categories (public)
@@ -197,11 +213,19 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     // Sort by order
     categories.sort((a, b) => a.order - b.order);
 
-    // Return as tree or flat list
+    // Enrich with real product counts so Categories page matches Products list
     if (tree === 'true') {
       const treeData = buildTree(categories);
+      await enrichWithProductCounts(treeData);
       res.json({ success: true, data: treeData });
     } else {
+      for (const cat of categories) {
+        try {
+          cat.productCount = await productService.getProductCountByCategory(cat.slug);
+        } catch {
+          cat.productCount = 0;
+        }
+      }
       res.json({
         success: true,
         data: categories,
@@ -231,6 +255,13 @@ router.get('/:idOrSlug', async (req: Request, res: Response, next: NextFunction)
 
     if (!category) {
       throw new NotFoundError('Category not found');
+    }
+
+    // Enrich with real product count
+    try {
+      category.productCount = await productService.getProductCountByCategory(category.slug);
+    } catch {
+      category.productCount = 0;
     }
 
     res.json({ success: true, data: category });

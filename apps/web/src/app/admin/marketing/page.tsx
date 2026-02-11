@@ -1,38 +1,51 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Mail,
   MessageCircle,
   Send,
   Users,
-  BarChart3,
-  Calendar,
   Plus,
-  Filter,
   Search,
   ChevronRight,
   Target,
   Zap,
   Bell,
+  Loader2,
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import Link from 'next/link';
+import { adminApi } from '@/lib/api';
 
-const MOCK_CAMPAIGNS = [
-  { id: '1', name: 'Diwali Gold Sale', channel: 'email', status: 'sent', sentAt: '2024-01-15', recipients: 12500, openRate: 32, clickRate: 8 },
-  { id: '2', name: 'New Arrivals - Necklaces', channel: 'email', status: 'scheduled', scheduledAt: '2024-02-10', recipients: 8500 },
-  { id: '3', name: 'Abandoned Cart Reminder', channel: 'whatsapp', status: 'sent', sentAt: '2024-01-20', recipients: 3200, openRate: 78 },
-  { id: '4', name: 'Price Drop Alert', channel: 'push', status: 'draft', recipients: 0 },
-];
+interface CampaignRow {
+  id: string;
+  name: string;
+  channel: string;
+  status: string;
+  sentAt?: string;
+  scheduledAt?: string;
+  recipients: number;
+  openRate?: number;
+  clickRate?: number;
+}
 
-const MOCK_SEGMENTS = [
-  { id: 's1', name: 'High-value buyers (₹1L+)', count: 1250, criteria: 'LTV > 100000', lastUpdated: '2024-02-01' },
-  { id: 's2', name: 'Abandoned cart (7 days)', count: 890, criteria: 'Cart abandoned in 7 days', lastUpdated: '2024-02-03' },
-  { id: 's3', name: 'Wishlist non-buyers', count: 2100, criteria: 'Has wishlist, no purchase in 30 days', lastUpdated: '2024-02-02' },
-  { id: 's4', name: 'India - Gold lovers', count: 5600, criteria: 'Country=IN, viewed gold category', lastUpdated: '2024-01-28' },
-];
+interface SegmentRow {
+  id: string;
+  name: string;
+  count: number;
+  criteria: string;
+  lastUpdated: string;
+}
+
+function segmentCriteriaSummary(criteria: Record<string, unknown> | undefined): string {
+  if (!criteria || typeof criteria !== 'object') return '–';
+  const keys = Object.keys(criteria);
+  if (keys.length === 0) return '–';
+  if (keys.length <= 2) return keys.map((k) => `${k}: ${String((criteria as Record<string, unknown>)[k])}`).join(', ');
+  return `${keys.length} criteria`;
+}
 
 const channelConfig = {
   email: { icon: Mail, label: 'Email', color: 'bg-blue-100 text-blue-700' },
@@ -49,6 +62,54 @@ const statusConfig = {
 
 export default function AdminMarketingPage() {
   const [activeTab, setActiveTab] = useState<'campaigns' | 'segments' | 'automation'>('campaigns');
+  const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
+  const [segments, setSegments] = useState<SegmentRow[]>([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(true);
+  const [loadingSegments, setLoadingSegments] = useState(true);
+
+  const loadCampaigns = useCallback(async () => {
+    setLoadingCampaigns(true);
+    try {
+      const res = await adminApi.getCampaigns({ limit: 100 });
+      const r = res as { data?: CampaignRow[]; total?: number };
+      const list = Array.isArray(r?.data) ? r.data : [];
+      setCampaigns(list);
+    } catch {
+      setCampaigns([]);
+    } finally {
+      setLoadingCampaigns(false);
+    }
+  }, []);
+
+  const loadSegments = useCallback(async () => {
+    setLoadingSegments(true);
+    try {
+      const res = await adminApi.getSegments({ limit: 100 });
+      const r = res as { data?: Array<{ id: string; name: string; criteria?: Record<string, unknown>; count?: number; lastUpdated?: string }>; total?: number };
+      const list = Array.isArray(r?.data)
+        ? r.data.map((s) => ({
+            id: s.id,
+            name: s.name,
+            count: s.count ?? 0,
+            criteria: segmentCriteriaSummary(s.criteria),
+            lastUpdated: s.lastUpdated ? new Date(s.lastUpdated).toLocaleDateString() : '–',
+          }))
+        : [];
+      setSegments(list);
+    } catch {
+      setSegments([]);
+    } finally {
+      setLoadingSegments(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCampaigns();
+  }, [loadCampaigns]);
+
+  useEffect(() => {
+    loadSegments();
+  }, [loadSegments]);
 
   return (
     <div>
@@ -111,38 +172,47 @@ export default function AdminMarketingPage() {
               </select>
             </div>
             <div className="divide-y divide-gray-50">
-              {MOCK_CAMPAIGNS.map((c) => {
-                const ChannelIcon = channelConfig[c.channel as keyof typeof channelConfig]?.icon ?? Mail;
-                const statusConf = statusConfig[c.status as keyof typeof statusConfig];
-                return (
-                  <div key={c.id} className="p-4 hover:bg-gray-50 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${channelConfig[c.channel as keyof typeof channelConfig]?.color ?? 'bg-gray-100'}`}>
-                        <ChannelIcon className="w-5 h-5" />
+              {loadingCampaigns ? (
+                <div className="p-8 flex items-center justify-center gap-2 text-gray-500">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Loading campaigns...
+                </div>
+              ) : campaigns.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">No campaigns yet. Create one to get started.</div>
+              ) : (
+                campaigns.map((c) => {
+                  const ChannelIcon = channelConfig[c.channel as keyof typeof channelConfig]?.icon ?? Mail;
+                  const statusConf = statusConfig[c.status as keyof typeof statusConfig];
+                  return (
+                    <div key={c.id} className="p-4 hover:bg-gray-50 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${channelConfig[c.channel as keyof typeof channelConfig]?.color ?? 'bg-gray-100'}`}>
+                          <ChannelIcon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{c.name}</p>
+                          <p className="text-sm text-gray-500">
+                            {(c.recipients ?? 0).toLocaleString()} recipients
+                            {c.sentAt && ` · Sent ${c.sentAt}`}
+                            {c.scheduledAt && ` · Scheduled ${c.scheduledAt}`}
+                          </p>
+                          {(c.openRate != null || c.clickRate != null) && (
+                            <p className="text-xs text-gray-400 mt-1">Open: {c.openRate ?? '–'}% · Click: {c.clickRate ?? '–'}%</p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{c.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {c.recipients.toLocaleString()} recipients
-                          {c.sentAt && ` · Sent ${c.sentAt}`}
-                          {c.scheduledAt && ` · Scheduled ${c.scheduledAt}`}
-                        </p>
-                        {c.openRate != null && (
-                          <p className="text-xs text-gray-400 mt-1">Open: {c.openRate}% · Click: {c.clickRate}%</p>
-                        )}
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${statusConf?.color ?? 'bg-gray-100'}`}>
+                          {statusConf?.label ?? c.status}
+                        </span>
+                        <Link href={`/admin/marketing/campaigns/${c.id}`} className="p-2 hover:bg-gray-200 rounded-lg">
+                          <ChevronRight className="w-5 h-5 text-gray-500" />
+                        </Link>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${statusConf?.color ?? 'bg-gray-100'}`}>
-                        {statusConf?.label ?? c.status}
-                      </span>
-                      <Link href={`/admin/marketing/campaigns/${c.id}`} className="p-2 hover:bg-gray-200 rounded-lg">
-                        <ChevronRight className="w-5 h-5 text-gray-500" />
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         </motion.div>
@@ -155,27 +225,36 @@ export default function AdminMarketingPage() {
               <input type="text" placeholder="Search segments..." className="w-full max-w-md px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gold-500" />
             </div>
             <div className="divide-y divide-gray-50">
-              {MOCK_SEGMENTS.map((s) => (
-                <div key={s.id} className="p-4 hover:bg-gray-50 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                      <Users className="w-5 h-5 text-purple-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{s.name}</p>
-                      <p className="text-sm text-gray-500">{s.criteria}</p>
-                      <p className="text-xs text-gray-400 mt-1">Updated {s.lastUpdated}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-lg font-semibold text-gray-900">{s.count.toLocaleString()}</span>
-                    <span className="text-sm text-gray-500">users</span>
-                    <Link href={`/admin/marketing/segments/${s.id}`} className="p-2 hover:bg-gray-200 rounded-lg">
-                      <ChevronRight className="w-5 h-5 text-gray-500" />
-                    </Link>
-                  </div>
+              {loadingSegments ? (
+                <div className="p-8 flex items-center justify-center gap-2 text-gray-500">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Loading segments...
                 </div>
-              ))}
+              ) : segments.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">No segments yet. Create one to get started.</div>
+              ) : (
+                segments.map((s) => (
+                  <div key={s.id} className="p-4 hover:bg-gray-50 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                        <Users className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{s.name}</p>
+                        <p className="text-sm text-gray-500">{s.criteria}</p>
+                        <p className="text-xs text-gray-400 mt-1">Updated {s.lastUpdated}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-lg font-semibold text-gray-900">{(s.count ?? 0).toLocaleString()}</span>
+                      <span className="text-sm text-gray-500">users</span>
+                      <Link href={`/admin/marketing/segments/${s.id}`} className="p-2 hover:bg-gray-200 rounded-lg">
+                        <ChevronRight className="w-5 h-5 text-gray-500" />
+                      </Link>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </motion.div>

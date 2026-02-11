@@ -71,15 +71,16 @@ export default function OrdersPage() {
     adminApi
       .getOrders({ page, limit: 20, status: statusFilter !== 'all' ? statusFilter : undefined })
       .then((res) => {
-        const d = res as { data?: OrderRow[]; total?: number };
-        const list = Array.isArray(d?.data) ? d.data : [];
+        const r = res as { data?: OrderRow[] | { data?: OrderRow[]; total?: number }; total?: number };
+        const list = Array.isArray(r?.data) ? r.data : Array.isArray(r?.data?.data) ? (r.data as { data: OrderRow[] }).data : [];
+        const totalCount = typeof r?.total === 'number' ? r.total : (r?.data && typeof r.data === 'object' && !Array.isArray(r.data) && typeof (r.data as { total?: number }).total === 'number' ? (r.data as { total: number }).total : list.length);
         setOrders(
           list.map((o) => ({
             ...o,
             date: o.createdAt ? formatRelativeDate(o.createdAt) : undefined,
           }))
         );
-        setTotal(d?.total ?? list.length);
+        setTotal(totalCount);
       })
       .catch(() => setOrders(FALLBACK_ORDERS))
       .finally(() => setLoading(false));
@@ -89,15 +90,22 @@ export default function OrdersPage() {
     loadOrders();
   }, [loadOrders]);
 
+  const extractTotal = (r: unknown): number => {
+    const x = r as { data?: { data?: unknown[]; total?: number }; total?: number };
+    if (typeof x?.total === 'number') return x.total;
+    if (x?.data && typeof x.data === 'object' && typeof (x.data as { total?: number }).total === 'number') return (x.data as { total: number }).total;
+    return 0;
+  };
+
   useEffect(() => {
     setStatsLoading(true);
     Promise.all([
-      adminApi.getOrders({ limit: 1 }).then((r: unknown) => (r as { total?: number }).total ?? 0),
-      adminApi.getOrders({ limit: 1, status: 'pending' }).then((r: unknown) => (r as { total?: number }).total ?? 0),
-      adminApi.getOrders({ limit: 1, status: 'processing' }).then((r: unknown) => (r as { total?: number }).total ?? 0),
-      adminApi.getOrders({ limit: 1, status: 'shipped' }).then((r: unknown) => (r as { total?: number }).total ?? 0),
-      adminApi.getOrders({ limit: 1, status: 'delivered' }).then((r: unknown) => (r as { total?: number }).total ?? 0),
-      adminApi.getOrders({ limit: 1, status: 'cancelled' }).then((r: unknown) => (r as { total?: number }).total ?? 0),
+      adminApi.getOrders({ limit: 1 }).then(extractTotal),
+      adminApi.getOrders({ limit: 1, status: 'pending' }).then(extractTotal),
+      adminApi.getOrders({ limit: 1, status: 'processing' }).then(extractTotal),
+      adminApi.getOrders({ limit: 1, status: 'shipped' }).then(extractTotal),
+      adminApi.getOrders({ limit: 1, status: 'delivered' }).then(extractTotal),
+      adminApi.getOrders({ limit: 1, status: 'cancelled' }).then(extractTotal),
     ])
       .then(([all, pending, processing, shipped, delivered, cancelled]) =>
         setStats({ all, pending, processing, shipped, delivered, cancelled })

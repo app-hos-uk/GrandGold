@@ -73,21 +73,28 @@ export default function ProductsPage() {
     adminApi
       .getProducts({ page, limit: 20, category: categoryFilter !== 'all' ? categoryFilter : undefined, status: statusFilter !== 'all' ? statusFilter : undefined })
       .then((res) => {
-        const d = res as unknown as { data?: ProductRow[]; total?: number };
-        const list = Array.isArray(d?.data) ? d.data : [];
+        const r = res as unknown as { data?: ProductRow[] | { data?: ProductRow[]; total?: number }; total?: number };
+        const list = Array.isArray(r?.data) ? r.data : Array.isArray(r?.data?.data) ? r.data.data : [];
+        const totalCount = typeof r?.total === 'number' ? r.total : (r?.data && typeof r.data === 'object' && !Array.isArray(r.data) && typeof (r.data as { total?: number }).total === 'number' ? (r.data as { total: number }).total : list.length);
         setProducts(list);
-        setTotal(d?.total ?? list.length);
+        setTotal(totalCount);
       })
       .catch(() => setProducts(FALLBACK))
       .finally(() => setLoading(false));
   }, [page, categoryFilter, statusFilter]);
 
   useEffect(() => {
+    const extractTotal = (r: unknown): number => {
+      const x = r as { data?: { data?: unknown[]; total?: number }; total?: number };
+      if (typeof x?.total === 'number') return x.total;
+      if (x?.data && typeof x.data === 'object' && typeof (x.data as { total?: number }).total === 'number') return (x.data as { total: number }).total;
+      return 0;
+    };
     Promise.all([
-      adminApi.getProducts({ limit: 1 }).then((r: unknown) => (r as { total?: number }).total ?? 0),
-      adminApi.getProducts({ limit: 1, status: 'active' }).then((r: unknown) => (r as { total?: number }).total ?? 0),
-      adminApi.getProducts({ limit: 1, status: 'out_of_stock' }).then((r: unknown) => (r as { total?: number }).total ?? 0),
-      adminApi.getProducts({ limit: 1, status: 'low_stock' }).then((r: unknown) => (r as { total?: number }).total ?? 0),
+      adminApi.getProducts({ limit: 1 }).then(extractTotal),
+      adminApi.getProducts({ limit: 1, status: 'active' }).then(extractTotal),
+      adminApi.getProducts({ limit: 1, status: 'out_of_stock' }).then(extractTotal),
+      adminApi.getProducts({ limit: 1, status: 'low_stock' }).then(extractTotal),
     ])
       .then(([totalCount, active, out_of_stock, low_stock]) => setStats({ total: totalCount, active, out_of_stock, low_stock }))
       .catch(() => {})
@@ -96,8 +103,12 @@ export default function ProductsPage() {
 
   const filteredProducts = products.filter((product) => {
     if (statusFilter !== 'all' && product.status !== statusFilter) return false;
-    if (categoryFilter !== 'all' && product.category !== categoryFilter) return false;
-    if (searchQuery && !product.name?.toLowerCase().includes(searchQuery.toLowerCase()) && 
+    if (categoryFilter !== 'all') {
+      const productCat = (product.category ?? '').toLowerCase();
+      const filterCat = categoryFilter.toLowerCase();
+      if (productCat !== filterCat) return false;
+    }
+    if (searchQuery && !product.name?.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !(product.sku || '').toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
@@ -225,10 +236,15 @@ export default function ProductsPage() {
               className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
             >
               <option value="all">All Categories</option>
-              <option value="Necklaces">Necklaces</option>
-              <option value="Earrings">Earrings</option>
-              <option value="Rings">Rings</option>
-              <option value="Bracelets">Bracelets</option>
+              <option value="necklaces">Necklaces</option>
+              <option value="earrings">Earrings</option>
+              <option value="rings">Rings</option>
+              <option value="bracelets">Bracelets</option>
+              <option value="bangles">Bangles</option>
+              <option value="pendants">Pendants</option>
+              <option value="mens_jewelry">Men&apos;s Jewelry</option>
+              <option value="gold_bars">Gold Bars</option>
+              <option value="gold_coins">Gold Coins</option>
             </select>
             <select
               value={statusFilter}

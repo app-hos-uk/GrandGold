@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -22,16 +22,42 @@ import {
 import { adminApi } from '@/lib/api';
 import { useToast } from '@/components/admin/toast';
 
-const sellers = [
-  { id: 1, name: 'Royal Jewellers', email: 'contact@royaljewellers.com', phone: '+91 98765 43210', products: 124, orders: 856, revenue: 4520000, rating: 4.9, status: 'verified', joined: '10 Jan 2024' },
-  { id: 2, name: 'Diamond Palace', email: 'info@diamondpalace.com', phone: '+91 98765 43211', products: 98, orders: 642, revenue: 3850000, rating: 4.8, status: 'verified', joined: '15 Jan 2024' },
-  { id: 3, name: 'Gold Craft India', email: 'sales@goldcraft.in', phone: '+91 98765 43212', products: 87, orders: 521, revenue: 3280000, rating: 4.7, status: 'verified', joined: '20 Jan 2024' },
-  { id: 4, name: 'Heritage Jewels', email: 'hello@heritagejewels.com', phone: '+91 98765 43213', products: 76, orders: 445, revenue: 2860000, rating: 4.9, status: 'verified', joined: '25 Jan 2024' },
-  { id: 5, name: 'Modern Gold Co.', email: 'info@moderngold.com', phone: '+91 98765 43214', products: 45, orders: 234, revenue: 1520000, rating: 4.5, status: 'pending', joined: '01 Feb 2024' },
-  { id: 6, name: 'Classic Ornaments', email: 'sales@classicornaments.com', phone: '+91 98765 43215', products: 32, orders: 156, revenue: 980000, rating: 4.3, status: 'pending', joined: '05 Feb 2024' },
-  { id: 7, name: 'Gem & Gold House', email: 'contact@gemgold.com', phone: '+91 98765 43216', products: 0, orders: 0, revenue: 0, rating: 0, status: 'rejected', joined: '08 Feb 2024' },
-  { id: 8, name: 'Precious Metals Ltd', email: 'info@preciousmetals.com', phone: '+91 98765 43217', products: 56, orders: 312, revenue: 1850000, rating: 4.6, status: 'verified', joined: '12 Feb 2024' },
-];
+interface SellerRow {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  products: number;
+  orders: number;
+  revenue: number;
+  rating: number;
+  status: 'verified' | 'pending' | 'rejected';
+  joined: string;
+}
+
+function formatJoined(date: string | Date | null | undefined): string {
+  if (!date) return '–';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return '–';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function mapUserToSeller(u: { id: string; email?: string; firstName?: string; lastName?: string; phone?: string; country?: string; kycStatus?: string; createdAt?: string }): SellerRow {
+  const name = [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || u.id;
+  const status = (u.kycStatus === 'approved' || u.kycStatus === 'verified' ? 'verified' : u.kycStatus === 'rejected' ? 'rejected' : 'pending') as SellerRow['status'];
+  return {
+    id: u.id,
+    name,
+    email: u.email || '',
+    phone: u.phone || '–',
+    products: 0,
+    orders: 0,
+    revenue: 0,
+    rating: 0,
+    status,
+    joined: formatJoined(u.createdAt),
+  };
+}
 
 const statusConfig = {
   verified: { color: 'bg-green-100 text-green-700', icon: CheckCircle },
@@ -41,6 +67,11 @@ const statusConfig = {
 
 export default function SellersPage() {
   const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+
+  const [sellers, setSellers] = useState<SellerRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [addSellerOpen, setAddSellerOpen] = useState(false);
@@ -48,12 +79,48 @@ export default function SellersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  const loadSellers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await adminApi.getUserList({ role: 'seller', limit: 500 });
+      const r = res as { users?: unknown[]; data?: { users?: unknown[] } };
+      const userList = r?.users ?? r?.data?.users ?? [];
+      const list = Array.isArray(userList) ? userList.map((u: Record<string, unknown>) => mapUserToSeller({
+        id: String(u.id ?? ''),
+        email: u.email as string,
+        firstName: u.firstName as string,
+        lastName: u.lastName as string,
+        phone: u.phone as string,
+        country: u.country as string,
+        kycStatus: u.kycStatus as string,
+        createdAt: u.createdAt as string,
+      })) : [];
+      setSellers(list);
+    } catch (err) {
+      console.error('Failed to load sellers:', err);
+      toastRef.current.error('Failed to load sellers');
+      setSellers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSellers();
+  }, [loadSellers]);
+
   const filteredSellers = sellers.filter((seller) => {
     if (statusFilter !== 'all' && seller.status !== statusFilter) return false;
-    if (searchQuery && !seller.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
+    if (searchQuery && !seller.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !seller.email.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
+
+  const totalSellers = sellers.length;
+  const verifiedCount = sellers.filter((s) => s.status === 'verified').length;
+  const pendingCount = sellers.filter((s) => s.status === 'pending').length;
+  const totalRevenue = sellers.reduce((sum, s) => sum + s.revenue, 0);
+  const revenueDisplay = totalRevenue >= 1e7 ? `₹${(totalRevenue / 1e7).toFixed(2)} Cr` : totalRevenue >= 1e5 ? `₹${(totalRevenue / 1e5).toFixed(1)} L` : totalRevenue > 0 ? `₹${(totalRevenue / 1000).toFixed(0)}K` : '₹0';
 
   return (
     <div>
@@ -109,13 +176,13 @@ export default function SellersPage() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats - derived from same list so overview and table match */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Total Sellers', value: '248', icon: Store },
-          { label: 'Verified', value: '186', color: 'text-green-600' },
-          { label: 'Pending Approval', value: '42', color: 'text-yellow-600' },
-          { label: 'Total Revenue', value: '₹4.52 Cr', color: 'text-gold-600' },
+          { label: 'Total Sellers', value: String(totalSellers), icon: Store },
+          { label: 'Verified', value: String(verifiedCount), color: 'text-green-600' },
+          { label: 'Pending Approval', value: String(pendingCount), color: 'text-yellow-600' },
+          { label: 'Total Revenue', value: revenueDisplay, color: 'text-gold-600' },
         ].map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl p-4 shadow-sm">
             <p className="text-sm text-gray-500">{stat.label}</p>
@@ -174,7 +241,15 @@ export default function SellersPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredSellers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((seller) => {
+              {loading ? (
+                <tr>
+                  <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+                    Loading sellers...
+                  </td>
+                </tr>
+              ) : (
+              filteredSellers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((seller) => {
                 const statusEntry = statusConfig[seller.status as keyof typeof statusConfig] ?? statusConfig.pending;
                 const StatusIcon = statusEntry.icon;
                 return (
@@ -234,7 +309,8 @@ export default function SellersPage() {
                     </td>
                   </motion.tr>
                 );
-              })}
+              })
+              )}
             </tbody>
           </table>
         </div>
@@ -314,6 +390,8 @@ export default function SellersPage() {
                   country: data.country,
                   tempPassword: data.tempPassword || undefined,
                 });
+                await loadSellers();
+                toast.success('Invitation sent! They can complete onboarding at /seller/onboarding');
               } finally {
                 setSubmitting(false);
               }
@@ -354,7 +432,7 @@ function AddSellerModal({
     try {
       await onSubmit(form);
       setSuccess('Invitation sent! They can complete onboarding at /seller/onboarding');
-      setTimeout(() => onClose(), 2000);
+      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to invite seller');
     }

@@ -291,4 +291,12 @@ export class ProductService {
       return { data: [], total: 0 };
     }
   }
+
+  /**
+   * Get product count for a category slug (for category list enrichment).
+   */
+  async getProductCountByCategory(categorySlug: string): Promise<number> {
+    const result = await this.listAllProducts({ category: categorySlug, limit: 1, page: 1 });
+    return result.total;
+  }
 }

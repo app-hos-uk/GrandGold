@@ -160,7 +160,20 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Render HTML template for invitation email
+ * Escape user-controlled data for safe use in HTML to prevent injection.
+ */
+function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Render HTML template for invitation email.
+ * All user-supplied values are escaped to prevent HTML/script injection.
  */
 function renderInvitationTemplate(data: {
   firstName: string;
@@ -169,6 +182,11 @@ function renderInvitationTemplate(data: {
   onboardingUrl: string;
   email: string;
 }): string {
+  const firstName = escapeHtml(data.firstName);
+  const businessName = escapeHtml(data.businessName);
+  const email = escapeHtml(data.email);
+  const tempPassword = escapeHtml(data.tempPassword);
+  const onboardingUrl = escapeHtml(data.onboardingUrl);
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -191,15 +209,15 @@ function renderInvitationTemplate(data: {
       <h1>Welcome to GrandGold Marketplace!</h1>
     </div>
     <div class="content">
-      <p>Dear <strong>${data.firstName}</strong>,</p>
+      <p>Dear <strong>${firstName}</strong>,</p>
       
-      <p>We're excited to have <strong>${data.businessName}</strong> join the GrandGold marketplace! 
+      <p>We're excited to have <strong>${businessName}</strong> join the GrandGold marketplace! 
       Your seller account has been created and is ready for setup.</p>
       
       <h3>Your Login Credentials</h3>
-      <p>Email: <strong>${data.email}</strong></p>
+      <p>Email: <strong>${email}</strong></p>
       <div class="password-box">
-        Temporary Password: <strong>${data.tempPassword}</strong>
+        Temporary Password: <strong>${tempPassword}</strong>
       </div>
       <p style="color: #d9534f; font-size: 12px;">⚠️ Please change this password after your first login for security.</p>
       
@@ -212,7 +230,7 @@ function renderInvitationTemplate(data: {
         <li>Seller Agreement Signature</li>
       </ul>
       
-      <a href="${data.onboardingUrl}" class="button">Start Onboarding</a>
+      <a href="${onboardingUrl}" class="button">Start Onboarding</a>
       
       <p>We typically review applications within 24-48 hours. You'll receive an email update once your account is approved.</p>
       

@@ -60,7 +60,7 @@ export default function NewTicketPage() {
 
     setSubmitting(true);
     try {
-      await adminApi.createTicket?.({
+      await adminApi.createTicket({
         subject: form.subject,
         category: form.category,
         priority: form.priority,
@@ -68,18 +68,6 @@ export default function NewTicketPage() {
         customerName: form.customerName,
         orderId: form.orderId || undefined,
         description: form.description,
-      }) ?? fetch('/api/support/tickets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subject: form.subject,
-          category: form.category,
-          priority: form.priority,
-          customerEmail: form.customerEmail,
-          customerName: form.customerName,
-          orderId: form.orderId || undefined,
-          message: form.description,
-        }),
       });
 
       setSuccess(true);
