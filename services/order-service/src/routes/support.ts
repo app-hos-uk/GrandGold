@@ -58,6 +58,32 @@ const createTicketSchema = z.object({
   relatedOrderId: z.string().optional(),
 });
 
+const CATEGORY_TO_TYPE: Record<string, string> = {
+  order: 'order',
+  payment: 'payment',
+  product: 'product',
+  account: 'account',
+  returns: 'return',
+  shipping: 'shipping',
+  technical: 'technical',
+  other: 'other',
+};
+
+/** Normalize body so both frontend (message, type, relatedOrderId) and legacy (description, category, orderId) work. */
+function normalizeCreateTicketBody(body: Record<string, unknown>): Record<string, unknown> {
+  const normalized = { ...body };
+  if (normalized.message == null && typeof normalized.description === 'string') {
+    normalized.message = normalized.description;
+  }
+  if (normalized.type == null && typeof normalized.category === 'string') {
+    normalized.type = CATEGORY_TO_TYPE[normalized.category] ?? 'other';
+  }
+  if (normalized.relatedOrderId == null && normalized.orderId != null) {
+    normalized.relatedOrderId = normalized.orderId;
+  }
+  return normalized;
+}
+
 const updateTicketSchema = z.object({
   status: z.enum(['open', 'pending', 'in_progress', 'resolved', 'closed']).optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
@@ -170,7 +196,8 @@ router.post(
   authenticate,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const data = createTicketSchema.parse(req.body);
+      const body = normalizeCreateTicketBody((req.body || {}) as Record<string, unknown>);
+      const data = createTicketSchema.parse(body);
 
       const userName = req.user!.email.split('@')[0]; // Use email prefix as name
       const ticket: SupportTicket = {
