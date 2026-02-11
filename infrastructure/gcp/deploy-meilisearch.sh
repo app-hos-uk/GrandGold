@@ -1,7 +1,7 @@
 #!/bin/bash
 # Deploy Meilisearch to Cloud Run
 set -e
-PROJECT_ID="${GCP_PROJECT_ID:-grandgold-prod}"
+PROJECT_ID="${GCP_PROJECT_ID:-${GCP_PROJECT:-grandmarketplace}}"
 REGION="${1:-asia-south1}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

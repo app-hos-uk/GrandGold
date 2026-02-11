@@ -5,7 +5,7 @@
 set -e
 
 # Configuration
-PROJECT_ID="${GCP_PROJECT_ID:-grandgold-prod}"
+PROJECT_ID="${GCP_PROJECT_ID:-${GCP_PROJECT:-grandmarketplace}}"
 INSTANCE_NAME="grandgold-redis"
 REGION="asia-south1"
 TIER="standard"  # standard for HA

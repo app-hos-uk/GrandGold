@@ -5,7 +5,7 @@
 set -e
 
 # Configuration
-PROJECT_ID="${GCP_PROJECT_ID:-grandgold-prod}"
+PROJECT_ID="${GCP_PROJECT_ID:-${GCP_PROJECT:-grandmarketplace}}"
 SERVICE_NAME="${1:-auth-service}"
 REGION="${2:-asia-south1}"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"

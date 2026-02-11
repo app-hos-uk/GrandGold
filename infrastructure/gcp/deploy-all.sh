@@ -4,8 +4,8 @@
 
 set -e
 
-# Configuration
-PROJECT_ID="${GCP_PROJECT_ID:-grandgold-prod}"
+# Configuration (GrandMarketPlace project)
+PROJECT_ID="${GCP_PROJECT_ID:-${GCP_PROJECT:-grandmarketplace}}"
 REGIONS=("asia-south1" "europe-west2" "me-central1")
 SERVICES=(
     "auth-service"
