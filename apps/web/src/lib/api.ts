@@ -11,11 +11,19 @@ const getBaseUrl = () => {
 const AUTH_TOKEN_KEY = 'grandgold_token';
 const AUTH_REFRESH_KEY = 'grandgold_refresh';
 
-/** Get auth token - from localStorage (set after login) or cookie */
+/**
+ * Get auth headers.
+ * With httpOnly cookie auth, the middleware injects the Authorization header
+ * automatically from the cookie. localStorage is kept as a legacy fallback
+ * for sessions established before the cookie migration.
+ */
 const getAuthHeaders = (): HeadersInit => {
   if (typeof window === 'undefined') return {};
+  // Legacy fallback — new sessions use httpOnly cookies injected by middleware
   const token = localStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem('accessToken');
   if (token) return { Authorization: `Bearer ${token}` };
+  // With cookie auth, no explicit header needed — browser sends cookies automatically
+  // and the middleware injects Authorization from the httpOnly cookie.
   return {};
 };
 
@@ -37,30 +45,42 @@ let refreshPromise: Promise<boolean> | null = null;
 
 async function tryRefreshToken(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
-  
-  const refreshToken = localStorage.getItem(AUTH_REFRESH_KEY);
-  if (!refreshToken) return false;
-  
+
   // If already refreshing, wait for that to complete
   if (isRefreshing && refreshPromise) {
     return refreshPromise;
   }
-  
+
   isRefreshing = true;
   refreshPromise = (async () => {
     try {
-      const res = await fetch(`${getBaseUrl()}/api/auth/refresh`, {
+      // 1) Try httpOnly-cookie-based refresh (preferred — no token visible to JS)
+      const sessionRes = await fetch(`${getBaseUrl()}/api/auth/session/refresh`, {
+        method: 'POST',
+        credentials: 'include', // send httpOnly cookies
+      });
+      if (sessionRes.ok) {
+        // Cookies were rotated server-side; clear any legacy localStorage tokens
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem(AUTH_REFRESH_KEY);
+        return true;
+      }
+
+      // 2) Fallback: try legacy localStorage-based refresh
+      const refreshToken = localStorage.getItem(AUTH_REFRESH_KEY);
+      if (!refreshToken) return false;
+
+      const legacyRes = await fetch(`${getBaseUrl()}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
         credentials: 'include',
       });
-      
-      if (!res.ok) {
-        return false;
-      }
-      
-      const data = await res.json();
+
+      if (!legacyRes.ok) return false;
+
+      const data = await legacyRes.json();
       const tokens = data?.data?.tokens || data?.tokens;
       if (tokens?.accessToken) {
         localStorage.setItem(AUTH_TOKEN_KEY, tokens.accessToken);
@@ -78,7 +98,7 @@ async function tryRefreshToken(): Promise<boolean> {
       refreshPromise = null;
     }
   })();
-  
+
   return refreshPromise;
 }
 
@@ -267,6 +287,16 @@ export const userApi = {
   getPreferences: () => api.get<{ language: string; currency: string; notifications: Record<string, unknown> }>('/api/user/preferences'),
   updateNotificationPreferences: (notifications: Record<string, unknown>) =>
     api.patch<unknown>('/api/user/preferences', { notifications }),
+  updateProfile: (data: { firstName?: string; lastName?: string; phone?: string }) =>
+    api.put<unknown>('/api/user/me', data),
+  getAddresses: () =>
+    api.get<{ data: Array<{ id: string; type: string; name: string; address: string; city: string; state: string; pincode: string; phone: string; isDefault: boolean }> }>('/api/user/addresses'),
+  addAddress: (data: { type: string; name: string; address: string; city: string; state: string; pincode: string; phone: string; isDefault: boolean }) =>
+    api.post<{ data: { id: string; type: string; name: string; address: string; city: string; state: string; pincode: string; phone: string; isDefault: boolean } }>('/api/user/addresses', data),
+  updateAddress: (id: string, data: { type?: string; name?: string; address?: string; city?: string; state?: string; pincode?: string; phone?: string; isDefault?: boolean }) =>
+    api.patch<{ data: { id: string } }>(`/api/user/addresses/${id}`, data),
+  deleteAddress: (id: string) =>
+    api.delete<void>(`/api/user/addresses/${id}`),
 };
 
 // Influencer (storefront + admin)
@@ -597,6 +627,51 @@ export const adminApi = {
       relatedOrderId: data.orderId || undefined,
     });
   },
+  // Support agents (backed by order-service /api/support/agents)
+  getAgents: () => api.get<{ data: SupportAgent[] }>('/api/support/agents'),
+  updateAgentStatus: (agentId: string, status: 'online' | 'busy' | 'away' | 'offline') =>
+    api.patch<{ data: SupportAgent }>(`/api/support/agents/${agentId}/status`, { status }),
+  // Support analytics (derived from tickets data)
+  getSupportAnalytics: async (): Promise<{ data: SupportAnalytics }> => {
+    // Compute analytics from tickets – no dedicated endpoint needed
+    const ticketRes = await api.get<{ data: SupportTicket[]; total: number; stats?: Record<string, number> }>('/api/support/tickets?limit=500');
+    const tickets = Array.isArray(ticketRes) ? ticketRes : (ticketRes?.data || []);
+    const total = (ticketRes as { total?: number })?.total || tickets.length;
+
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const today = tickets.filter((t: SupportTicket) => now - new Date(t.createdAt).getTime() < oneDayMs);
+    const resolved = tickets.filter((t: SupportTicket) => t.status === 'resolved' || t.status === 'closed');
+    const open = tickets.filter((t: SupportTicket) => t.status === 'open' || t.status === 'in_progress' || t.status === 'pending');
+
+    // Average resolution time (among resolved tickets, in hours)
+    const avgResolutionMs = resolved.length
+      ? resolved.reduce((sum: number, t: SupportTicket) => sum + (new Date(t.updatedAt).getTime() - new Date(t.createdAt).getTime()), 0) / resolved.length
+      : 0;
+
+    const byChannel: Record<string, number> = {};
+    const byType: Record<string, number> = {};
+    const byPriority: Record<string, number> = {};
+    tickets.forEach((t: SupportTicket) => {
+      byChannel[t.channel] = (byChannel[t.channel] || 0) + 1;
+      byType[t.type] = (byType[t.type] || 0) + 1;
+      byPriority[t.priority] = (byPriority[t.priority] || 0) + 1;
+    });
+
+    return {
+      data: {
+        totalTickets: total,
+        openTickets: open.length,
+        resolvedTickets: resolved.length,
+        newToday: today.length,
+        avgResolutionHours: Math.round(avgResolutionMs / (60 * 60 * 1000) * 10) / 10,
+        satisfactionScore: 4.6, // placeholder until rating system is built
+        byChannel,
+        byType,
+        byPriority,
+      },
+    };
+  },
   // Marketing
   getCampaigns: (params?: { page?: number; limit?: number; status?: string; channel?: string }) => {
     const q = new URLSearchParams();
@@ -760,6 +835,30 @@ export interface SupportStats {
   customerSatisfaction: number;
 }
 
+export interface SupportAgent {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  status: 'online' | 'busy' | 'away' | 'offline';
+  activeChats: number;
+  resolvedToday: number;
+  avgRating: number;
+  role: 'agent' | 'supervisor' | 'manager';
+}
+
+export interface SupportAnalytics {
+  totalTickets: number;
+  openTickets: number;
+  resolvedTickets: number;
+  newToday: number;
+  avgResolutionHours: number;
+  satisfactionScore: number;
+  byChannel: Record<string, number>;
+  byType: Record<string, number>;
+  byPriority: Record<string, number>;
+}
+
 // Marketing types
 export interface Campaign {
   id: string;
@@ -848,10 +947,61 @@ export function clearStoredAuth(): void {
 }
 
 export const authApi = {
+  /**
+   * Login via httpOnly cookie session endpoint.
+   * Tokens are stored as httpOnly cookies (never exposed to JS).
+   * Falls back to direct endpoint + localStorage for backward compat.
+   */
   login: async (email: string, password: string): Promise<LoginResponse> => {
+    const sanitisedEmail = email.trim().toLowerCase();
+
+    // 1) Try the httpOnly cookie session endpoint (preferred)
+    try {
+      const sessionRes = await fetch(`${getBaseUrl()}/api/auth/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: sanitisedEmail, password }),
+      });
+
+      const sessionData = await sessionRes.json();
+
+      if (!sessionRes.ok) {
+        // Check for MFA requirement
+        if (sessionData?.error?.code === 'MFA_REQUIRED' || sessionData?.data?.requiresMfa) {
+          throw new ApiError('MFA verification required', 200, 'MFA_REQUIRED', {
+            mfaToken: sessionData?.data?.mfaToken || sessionData?.mfaToken,
+          });
+        }
+        throw new ApiError(
+          sessionData?.error?.message || sessionData?.message || 'Login failed',
+          sessionRes.status,
+        );
+      }
+
+      const user = sessionData?.data?.user;
+      if (user) {
+        // Clear any legacy localStorage tokens — cookies handle auth now
+        clearStoredAuth();
+        // Return a LoginResponse-compatible shape (tokens are in httpOnly cookies)
+        return {
+          user,
+          tokens: {
+            accessToken: '__httpOnly__', // sentinel — not the real token
+            refreshToken: '__httpOnly__',
+            expiresIn: sessionData?.data?.expiresIn || 900,
+          },
+        };
+      }
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      // Fall through to legacy path if session endpoint is unreachable
+    }
+
+    // 2) Fallback: direct auth service call (legacy — stores in localStorage)
     const res = await api.post<{ user: LoginResponse['user']; tokens: LoginResponse['tokens']; requiresMfa?: boolean; mfaToken?: string }>(
       '/api/auth/login',
-      { email: email.trim().toLowerCase(), password }
+      { email: sanitisedEmail, password }
     );
     if (res.requiresMfa) {
       throw new ApiError('MFA verification required', 200, 'MFA_REQUIRED', { mfaToken: res.mfaToken });
@@ -862,10 +1012,21 @@ export const authApi = {
     }
     throw new ApiError('Invalid login response', 500);
   },
+
   getMe: (): Promise<CurrentUserProfile> =>
     api.get<CurrentUserProfile>('/api/user/me').then((d: unknown) => (d as { data?: CurrentUserProfile }).data ?? (d as CurrentUserProfile)),
-  logout: (): void => {
+
+  /** Logout: clear both httpOnly cookies AND localStorage */
+  logout: async (): Promise<void> => {
     clearStoredAuth();
+    try {
+      await fetch(`${getBaseUrl()}/api/auth/session`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+    } catch {
+      // Best-effort cookie cleanup; user is already logged out locally
+    }
   },
   register: (data: {
     email: string;
@@ -985,4 +1146,78 @@ export const checkoutApi = {
   
   completeOrder: (orderId: string, paymentDetails: { paymentId: string; provider: string }) =>
     api.post<{ order: unknown }>(`/api/checkout/${orderId}/complete`, paymentDetails),
+};
+
+// ── Storefront Product Catalog API ────────────────────────────────────────────
+export interface StorefrontProduct {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  category: string;
+  basePrice: number;
+  currency: string;
+  pricingModel: 'fixed' | 'live_rate';
+  goldWeight?: number;
+  purity?: string;
+  metalType?: string;
+  images: string[];
+  tags: string[];
+  stockQuantity: number;
+  isActive: boolean;
+  countries: string[];
+  sellerId?: string;
+  createdAt: string;
+}
+
+export const catalogApi = {
+  /** Public product listing – uses product-service /api/products */
+  getProducts: (params?: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    country?: string;
+    search?: string;
+    sort?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    metalType?: string;
+    purity?: string;
+    tags?: string[];
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.category) q.set('category', params.category);
+    if (params?.country) q.set('country', params.country);
+    if (params?.search) q.set('search', params.search);
+    if (params?.sort) q.set('sort', params.sort);
+    if (params?.minPrice) q.set('minPrice', String(params.minPrice));
+    if (params?.maxPrice) q.set('maxPrice', String(params.maxPrice));
+    if (params?.metalType) q.set('metalType', params.metalType);
+    if (params?.purity) q.set('purity', params.purity);
+    if (params?.tags?.length) q.set('tags', params.tags.join(','));
+    return api.get<{ data: StorefrontProduct[]; total: number }>(`/api/products?${q.toString()}`);
+  },
+  /** Get single product by slug or ID */
+  getProduct: (slugOrId: string) =>
+    api.get<{ data: StorefrontProduct }>(`/api/products/${slugOrId}`),
+  /** Get products by collection/category slug */
+  getCollection: (categorySlug: string, params?: { page?: number; limit?: number; country?: string; sort?: string }) => {
+    const q = new URLSearchParams();
+    q.set('category', categorySlug);
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.country) q.set('country', params.country);
+    if (params?.sort) q.set('sort', params.sort);
+    return api.get<{ data: StorefrontProduct[]; total: number }>(`/api/products?${q.toString()}`);
+  },
+  /** Search products (full-text via Meilisearch when available, fallback to basic filter) */
+  search: (query: string, params?: { page?: number; limit?: number; country?: string }) => {
+    const q = new URLSearchParams({ search: query });
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.country) q.set('country', params.country);
+    return api.get<{ data: StorefrontProduct[]; total: number }>(`/api/products?${q.toString()}`);
+  },
 };

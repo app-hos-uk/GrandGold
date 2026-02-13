@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { formatCurrency } from '@/lib/format';
 import { useToast } from '@/components/admin/toast';
+import { adminApi } from '@/lib/api';
 
 interface CommissionEntry {
   id: string;
@@ -36,7 +37,7 @@ interface CommissionEntry {
   status: 'collected' | 'pending' | 'waived';
 }
 
-const MOCK_COMMISSIONS: CommissionEntry[] = [
+const FALLBACK_COMMISSIONS: CommissionEntry[] = [
   { id: 'COM-001', orderId: 'ORD-2024-1234', sellerId: 'SEL001', sellerName: 'Royal Jewellers', orderAmount: 85000, commissionRate: 10, commissionAmount: 8500, category: 'Necklaces', country: 'IN', createdAt: '2024-02-03T14:32:00Z', status: 'collected' },
   { id: 'COM-002', orderId: 'ORD-2024-1233', sellerId: 'SEL002', sellerName: 'Diamond Palace', orderAmount: 156000, commissionRate: 10, commissionAmount: 15600, category: 'Rings', country: 'UK', createdAt: '2024-02-03T11:00:00Z', status: 'collected' },
   { id: 'COM-003', orderId: 'ORD-2024-1232', sellerId: 'SEL003', sellerName: 'Gold Craft India', orderAmount: 45000, commissionRate: 8, commissionAmount: 3600, category: 'Earrings', country: 'IN', createdAt: '2024-02-03T10:00:00Z', status: 'pending' },
@@ -70,13 +71,44 @@ const statusConfig = {
 
 export default function CommissionsPage() {
   const toast = useToast();
-  const [commissions] = useState<CommissionEntry[]>(MOCK_COMMISSIONS);
+  const [commissions, setCommissions] = useState<CommissionEntry[]>(FALLBACK_COMMISSIONS);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('');
   const [dateRange, setDateRange] = useState('30days');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+
+  useEffect(() => {
+    const fetchCommissions = async () => {
+      setLoading(true);
+      try {
+        const res = await adminApi.getTransactions({ type: 'commission', limit: 50, country: countryFilter || undefined });
+        const data = res?.data ?? [];
+        if (data.length > 0) {
+          setCommissions(data.map(t => ({
+            id: t.id,
+            orderId: t.orderId || '',
+            sellerId: t.sellerId || '',
+            sellerName: (t as unknown as Record<string, string>).sellerName || '—',
+            orderAmount: (t as unknown as Record<string, number>).orderAmount || t.amount * 10,
+            commissionRate: (t as unknown as Record<string, number>).commissionRate || 10,
+            commissionAmount: t.amount,
+            category: (t as unknown as Record<string, string>).category || '—',
+            country: t.country,
+            createdAt: t.date,
+            status: (t.status === 'completed' ? 'collected' : t.status === 'pending' ? 'pending' : 'waived') as CommissionEntry['status'],
+          })));
+        }
+      } catch {
+        // keep fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCommissions();
+  }, [countryFilter]);
 
   const filteredCommissions = commissions.filter((c) => {
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;

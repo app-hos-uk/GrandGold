@@ -177,10 +177,9 @@ export default function OrderDetailPage() {
 
   const handleDownloadInvoice = async () => {
     try {
+      // credentials: 'include' sends httpOnly cookie; middleware injects Authorization header
       const res = await fetch(`/api/orders/${orderId}/invoice`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken') || ''}`,
-        },
+        credentials: 'include',
       });
       if (!res.ok) throw new Error('Invoice not available');
       const blob = await res.blob();

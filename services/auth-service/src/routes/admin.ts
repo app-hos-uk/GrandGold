@@ -6,7 +6,7 @@ import { ValidationError } from '@grandgold/utils';
 import type { UserRole } from '@grandgold/types';
 
 const router = Router();
-const ADMIN_ROLES: UserRole[] = ['super_admin', 'country_admin', 'manager'];
+const ADMIN_ROLES: UserRole[] = ['super_admin', 'country_admin', 'manager', 'staff'];
 
 // Invite seller schema
 const inviteSellerSchema = z.object({
@@ -30,27 +30,55 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const dateRange = (req.query.dateRange as string) || '30days';
-      const country = req.query.country as string;
+      let country = req.query.country as string;
+
+      // Country admins are restricted to their own country
+      const isCountryAdmin = req.user?.role === 'country_admin';
+      const adminCountry = req.user?.country;
+      if (isCountryAdmin && adminCountry) {
+        country = adminCountry;
+      }
 
       // In production, these would come from database aggregations
-      // For now, return demo data that the dashboard can display
+      // filtered by `country` when it's set (country_admin or explicit filter)
+      
+      // Demo data — scoped to a single country when `country` is set
+      const allRevenueByCountry = [
+        { country: 'IN', revenue: 2712000 },
+        { country: 'AE', revenue: 1130000 },
+        { country: 'UK', revenue: 678000 },
+      ];
+      const allRecentOrders = [
+        { id: 'ORD-001', customer: 'Priya Sharma', amount: 85000, status: 'completed', date: '2 min ago', country: 'IN' },
+        { id: 'ORD-002', customer: 'Ahmed Khan', amount: 156000, status: 'processing', date: '15 min ago', country: 'AE' },
+        { id: 'ORD-003', customer: 'James Wilson', amount: 42000, status: 'shipped', date: '1 hour ago', country: 'UK' },
+      ];
+      
+      const filteredRevenue = country
+        ? allRevenueByCountry.filter((r) => r.country === country)
+        : allRevenueByCountry;
+      const filteredOrders = country
+        ? allRecentOrders.filter((o) => o.country === country)
+        : allRecentOrders;
+      const totalRevenue = filteredRevenue.reduce((sum, r) => sum + r.revenue, 0);
+
       const analytics = {
         metrics: {
-          totalRevenue: 4520000,
+          totalRevenue,
           revenueChange: 12.5,
           ordersChange: 8.2,
         },
         revenue: {
-          total: 4520000,
+          total: totalRevenue,
           change: 12.5,
         },
         orders: {
-          total: 385,
+          total: country ? Math.round(385 / 3) : 385,
           change: 8.2,
         },
         customers: {
-          total: 1250,
-          new: 87,
+          total: country ? Math.round(1250 / 3) : 1250,
+          new: country ? Math.round(87 / 3) : 87,
           change: 15.3,
         },
         avgOrderValue: 11740,
@@ -61,16 +89,8 @@ router.get(
           { id: 'p4', name: 'Gold Bracelet', sales: 24 },
           { id: 'p5', name: 'Silver Chain', sales: 21 },
         ],
-        revenueByCountry: [
-          { country: 'IN', revenue: 2712000 },
-          { country: 'AE', revenue: 1130000 },
-          { country: 'UK', revenue: 678000 },
-        ],
-        recentOrders: [
-          { id: 'ORD-001', customer: 'Priya Sharma', amount: 85000, status: 'completed', date: '2 min ago' },
-          { id: 'ORD-002', customer: 'Ahmed Khan', amount: 156000, status: 'processing', date: '15 min ago' },
-          { id: 'ORD-003', customer: 'James Wilson', amount: 42000, status: 'shipped', date: '1 hour ago' },
-        ],
+        revenueByCountry: filteredRevenue,
+        recentOrders: filteredOrders.map(({ country: _c, ...rest }) => rest),
         dateRange,
         country: country || 'all',
       };
@@ -95,13 +115,30 @@ router.get(
   authorize(...ADMIN_ROLES),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // In production, aggregate from database
-      const stats = {
-        totalUsers: 1250,
-        totalOrders: 385,
-        totalRevenue: 4520000,
-        pendingOrders: 24,
-      };
+      // Country admins see only their country's stats
+      const isCountryAdmin = req.user?.role === 'country_admin';
+      const adminCountry = req.user?.country;
+      let country = req.query.country as string | undefined;
+      if (isCountryAdmin && adminCountry) {
+        country = adminCountry;
+      }
+
+      // In production, aggregate from database with country filter
+      const stats = country
+        ? {
+            totalUsers: Math.round(1250 / 3),
+            totalOrders: Math.round(385 / 3),
+            totalRevenue: Math.round(4520000 / 3),
+            pendingOrders: Math.round(24 / 3),
+            country,
+          }
+        : {
+            totalUsers: 1250,
+            totalOrders: 385,
+            totalRevenue: 4520000,
+            pendingOrders: 24,
+            country: 'all',
+          };
 
       res.json({
         success: true,
@@ -124,10 +161,17 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const data = inviteSellerSchema.parse(req.body);
-      
-      // Generate a temporary password if not provided
-      // Password generated for email invitation in production
-      // const tempPassword = data.tempPassword || `Seller${randomUUID().slice(0, 8)}!`;
+
+      // Country admins can only invite sellers for their own country
+      if (req.user?.role === 'country_admin' && req.user?.country) {
+        if (data.country !== req.user.country) {
+          res.status(403).json({
+            success: false,
+            error: { code: 'FORBIDDEN', message: `You can only invite sellers for ${req.user.country}` },
+          });
+          return;
+        }
+      }
       
       // In production, this would:
       // 1. Create the user with seller role in database
@@ -181,10 +225,17 @@ router.post(
         });
         return;
       }
-      
-      // Generate a temporary password if not provided
-      // Password generated for email invitation in production
-      // const password = tempPassword || `Influencer${randomUUID().slice(0, 8)}!`;
+
+      // Country admins can only invite influencers for their own country
+      if (req.user?.role === 'country_admin' && req.user?.country) {
+        if (country !== req.user.country) {
+          res.status(403).json({
+            success: false,
+            error: { code: 'FORBIDDEN', message: `You can only invite influencers for ${req.user.country}` },
+          });
+          return;
+        }
+      }
       
       // In production, this would create the user and send email
       const influencerId = randomUUID();

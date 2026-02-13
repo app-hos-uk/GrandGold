@@ -276,10 +276,29 @@ export interface ReturnRequest extends Timestamps {
   returnLabel?: string;
   returnTrackingNumber?: string;
   
+  // Return shipping cost policy
+  returnShippingPolicy: ReturnShippingPolicy;
+  returnShippingCost?: Money;
+  returnShippingPaidBy: 'customer' | 'seller' | 'platform';
+  
   // Notes
   customerNotes?: string;
   internalNotes?: string;
 }
+
+/**
+ * Policy determining who bears the return shipping cost.
+ *
+ *   - `seller_fault`: Defective / wrong item shipped — seller pays.
+ *   - `customer_choice`: Customer changed mind — customer pays.
+ *   - `platform_goodwill`: Platform absorbs cost as a goodwill gesture.
+ *   - `free_return`: Product is covered by free-return guarantee.
+ */
+export type ReturnShippingPolicy =
+  | 'seller_fault'
+  | 'customer_choice'
+  | 'platform_goodwill'
+  | 'free_return';
 
 export type ReturnReason =
   | 'defective'

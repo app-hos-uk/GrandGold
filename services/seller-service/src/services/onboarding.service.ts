@@ -150,7 +150,11 @@ export class OnboardingService {
       agreementSigned: onboarding.agreementSigned,
       backgroundCheckPassed: onboarding.backgroundCheckPassed,
       rejectionReasons: onboarding.rejectionReasons,
-      estimatedApprovalTime: onboarding.onboardingType === 'automated' ? '24-48 hours' : '3-5 business days',
+      estimatedApprovalTime: this.calculateEstimatedApprovalTime(
+        onboarding.onboardingType,
+        onboarding.country,
+        onboarding.businessType
+      ),
       createdAt: onboarding.createdAt,
       updatedAt: onboarding.updatedAt,
     };
@@ -424,6 +428,38 @@ export class OnboardingService {
     }
 
     return { status: 'rejected' };
+  }
+
+  /**
+   * Calculate the estimated approval time based on country and business rules.
+   *
+   * SLA targets:
+   *   - Automated / individual / IN: 24-48 hours
+   *   - Automated / company   / IN: 2-3 business days (GST verification)
+   *   - Manual  / any         / AE: 3-5 business days (trade licence check)
+   *   - Manual  / any         / UK: 3-7 business days (FCA/assay office)
+   *   - Default                    : 3-5 business days
+   */
+  private calculateEstimatedApprovalTime(
+    onboardingType: string,
+    country: Country,
+    businessType: string
+  ): string {
+    if (onboardingType === 'automated') {
+      if (country === 'IN' && businessType === 'individual') return '24-48 hours';
+      if (country === 'IN') return '2-3 business days';
+      if (country === 'AE') return '2-4 business days';
+      if (country === 'UK') return '3-5 business days';
+      return '2-4 business days';
+    }
+
+    // Manual onboarding requires more compliance checks
+    const manualSLA: Record<Country, string> = {
+      IN: '3-5 business days',
+      AE: '3-5 business days',
+      UK: '3-7 business days',
+    };
+    return manualSLA[country] || '3-5 business days';
   }
 
   /**

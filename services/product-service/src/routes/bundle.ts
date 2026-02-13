@@ -47,6 +47,26 @@ router.post('/', authenticate, async (req: Request, res: Response, next: NextFun
 });
 
 /**
+ * GET /api/bundles/product/:productId
+ * Get bundles containing product
+ * NOTE: Must be defined BEFORE /:id to prevent "product" matching as :id
+ */
+router.get('/product/:productId', optionalAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const country = (req.query.country as Country) || 'IN';
+
+    const bundles = await bundleService.getBundlesForProduct(req.params.productId, country);
+
+    res.json({
+      success: true,
+      data: bundles,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/bundles/:id
  * Get bundle with products
  */
@@ -59,25 +79,6 @@ router.get('/:id', optionalAuth, async (req: Request, res: Response, next: NextF
     res.json({
       success: true,
       data: bundle,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /api/bundles/product/:productId
- * Get bundles containing product
- */
-router.get('/product/:productId', optionalAuth, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const country = (req.query.country as Country) || 'IN';
-
-    const bundles = await bundleService.getBundlesForProduct(req.params.productId, country);
-
-    res.json({
-      success: true,
-      data: bundles,
     });
   } catch (error) {
     next(error);

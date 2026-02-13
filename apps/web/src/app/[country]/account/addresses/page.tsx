@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
@@ -14,40 +14,32 @@ import {
   X,
   Home,
   Building,
+  Loader2,
 } from 'lucide-react';
+import { userApi } from '@/lib/api';
 
-const initialAddresses = [
-  {
-    id: '1',
-    type: 'home',
-    name: 'Priya Sharma',
-    address: '123 Gold Street, Bandra West',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    pincode: '400050',
-    phone: '+91 98765 43210',
-    isDefault: true,
-  },
-  {
-    id: '2',
-    type: 'office',
-    name: 'Priya Sharma',
-    address: '456 Business Park, Andheri East',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    pincode: '400093',
-    phone: '+91 98765 43210',
-    isDefault: false,
-  },
-];
+interface Address {
+  id: string;
+  type: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  phone: string;
+  isDefault: boolean;
+}
 
 export default function AddressesPage() {
   const params = useParams();
+  const router = useRouter();
   const country = (params.country as 'in' | 'ae' | 'uk') || 'in';
   
-  const [addresses, setAddresses] = useState(initialAddresses);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editingAddress, setEditingAddress] = useState<typeof initialAddresses[0] | null>(null);
+  const [editingAddress, setEditingAddress] = useState<Address | null>(null);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     type: 'home',
     name: '',
@@ -59,16 +51,45 @@ export default function AddressesPage() {
     isDefault: false,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingAddress) {
-      setAddresses(addresses.map(addr => 
-        addr.id === editingAddress.id ? { ...formData, id: addr.id } : addr
-      ));
-    } else {
-      setAddresses([...addresses, { ...formData, id: Date.now().toString() }]);
+  const loadAddresses = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await userApi.getAddresses();
+      const data = (res as { data?: Address[] })?.data ?? (res as Address[]);
+      setAddresses(Array.isArray(data) ? data : []);
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 401) {
+        router.replace(`/${country}/login?redirect=${encodeURIComponent(`/${country}/account/addresses`)}`);
+        return;
+      }
+      setAddresses([]);
+    } finally {
+      setLoading(false);
     }
-    resetForm();
+  }, [country, router]);
+
+  useEffect(() => {
+    // Auth handled by httpOnly cookie or legacy localStorage token.
+    // loadAddresses() will 401 if unauthenticated and we redirect.
+    loadAddresses();
+  }, [loadAddresses]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (editingAddress) {
+        await userApi.updateAddress(editingAddress.id, formData);
+      } else {
+        await userApi.addAddress(formData);
+      }
+      await loadAddresses();
+      resetForm();
+    } catch {
+      // Silently fail for now
+    } finally {
+      setSaving(false);
+    }
   };
 
   const resetForm = () => {
@@ -86,22 +107,43 @@ export default function AddressesPage() {
     });
   };
 
-  const handleEdit = (address: typeof initialAddresses[0]) => {
+  const handleEdit = (address: Address) => {
     setEditingAddress(address);
     setFormData(address);
     setShowAddModal(true);
   };
 
-  const handleDelete = (id: string) => {
-    setAddresses(addresses.filter(addr => addr.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      await userApi.deleteAddress(id);
+      setAddresses(addresses.filter(addr => addr.id !== id));
+    } catch {
+      // Silently fail
+    }
   };
 
-  const setAsDefault = (id: string) => {
-    setAddresses(addresses.map(addr => ({
-      ...addr,
-      isDefault: addr.id === id,
-    })));
+  const setAsDefault = async (id: string) => {
+    try {
+      await userApi.updateAddress(id, { isDefault: true });
+      setAddresses(addresses.map(addr => ({
+        ...addr,
+        isDefault: addr.id === id,
+      })));
+    } catch {
+      // Silently fail
+    }
   };
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-cream-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-gold-500" />
+          <p className="text-gray-500 font-medium">Loading addresses...</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-cream-50">
@@ -379,9 +421,11 @@ export default function AddressesPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-gold-500 hover:bg-gold-600 text-white font-medium rounded-lg transition-colors"
+                  disabled={saving}
+                  className="flex-1 py-3 bg-gold-500 hover:bg-gold-600 text-white font-medium rounded-lg transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
                 >
-                  {editingAddress ? 'Update Address' : 'Add Address'}
+                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {saving ? 'Saving...' : editingAddress ? 'Update Address' : 'Add Address'}
                 </button>
               </div>
             </form>

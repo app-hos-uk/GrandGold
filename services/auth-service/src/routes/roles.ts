@@ -37,15 +37,43 @@ router.get('/', authorize('super_admin', 'country_admin'), async (req: Request, 
     } catch (dbError) {
       // If database table doesn't exist or query fails, return default system roles
       console.error('Failed to load roles from database, using defaults:', dbError);
+      const now = new Date();
       rolesList = [
-        { id: 'super_admin', name: 'Super Admin', description: 'Full system access', scope: 'global', country: null, permissions: ['*'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'country_admin', name: 'Country Admin', description: 'Country-level access', scope: 'country', country: null, permissions: ['manage_country'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'manager', name: 'Manager', description: 'Management access', scope: 'country', country: null, permissions: ['manage_orders', 'manage_products'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'support', name: 'Support Staff', description: 'Customer support access', scope: 'country', country: null, permissions: ['view_orders', 'manage_tickets'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'seller', name: 'Seller', description: 'Seller access', scope: 'country', country: null, permissions: ['manage_own_products'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'influencer', name: 'Influencer', description: 'Influencer access', scope: 'country', country: null, permissions: ['manage_rack'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'consultant', name: 'Consultant', description: 'Consultant access', scope: 'country', country: null, permissions: ['view_products'], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'customer', name: 'Customer', description: 'Regular customer', scope: 'global', country: null, permissions: [], isSystem: true, userCount: 0, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'super_admin', name: 'Super Admin', description: 'Full system access across all countries', scope: 'global', country: null, permissions: ['*'], isSystem: true, userCount: 0, createdAt: now, updatedAt: now },
+        { id: 'country_admin', name: 'Country Admin', description: 'Full access within assigned country', scope: 'country', country: null, permissions: [
+          'users.view', 'users.create', 'users.edit', 'users.assign_role',
+          'orders.view', 'orders.update_status', 'orders.cancel', 'orders.refund',
+          'products.view', 'products.create', 'products.edit', 'products.approve',
+          'sellers.view', 'sellers.approve', 'sellers.suspend', 'sellers.edit',
+          'payments.view', 'payments.refund', 'payments.settlements',
+          'reports.view', 'reports.export', 'reports.analytics',
+          'settings.view',
+          'kyc.view', 'kyc.approve', 'kyc.reject',
+        ], isSystem: true, userCount: 0, createdAt: now, updatedAt: now },
+        { id: 'manager', name: 'Manager', description: 'Management access: orders, products, sellers, reports', scope: 'country', country: null, permissions: [
+          'users.view',
+          'orders.view', 'orders.update_status', 'orders.cancel',
+          'products.view', 'products.create', 'products.edit',
+          'sellers.view',
+          'payments.view',
+          'reports.view', 'reports.export',
+          'kyc.view',
+        ], isSystem: true, userCount: 0, createdAt: now, updatedAt: now },
+        { id: 'staff', name: 'Staff', description: 'Operational staff: order processing and product viewing', scope: 'country', country: null, permissions: [
+          'orders.view', 'orders.update_status',
+          'products.view',
+          'kyc.view',
+        ], isSystem: true, userCount: 0, createdAt: now, updatedAt: now },
+        { id: 'support', name: 'Support', description: 'Customer support: tickets, order and user lookup', scope: 'country', country: null, permissions: [
+          'orders.view',
+          'users.view',
+          'products.view',
+          'kyc.view',
+        ], isSystem: true, userCount: 0, createdAt: now, updatedAt: now },
+        { id: 'seller', name: 'Seller', description: 'Seller access: own products, orders, inventory', scope: 'country', country: null, permissions: ['products.own', 'orders.own', 'inventory.own'], isSystem: true, userCount: 0, createdAt: now, updatedAt: now },
+        { id: 'influencer', name: 'Influencer', description: 'Influencer access: own storefront and analytics', scope: 'country', country: null, permissions: ['storefront.own', 'analytics.own'], isSystem: true, userCount: 0, createdAt: now, updatedAt: now },
+        { id: 'consultant', name: 'Consultant', description: 'Consultant access: consultations', scope: 'country', country: null, permissions: ['consultations.own'], isSystem: true, userCount: 0, createdAt: now, updatedAt: now },
+        { id: 'customer', name: 'Customer', description: 'Regular customer: orders and profile', scope: 'global', country: null, permissions: ['orders.own', 'profile.own'], isSystem: true, userCount: 0, createdAt: now, updatedAt: now },
       ];
     }
     

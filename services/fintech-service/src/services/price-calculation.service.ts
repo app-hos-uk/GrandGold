@@ -18,6 +18,12 @@ const TAX_RATES: Record<Country, number> = {
   UK: 20, // VAT
 };
 
+// ── Margin guard configuration ──────────────────────────────────────
+// Minimum margin percentage over raw material cost (gold + stones).
+// This prevents below-cost listings due to misconfigured making charges.
+const MIN_MARGIN_PERCENT = 3; // 3% minimum margin over material cost
+const MAX_MAKING_CHARGES_PERCENT = 50; // Ceiling for making charges
+
 interface PriceCalculationInput {
   goldWeight: number;
   purity: GoldPurity;
@@ -53,9 +59,17 @@ export class PriceCalculationService {
   }
 
   /**
-   * Calculate product price based on gold content and additions
+   * Calculate product price based on gold content and additions.
+   * Enforces minimum margin guard and making-charge ceiling.
    */
   async calculatePrice(input: PriceCalculationInput): Promise<PriceCalculation> {
+    // ── Validate making charges ceiling ──────────────────────────────
+    if (input.makingChargesPercent > MAX_MAKING_CHARGES_PERCENT) {
+      throw new Error(
+        `Making charges (${input.makingChargesPercent}%) exceed the maximum allowed (${MAX_MAKING_CHARGES_PERCENT}%).`
+      );
+    }
+
     // Get current gold prices
     const goldPrices = await this.goldPriceService.getCurrentPrices(input.country);
 
@@ -71,6 +85,21 @@ export class PriceCalculationService {
 
     // Calculate subtotal
     const subtotal = goldValue + input.stoneValue + input.laborCost + makingCharges;
+
+    // ── Minimum margin guard ─────────────────────────────────────────
+    // Material cost = gold value + stone value (raw materials).
+    // The selling price (subtotal before tax) must exceed material cost
+    // by at least MIN_MARGIN_PERCENT.
+    const materialCost = goldValue + input.stoneValue;
+    if (materialCost > 0) {
+      const marginPercent = ((subtotal - materialCost) / materialCost) * 100;
+      if (marginPercent < MIN_MARGIN_PERCENT) {
+        throw new Error(
+          `Calculated margin (${marginPercent.toFixed(1)}%) is below the minimum required (${MIN_MARGIN_PERCENT}%). ` +
+          `Increase labor cost or making charges to meet the pricing floor.`
+        );
+      }
+    }
 
     // Calculate tax
     const taxRate = TAX_RATES[input.country];

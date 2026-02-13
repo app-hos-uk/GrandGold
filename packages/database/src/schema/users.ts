@@ -18,9 +18,11 @@ export const countryEnum = pgEnum('country', ['IN', 'AE', 'UK']);
 
 export const kycStatusEnum = pgEnum('kyc_status', [
   'none',
+  'not_started',
   'pending',
   'tier1',
   'tier2',
+  'verified',
   'rejected',
 ]);
 

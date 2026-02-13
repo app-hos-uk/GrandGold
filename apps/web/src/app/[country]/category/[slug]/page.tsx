@@ -57,6 +57,16 @@ const categoryData: Record<string, { title: string; description: string; banner:
     description: 'Adorn your wrists with our exquisite collection of bangles and bracelets.',
     banner: '/banners/bracelets.jpg',
   },
+  bangles: {
+    title: 'Bangles',
+    description: 'Traditional and contemporary bangles crafted in pure gold, from classic designs to modern statement pieces.',
+    banner: '/banners/bangles.jpg',
+  },
+  pendants: {
+    title: 'Pendants',
+    description: 'Elegant pendants to elevate any look, from delicate solitaires to ornate traditional designs.',
+    banner: '/banners/pendants.jpg',
+  },
   'gold-bars': {
     title: 'Gold Bars',
     description: 'Invest in certified gold bars with guaranteed purity and competitive rates.',
@@ -96,6 +106,22 @@ const productsByCategory: Record<string, Product[]> = {
     { id: '22', name: 'Gold Kada Set', price: 165000, weight: '45.0g', purity: '22K', isNew: false, description: 'Traditional gold kada set with intricate patterns. A timeless addition to any collection.', inStock: true },
     { id: '23', name: 'Sleek Chain Bracelet', price: 35000, weight: '10.0g', purity: '18K', isNew: false, description: 'Modern sleek chain bracelet with minimalist design. Perfect for layering or wearing alone.', inStock: true },
     { id: '24', name: 'Antique Bangle Collection', price: 225000, weight: '55.0g', purity: '22K', isNew: true, description: 'Exquisite collection of antique-style bangles with traditional craftsmanship.', inStock: false },
+  ],
+  bangles: [
+    { id: '31', name: 'Classic Gold Bangle Set (4 pieces)', price: 125000, weight: '35.0g', purity: '22K', isNew: false, description: 'Set of 4 classic gold bangles with intricate filigree work. Timeless elegance for everyday wear.', inStock: true },
+    { id: '32', name: 'Temple Design Kangan', price: 185000, weight: '42.0g', purity: '22K', isNew: true, description: 'Traditional temple design kangan with deity motifs. Perfect for festivals and celebrations.', inStock: true },
+    { id: '33', name: 'Diamond Studded Bangle', price: 245000, weight: '28.0g', purity: '18K', isNew: true, description: 'Elegant bangle studded with brilliant-cut diamonds in 18K gold. A modern statement piece.', inStock: true },
+    { id: '34', name: 'Antique Broad Bangle', price: 165000, weight: '38.0g', purity: '22K', isNew: false, description: 'Broad antique-style bangle with traditional Rajasthani craftsmanship.', inStock: true },
+    { id: '35', name: 'Slim Stack Bangles (Set of 6)', price: 95000, weight: '24.0g', purity: '22K', isNew: false, description: 'Delicate slim bangles perfect for stacking. Minimalist design for the modern woman.', inStock: true },
+    { id: '36', name: 'Rose Gold Bangle', price: 55000, weight: '12.0g', purity: '18K', isNew: true, description: 'Contemporary rose gold bangle with a polished finish. Versatile for any occasion.', inStock: false },
+  ],
+  pendants: [
+    { id: '37', name: 'Heart Diamond Pendant', price: 85000, weight: '5.5g', purity: '18K', isNew: true, description: 'Romantic heart-shaped pendant with a brilliant diamond centre. Includes 18K gold chain.', inStock: true },
+    { id: '38', name: 'Om Gold Pendant', price: 25000, weight: '4.0g', purity: '22K', isNew: false, description: 'Sacred Om symbol pendant in 22K gold. A spiritual and elegant piece.', inStock: true },
+    { id: '39', name: 'Solitaire Drop Pendant', price: 145000, weight: '6.0g', purity: '18K', isNew: true, description: 'Stunning solitaire diamond drop pendant in 18K white gold. Timeless sophistication.', inStock: true },
+    { id: '40', name: 'Ruby and Gold Pendant', price: 75000, weight: '7.5g', purity: '22K', isNew: false, description: 'Beautiful pendant featuring a natural ruby set in 22K gold with diamond accents.', inStock: true },
+    { id: '41', name: 'Peacock Pendant', price: 95000, weight: '8.0g', purity: '22K', isNew: true, description: 'Intricate peacock design pendant with meenakari enamel work. A celebration of Indian artistry.', inStock: true },
+    { id: '42', name: 'Initial Letter Pendant', price: 18000, weight: '2.5g', purity: '18K', isNew: false, description: 'Personalized initial letter pendant in 18K gold. A thoughtful gift for someone special.', inStock: true },
   ],
   'gold-bars': [
     { id: '25', name: '1 Gram Gold Bar', price: 6500, weight: '1g', purity: '24K', isNew: false, description: 'Pure 24K gold bar weighing 1 gram. BIS hallmarked with certificate of authenticity.', inStock: true },

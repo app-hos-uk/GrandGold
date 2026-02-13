@@ -221,9 +221,10 @@ export class AuthService {
       permissions: this.getUserPermissions(user.role),
     });
 
-    // Update session
+    // Update session with new tokens (including updated access token hash)
     await this.sessionService.updateSession(session.id, {
       refreshToken: tokens.refreshToken,
+      accessToken: tokens.accessToken, // Update hash for token-based session matching
       lastActiveAt: new Date(),
     });
 
@@ -349,6 +350,7 @@ export class AuthService {
     await this.sessionService.createSession({
       userId: user.id,
       refreshToken: tokens.refreshToken,
+      accessToken: tokens.accessToken, // Store hash for token-based session matching
       deviceId: context.deviceId,
       ipAddress: context.ipAddress,
       userAgent: context.userAgent,
@@ -399,13 +401,40 @@ export class AuthService {
   private getUserPermissions(role: UserRole): string[] {
     const permissionsByRole: Record<string, string[]> = {
       super_admin: ['*'],
-      country_admin: ['users:read', 'users:write', 'orders:*', 'products:*', 'sellers:*'],
-      manager: ['orders:read', 'orders:write', 'products:read', 'products:write', 'users:read'],
-      staff: ['orders:read', 'orders:write', 'products:read'],
-      seller: ['products:own', 'orders:own', 'inventory:own'],
-      influencer: ['storefront:own', 'analytics:own'],
-      consultant: ['consultations:own'],
-      customer: ['orders:own', 'profile:own'],
+      country_admin: [
+        'users.view', 'users.create', 'users.edit', 'users.assign_role',
+        'orders.view', 'orders.update_status', 'orders.cancel', 'orders.refund',
+        'products.view', 'products.create', 'products.edit', 'products.approve',
+        'sellers.view', 'sellers.approve', 'sellers.suspend', 'sellers.edit',
+        'payments.view', 'payments.refund', 'payments.settlements',
+        'reports.view', 'reports.export', 'reports.analytics',
+        'kyc.view', 'kyc.approve', 'kyc.reject',
+        'settings.view',
+      ],
+      manager: [
+        'users.view',
+        'orders.view', 'orders.update_status', 'orders.cancel',
+        'products.view', 'products.create', 'products.edit',
+        'sellers.view',
+        'payments.view',
+        'reports.view', 'reports.export',
+        'kyc.view',
+      ],
+      staff: [
+        'orders.view', 'orders.update_status',
+        'products.view',
+        'kyc.view',
+      ],
+      support: [
+        'orders.view',
+        'users.view',
+        'products.view',
+        'kyc.view',
+      ],
+      seller: ['products.own', 'orders.own', 'inventory.own'],
+      influencer: ['storefront.own', 'analytics.own'],
+      consultant: ['consultations.own'],
+      customer: ['orders.own', 'profile.own'],
     };
 
     return permissionsByRole[role] || [];

@@ -285,6 +285,87 @@ export class SettlementService {
   }
 
   /**
+   * Raise a dispute on a settlement (Seller)
+   */
+  async raiseDispute(
+    settlementId: string,
+    userId: string,
+    data: { reason: string; details?: string; expectedAmount?: number }
+  ): Promise<{
+    disputeId: string;
+    settlementId: string;
+    status: string;
+    reason: string;
+    createdAt: Date;
+  }> {
+    const sellerId = await getSellerIdByUserId(userId);
+    if (!sellerId) throw new NotFoundError('Settlement');
+
+    const settlement = await getSettlementById(settlementId);
+    if (!settlement || settlement.sellerId !== sellerId) {
+      throw new NotFoundError('Settlement');
+    }
+
+    // Can only dispute pending or completed settlements
+    if (!['pending', 'completed'].includes(settlement.status)) {
+      throw new NotFoundError('Settlement cannot be disputed in its current status');
+    }
+
+    // Mark settlement as disputed
+    await updateSettlementStatus(settlementId, 'disputed' as 'pending', {
+      disputeReason: data.reason,
+      disputeDetails: data.details,
+      disputeExpectedAmount: data.expectedAmount,
+      disputedAt: new Date(),
+      disputedBy: userId,
+    });
+
+    const disputeId = `disp_${settlementId.slice(-8)}_${Date.now()}`;
+
+    return {
+      disputeId,
+      settlementId,
+      status: 'open',
+      reason: data.reason,
+      createdAt: new Date(),
+    };
+  }
+
+  /**
+   * Resolve a dispute (Admin)
+   */
+  async resolveDispute(
+    settlementId: string,
+    adminUserId: string,
+    data: { resolution: 'accepted' | 'rejected' | 'adjusted'; adjustedAmount?: number; notes?: string }
+  ): Promise<{
+    settlementId: string;
+    resolution: string;
+    adjustedAmount?: number;
+    resolvedAt: Date;
+  }> {
+    const settlement = await getSettlementById(settlementId);
+    if (!settlement) throw new NotFoundError('Settlement');
+
+    const newStatus = data.resolution === 'rejected' ? 'pending' : 'pending';
+
+    await updateSettlementStatus(settlementId, newStatus, {
+      disputeResolution: data.resolution,
+      disputeResolvedBy: adminUserId,
+      disputeResolvedAt: new Date(),
+      disputeNotes: data.notes,
+      ...(data.adjustedAmount !== undefined ? { netAmount: String(data.adjustedAmount) } : {}),
+    });
+
+    return {
+      settlementId,
+      resolution: data.resolution,
+      adjustedAmount: data.adjustedAmount,
+      resolvedAt: new Date(),
+    };
+  }
+
+  /**
    * Mark settlement as paid (Admin)
    */
   async markAsPaid(

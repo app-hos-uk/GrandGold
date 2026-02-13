@@ -36,26 +36,29 @@ import {
 import { adminApi, authApi, ApiError, type CurrentUserProfile } from '@/lib/api';
 import { Logo } from '@/components/brand/logo';
 
+// Roles allowed to access the admin panel
+const ADMIN_PANEL_ROLES = ['super_admin', 'country_admin', 'manager', 'staff', 'support'];
+
 const ALL_NAV = [
-  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, roles: ['super_admin', 'country_admin'] },
+  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, roles: ['super_admin', 'country_admin', 'manager'] },
   { name: 'Users', href: '/admin/users', icon: Users, roles: ['super_admin', 'country_admin'] },
   { name: 'Roles', href: '/admin/roles', icon: Shield, roles: ['super_admin', 'country_admin'] },
-  { name: 'Orders', href: '/admin/orders', icon: ShoppingCart, roles: ['super_admin', 'country_admin'] },
-  { name: 'Products', href: '/admin/products', icon: Package, roles: ['super_admin', 'country_admin'] },
-  { name: 'Categories', href: '/admin/categories', icon: FolderTree, roles: ['super_admin', 'country_admin'] },
-  { name: 'Inventory', href: '/admin/inventory', icon: Boxes, roles: ['super_admin', 'country_admin'] },
-  { name: 'Sellers', href: '/admin/sellers', icon: Store, roles: ['super_admin', 'country_admin'] },
+  { name: 'Orders', href: '/admin/orders', icon: ShoppingCart, roles: ['super_admin', 'country_admin', 'manager', 'staff'] },
+  { name: 'Products', href: '/admin/products', icon: Package, roles: ['super_admin', 'country_admin', 'manager'] },
+  { name: 'Categories', href: '/admin/categories', icon: FolderTree, roles: ['super_admin', 'country_admin', 'manager'] },
+  { name: 'Inventory', href: '/admin/inventory', icon: Boxes, roles: ['super_admin', 'country_admin', 'manager'] },
+  { name: 'Sellers', href: '/admin/sellers', icon: Store, roles: ['super_admin', 'country_admin', 'manager'] },
   { name: 'Finance', href: '/admin/finance', icon: Wallet, roles: ['super_admin', 'country_admin'] },
-  { name: 'Promotions', href: '/admin/promotions', icon: Tag, roles: ['super_admin', 'country_admin'] },
+  { name: 'Promotions', href: '/admin/promotions', icon: Tag, roles: ['super_admin', 'country_admin', 'manager'] },
   { name: 'Marketing', href: '/admin/marketing', icon: Mail, roles: ['super_admin', 'country_admin'] },
   { name: 'Metal Pricing', href: '/admin/pricing', icon: TrendingUp, roles: ['super_admin', 'country_admin'] },
   { name: 'Influencer Marketing', href: '/admin/influencers', icon: Sparkles, roles: ['super_admin', 'country_admin'] },
-  { name: 'Support', href: '/admin/support', icon: Headphones, roles: ['super_admin', 'country_admin'] },
-  { name: 'KYC', href: '/admin/kyc', icon: ShieldCheck, roles: ['super_admin', 'country_admin'] },
-  { name: 'Refunds', href: '/admin/refunds', icon: Receipt, roles: ['super_admin', 'country_admin'] },
+  { name: 'Support', href: '/admin/support', icon: Headphones, roles: ['super_admin', 'country_admin', 'manager', 'staff', 'support'] },
+  { name: 'KYC', href: '/admin/kyc', icon: ShieldCheck, roles: ['super_admin', 'country_admin', 'manager', 'staff'] },
+  { name: 'Refunds', href: '/admin/refunds', icon: Receipt, roles: ['super_admin', 'country_admin', 'manager'] },
   { name: 'Onboarding', href: '/admin/onboarding', icon: UserPlus, roles: ['super_admin', 'country_admin'] },
-  { name: 'Reports', href: '/admin/reports', icon: BarChart3, roles: ['super_admin', 'country_admin'] },
-  { name: 'Shipping', href: '/admin/shipping', icon: Truck, roles: ['super_admin', 'country_admin'] },
+  { name: 'Reports', href: '/admin/reports', icon: BarChart3, roles: ['super_admin', 'country_admin', 'manager'] },
+  { name: 'Shipping', href: '/admin/shipping', icon: Truck, roles: ['super_admin', 'country_admin', 'manager'] },
   { name: 'Audit Logs', href: '/admin/audit-logs', icon: FileText, roles: ['super_admin'] },
   { name: 'Settings', href: '/admin/settings', icon: Settings, roles: ['super_admin'] },
 ];
@@ -80,22 +83,15 @@ export default function AdminLayout({
   // Fetch profile only once on mount, not on every path change
   const fetchProfile = useCallback(async () => {
     if (isRedirectingRef.current) return;
-    
-    const token =
-      typeof window !== 'undefined'
-        ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
-        : null;
-    
-    if (!token) {
-      isRedirectingRef.current = true;
-      router.replace('/admin/login');
-      return;
-    }
 
+    // Always attempt getMe() — auth is handled by either:
+    //   1. httpOnly cookie (middleware injects Authorization header), or
+    //   2. Legacy localStorage token (getAuthHeaders adds the header)
+    // If neither is present the API returns 401 and we redirect.
     try {
       const user = await adminApi.getMe();
       const role = user?.role;
-      if (role !== 'super_admin' && role !== 'country_admin') {
+      if (!role || !ADMIN_PANEL_ROLES.includes(role)) {
         isRedirectingRef.current = true;
         authApi.logout();
         router.replace('/admin/login');
@@ -139,12 +135,16 @@ export default function AdminLayout({
   }, [pathname, fetchProfile]);
 
   const navigation = profile ? getNavigation(profile.role) : [];
+  const roleLabels: Record<string, string> = {
+    super_admin: 'Super Admin (Global)',
+    manager: 'Manager',
+    staff: 'Staff',
+    support: 'Support',
+  };
   const roleLabel =
-    profile?.role === 'super_admin'
-      ? 'Super Admin (Global)'
-      : profile?.role === 'country_admin' && profile?.country
-        ? `Country Admin (${profile.country})`
-        : 'Admin';
+    profile?.role === 'country_admin' && profile?.country
+      ? `Country Admin (${profile.country})`
+      : roleLabels[profile?.role || ''] || 'Admin';
   const initial = profile?.firstName?.[0] || profile?.email?.[0]?.toUpperCase() || 'A';
 
   if (pathname === '/admin/login') {

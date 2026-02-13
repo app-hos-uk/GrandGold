@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, boolean, timestamp, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, boolean, timestamp, integer, jsonb, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './users';
 
@@ -7,6 +7,7 @@ export const sessions = pgTable('sessions', {
   id: varchar('id', { length: 36 }).primaryKey(),
   userId: varchar('user_id', { length: 36 }).notNull().references(() => users.id),
   refreshToken: text('refresh_token').notNull(),
+  accessTokenHash: varchar('access_token_hash', { length: 64 }), // SHA-256 hash for token-based session matching
   deviceId: varchar('device_id', { length: 100 }),
   deviceName: varchar('device_name', { length: 100 }),
   ipAddress: varchar('ip_address', { length: 45 }),
@@ -77,9 +78,6 @@ export const userActivities = pgTable('user_activities', {
   metadata: jsonb('metadata'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
-
-// Import missing types
-import { integer, jsonb } from 'drizzle-orm/pg-core';
 
 // Relations
 export const sessionsRelations = relations(sessions, ({ one }) => ({

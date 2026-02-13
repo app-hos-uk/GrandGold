@@ -269,13 +269,15 @@ export class ProductService {
   }
 
   /**
-   * List all products (Admin) - no country filter. Returns empty on MeiliSearch/network error.
+   * List all products (Admin). When `country` is specified (e.g. for country_admin),
+   * only products available in that country are returned.
    */
   async listAllProducts(options: ProductListOptions = { page: 1, limit: 50 }): Promise<PaginatedResult<Product>> {
     try {
       const filters: string[] = [];
       if (options.category) filters.push(`category = ${options.category}`);
       if (options.status) filters.push(`status = ${options.status}`);
+      if (options.country) filters.push(`country = ${options.country}`);
 
       const results = await productIndex.search('', {
         filter: filters.length > 0 ? filters.join(' AND ') : undefined,

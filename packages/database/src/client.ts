@@ -3,7 +3,14 @@ import postgres from 'postgres';
 import * as schema from './schema';
 
 // Connection string from environment
-const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/grandgold_dev';
+function getDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url && process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL: DATABASE_URL environment variable is required in production.');
+  }
+  return url || 'postgresql://postgres:password@localhost:5432/grandgold_dev';
+}
+const connectionString = getDatabaseUrl();
 
 // Cloud SQL connection name for Unix socket (e.g. project:region:instance)
 // When set, we connect via /cloudsql/PROJECT:REGION:INSTANCE socket

@@ -7,12 +7,13 @@ const productService = new ProductService();
 
 /**
  * GET /api/search/admin
- * List all products for admin (no country filter)
+ * List all products for admin. Country admins see only their country's products.
  */
 router.get('/admin', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const role = (req.user as { role?: string })?.role;
-    if (role !== 'super_admin' && role !== 'country_admin') {
+    const role = (req.user as { role?: string; country?: string })?.role;
+    const adminRoles = ['super_admin', 'country_admin', 'manager'];
+    if (!role || !adminRoles.includes(role)) {
       res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Admin access required' } });
       return;
     }
@@ -22,7 +23,13 @@ router.get('/admin', authenticate, async (req: Request, res: Response, next: Nex
     const category = req.query.category as string;
     const status = req.query.status as string;
 
-    const results = await productService.listAllProducts({ page, limit, category, status });
+    // Country admins can only see products from their assigned country
+    let country: string | undefined = req.query.country as string;
+    if (role === 'country_admin' && req.user?.country) {
+      country = req.user.country;
+    }
+
+    const results = await productService.listAllProducts({ page, limit, category, status, country });
     res.json({
       success: true,
       data: results,

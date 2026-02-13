@@ -60,7 +60,7 @@ export default function CampaignDetailPage() {
     const fetchCampaign = async () => {
       try {
         const res = await fetch(`/api/marketing/campaigns/${id}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('grandgold_token')}` },
+          credentials: 'include',
         });
         if (!res.ok) throw new Error('Campaign not found');
         const data = await res.json();
@@ -262,9 +262,12 @@ export default function CampaignDetailPage() {
         )}
         <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
           {campaign.channel === 'email' ? (
-            <div
-              className="prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: campaign.content }}
+            <iframe
+              srcDoc={campaign.content}
+              sandbox="" /* empty = maximum restriction: no scripts, no forms, no same-origin */
+              className="w-full min-h-[300px] border-0"
+              title="Email preview"
+              referrerPolicy="no-referrer"
             />
           ) : (
             <p className="whitespace-pre-wrap">{campaign.content}</p>

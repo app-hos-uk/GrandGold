@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { ValidationError, passwordSchema } from '@grandgold/utils';
+import { ValidationError, NotFoundError, passwordSchema } from '@grandgold/utils';
 import { UserService } from '../services/user.service';
 import { authenticate, authorize } from '../middleware/auth';
 import { listUsers, findUserById, updateUser } from '@grandgold/database';
@@ -541,11 +541,42 @@ router.delete('/account', async (req: Request, res: Response, next: NextFunction
       throw new ValidationError('Please type "DELETE MY ACCOUNT" to confirm');
     }
     
-    await userService.deleteAccount(req.user.sub, password);
+    const result = await userService.deleteAccount(req.user.sub, password);
     
     res.json({
       success: true,
-      message: 'Your account has been scheduled for deletion',
+      message: 'Your account has been scheduled for deletion. You have 30 days to reactivate.',
+      data: { scheduledPurgeAt: result.scheduledPurgeAt, gracePeriodDays: 30 },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/users/account/reactivate
+ * Reactivate a soft-deleted account within the 30-day grace period
+ */
+router.post('/account/reactivate', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      throw new ValidationError('Email and password are required');
+    }
+
+    // Look up user by email (they can't authenticate normally because sessions are invalidated)
+    const { findUserByEmail } = await import('@grandgold/database');
+    const user = await findUserByEmail(email);
+    if (!user) {
+      throw new NotFoundError('User');
+    }
+
+    await userService.reactivateAccount(user.id, password);
+    
+    res.json({
+      success: true,
+      message: 'Account reactivated successfully. Please log in again.',
     });
   } catch (error) {
     next(error);

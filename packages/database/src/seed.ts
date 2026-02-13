@@ -39,10 +39,14 @@ function requireRealDatabaseUrl(): void {
   }
 }
 
-const SUPER_ADMIN_EMAIL = 'mail@jsabu.com';
-const SUPER_ADMIN_PASSWORD = 'Admin@1234';
-const SUPER_ADMIN_FIRST_NAME = 'Sabuj';
-const SUPER_ADMIN_LAST_NAME = 'Anchuparayil';
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || 'mail@jsabu.com';
+const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || 'Admin@1234';
+const SUPER_ADMIN_FIRST_NAME = process.env.SUPER_ADMIN_FIRST_NAME || 'Sabuj';
+const SUPER_ADMIN_LAST_NAME = process.env.SUPER_ADMIN_LAST_NAME || 'Anchuparayil';
+
+if (process.env.NODE_ENV === 'production' && !process.env.SUPER_ADMIN_PASSWORD) {
+  console.error('WARNING: Set SUPER_ADMIN_PASSWORD env var in production. Do not use default credentials.');
+}
 
 async function seedSuperAdmin(): Promise<void> {
   requireRealDatabaseUrl();

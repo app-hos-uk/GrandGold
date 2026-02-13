@@ -47,9 +47,27 @@ export async function getUserActiveSessions(userId: string): Promise<Session[]> 
     .orderBy(desc(sessions.lastActiveAt));
 }
 
+export async function findSessionByTokenHash(userId: string, tokenHash: string): Promise<Session | undefined> {
+  const result = await db.select()
+    .from(sessions)
+    .where(and(
+      eq(sessions.userId, userId),
+      eq(sessions.accessTokenHash, tokenHash),
+      eq(sessions.isActive, true),
+    ))
+    .limit(1);
+  return result[0];
+}
+
 export async function updateSessionActivity(id: string): Promise<void> {
   await db.update(sessions)
     .set({ lastActiveAt: new Date() })
+    .where(eq(sessions.id, id));
+}
+
+export async function updateSessionTokenHash(id: string, accessTokenHash: string): Promise<void> {
+  await db.update(sessions)
+    .set({ accessTokenHash, lastActiveAt: new Date() })
     .where(eq(sessions.id, id));
 }
 

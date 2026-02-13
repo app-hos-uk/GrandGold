@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Truck,
@@ -17,6 +17,7 @@ import {
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { useToast } from '@/components/admin/toast';
 import { formatCurrency } from '@/lib/format';
+import { adminApi } from '@/lib/api';
 
 interface Carrier {
   id: string;
@@ -29,7 +30,7 @@ interface Carrier {
   supportsInsurance: boolean;
 }
 
-const MOCK_CARRIERS: Carrier[] = [
+const FALLBACK_CARRIERS: Carrier[] = [
   {
     id: '1',
     name: 'Delhivery',
@@ -85,16 +86,40 @@ const MOCK_CARRIERS: Carrier[] = [
 
 export default function AdminShippingPage() {
   const toast = useToast();
-  const [carriers, setCarriers] = useState<Carrier[]>(MOCK_CARRIERS);
+  const [carriers, setCarriers] = useState<Carrier[]>(FALLBACK_CARRIERS);
+  const [loading, setLoading] = useState(true);
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(25000);
   const [armoredTransportEnabled, setArmoredTransportEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    const fetchCarriers = async () => {
+      setLoading(true);
+      try {
+        const res = await adminApi.getCarriers();
+        const data = res?.data ?? [];
+        if (data.length > 0) {
+          setCarriers(data as Carrier[]);
+        }
+      } catch {
+        // keep fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCarriers();
+  }, []);
+
   const handleSaveSettings = async () => {
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setSaving(false);
-    toast.success('Shipping settings saved');
+    try {
+      await adminApi.updateShippingSettings({ freeShippingThreshold, armoredTransportEnabled });
+      toast.success('Shipping settings saved');
+    } catch {
+      toast.error('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

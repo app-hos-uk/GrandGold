@@ -111,24 +111,86 @@ router.post('/send/whatsapp', (req: Request, res: Response, next: NextFunction) 
   }
 });
 
-// Preferences (opt-in/opt-out)
-router.get('/preferences/:userId', (req: Request, res: Response) => {
-  // TODO: load from DB
-  res.json({
-    success: true,
-    data: {
-      email: true,
-      whatsapp: false,
-      sms: false,
-      push: true,
-      marketing: false,
-    },
-  });
+// ── Notification preference persistence (Redis-backed) ──────────────────
+const PREFS_PREFIX = 'notif_prefs:';
+
+interface NotificationPrefs {
+  email: boolean;
+  whatsapp: boolean;
+  sms: boolean;
+  push: boolean;
+  marketing: boolean;
+}
+
+const DEFAULT_PREFS: NotificationPrefs = {
+  email: true,
+  whatsapp: false,
+  sms: false,
+  push: true,
+  marketing: false,
+};
+
+// Lazy Redis init (same pattern used by other services)
+let redis: import('ioredis').default | null = null;
+
+function getRedis(): import('ioredis').default {
+  if (!redis) {
+    const Redis = require('ioredis');
+    redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  }
+  return redis!;
+}
+
+async function loadPrefs(userId: string): Promise<NotificationPrefs> {
+  try {
+    const raw = await getRedis().get(`${PREFS_PREFIX}${userId}`);
+    if (raw) return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+  } catch {
+    // Redis unavailable — return defaults
+  }
+  return { ...DEFAULT_PREFS };
+}
+
+async function savePrefs(userId: string, prefs: Partial<NotificationPrefs>): Promise<NotificationPrefs> {
+  const current = await loadPrefs(userId);
+  const merged: NotificationPrefs = { ...current, ...prefs };
+  try {
+    await getRedis().set(
+      `${PREFS_PREFIX}${userId}`,
+      JSON.stringify(merged),
+      'EX',
+      365 * 86400, // 1 year TTL
+    );
+  } catch {
+    // Redis unavailable — preference will still be returned in-memory
+  }
+  return merged;
+}
+
+// Preferences (opt-in/opt-out) — persisted in Redis
+router.get('/preferences/:userId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const prefs = await loadPrefs(req.params.userId);
+    res.json({ success: true, data: prefs });
+  } catch (e) {
+    next(e);
+  }
 });
 
-router.patch('/preferences/:userId', (req: Request, res: Response) => {
-  // TODO: save to DB
-  res.json({ success: true, data: req.body });
+router.patch('/preferences/:userId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const allowedKeys: (keyof NotificationPrefs)[] = ['email', 'whatsapp', 'sms', 'push', 'marketing'];
+    const patch: Partial<NotificationPrefs> = {};
+    for (const key of allowedKeys) {
+      if (typeof req.body[key] === 'boolean') {
+        patch[key] = req.body[key];
+      }
+    }
+    const updated = await savePrefs(req.params.userId, patch);
+    res.json({ success: true, data: updated });
+  } catch (e) {
+    next(e);
+  }
 });
 
 export { router as notificationRouter };

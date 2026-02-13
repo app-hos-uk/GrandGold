@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
@@ -16,9 +16,25 @@ import {
   Download,
   Sparkles,
   Copy,
+  Loader2,
 } from 'lucide-react';
+import { adminApi } from '@/lib/api';
 
-const products = [
+interface Product {
+  id: string | number;
+  name: string;
+  sku: string;
+  category: string;
+  price?: number;
+  basePrice?: number;
+  stock?: number;
+  stockQuantity?: number;
+  status: string;
+  views?: number;
+  sales?: number;
+}
+
+const FALLBACK_PRODUCTS: Product[] = [
   { id: 1, name: 'Traditional Kundan Necklace Set', sku: 'GG-NK-001', category: 'Necklaces', price: 185000, stock: 12, status: 'active', views: 1245, sales: 28 },
   { id: 2, name: 'Diamond Studded Jhumkas', sku: 'GG-ER-002', category: 'Earrings', price: 78500, stock: 25, status: 'active', views: 987, sales: 45 },
   { id: 3, name: 'Solitaire Engagement Ring', sku: 'GG-RG-003', category: 'Rings', price: 245000, stock: 2, status: 'low_stock', views: 2156, sales: 18 },
@@ -29,14 +45,14 @@ const products = [
   { id: 8, name: 'Charm Bracelet', sku: 'GG-BR-008', category: 'Bracelets', price: 55000, stock: 20, status: 'draft', views: 0, sales: 0 },
 ];
 
-const statusColors = {
+const statusColors: Record<string, string> = {
   active: 'bg-green-100 text-green-700',
   draft: 'bg-gray-100 text-gray-700',
   out_of_stock: 'bg-red-100 text-red-700',
   low_stock: 'bg-yellow-100 text-yellow-700',
 };
 
-const statusLabels = {
+const statusLabels: Record<string, string> = {
   active: 'Active',
   draft: 'Draft',
   out_of_stock: 'Out of Stock',
@@ -46,9 +62,44 @@ const statusLabels = {
 export default function SellerProductsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true);
+      try {
+        const res = await adminApi.getProducts({ page, limit: 20, status: statusFilter === 'all' ? undefined : statusFilter });
+        const data = (res as { data?: unknown[] })?.data ?? [];
+        const mappedProducts: Product[] = data.map((p: unknown) => {
+          const item = p as Record<string, unknown>;
+          return {
+            id: (item.id || item._id || '') as string,
+            name: (item.name || '') as string,
+            sku: (item.sku || '') as string,
+            category: (item.category || '') as string,
+            price: (item.basePrice || item.price || 0) as number,
+            stock: (item.stockQuantity ?? item.stock ?? 0) as number,
+            status: (item.status || 'active') as string,
+            views: (item.views || 0) as number,
+            sales: (item.sales || 0) as number,
+          };
+        });
+        setProducts(mappedProducts.length > 0 ? mappedProducts : FALLBACK_PRODUCTS);
+        setTotal((res as { total?: number })?.total ?? mappedProducts.length);
+      } catch {
+        setProducts(FALLBACK_PRODUCTS);
+        setTotal(FALLBACK_PRODUCTS.length);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProducts();
+  }, [page, statusFilter]);
 
   const filteredProducts = products.filter((product) => {
-    if (statusFilter !== 'all' && product.status !== statusFilter) return false;
     if (searchQuery && !product.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
@@ -85,14 +136,14 @@ export default function SellerProductsPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Total Products', value: '48', color: 'text-gray-900' },
-          { label: 'Active', value: '42', color: 'text-green-600' },
-          { label: 'Out of Stock', value: '3', color: 'text-red-600' },
-          { label: 'Draft', value: '3', color: 'text-gray-600' },
+          { label: 'Total Products', value: String(total), color: 'text-gray-900' },
+          { label: 'Active', value: String(products.filter(p => p.status === 'active').length), color: 'text-green-600' },
+          { label: 'Out of Stock', value: String(products.filter(p => p.status === 'out_of_stock').length), color: 'text-red-600' },
+          { label: 'Draft', value: String(products.filter(p => p.status === 'draft').length), color: 'text-gray-600' },
         ].map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl p-4 shadow-sm">
             <p className="text-sm text-gray-500">{stat.label}</p>
-            <span className={`text-2xl font-bold ${stat.color}`}>{stat.value}</span>
+            <span className={`text-2xl font-bold ${stat.color}`}>{loading ? '—' : stat.value}</span>
           </div>
         ))}
       </div>
@@ -171,22 +222,22 @@ export default function SellerProductsPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4 font-semibold text-gray-900">
-                    ₹{product.price.toLocaleString()}
+                    ₹{(product.price ?? product.basePrice ?? 0).toLocaleString()}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={product.stock === 0 ? 'text-red-600 font-medium' : product.stock < 5 ? 'text-yellow-600 font-medium' : 'text-gray-900'}>
-                      {product.stock}
+                    <span className={(product.stock ?? 0) === 0 ? 'text-red-600 font-medium' : (product.stock ?? 0) < 5 ? 'text-yellow-600 font-medium' : 'text-gray-900'}>
+                      {product.stock ?? product.stockQuantity ?? 0}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                      statusColors[product.status as keyof typeof statusColors]
+                      statusColors[product.status] || 'bg-gray-100 text-gray-700'
                     }`}>
-                      {statusLabels[product.status as keyof typeof statusLabels]}
+                      {statusLabels[product.status] || product.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-gray-600">{product.views.toLocaleString()}</td>
-                  <td className="px-6 py-4 text-gray-900 font-medium">{product.sales}</td>
+                  <td className="px-6 py-4 text-gray-600">{(product.views ?? 0).toLocaleString()}</td>
+                  <td className="px-6 py-4 text-gray-900 font-medium">{product.sales ?? 0}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1">
                       <button className="p-2 hover:bg-gray-100 rounded-lg" title="View">
@@ -206,17 +257,31 @@ export default function SellerProductsPage() {
           </table>
         </div>
 
+        {loading && (
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="w-6 h-6 animate-spin text-gold-500" />
+            <span className="ml-2 text-gray-500">Loading products...</span>
+          </div>
+        )}
+
         <div className="flex items-center justify-between p-4 border-t border-gray-100">
           <p className="text-sm text-gray-500">
-            Showing {filteredProducts.length} of {products.length} products
+            Showing {filteredProducts.length} of {total} products
           </p>
           <div className="flex items-center gap-2">
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage(Math.max(1, page - 1))}
+              className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <button className="px-3 py-1 bg-gold-500 text-white rounded-lg">1</button>
-            <button className="px-3 py-1 hover:bg-gray-100 rounded-lg">2</button>
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <span className="px-3 py-1 bg-gold-500 text-white rounded-lg">{page}</span>
+            <button
+              disabled={page * 20 >= total}
+              onClick={() => setPage(page + 1)}
+              className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>

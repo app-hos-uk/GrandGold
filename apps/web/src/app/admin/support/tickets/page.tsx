@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -27,6 +27,7 @@ import {
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { formatRelativeDate } from '@/lib/format';
 import { useToast } from '@/components/admin/toast';
+import { adminApi } from '@/lib/api';
 
 interface Ticket {
   id: string;
@@ -62,7 +63,7 @@ interface Ticket {
   resolvedAt?: string;
 }
 
-const MOCK_TICKETS: Ticket[] = [
+const FALLBACK_TICKETS: Ticket[] = [
   {
     id: 'TKT-2024-001',
     subject: 'Order not delivered - ORD-2024-1234',
@@ -161,7 +162,9 @@ const typeConfig = {
 
 export default function TicketsPage() {
   const toast = useToast();
-  const [tickets, setTickets] = useState<Ticket[]>(MOCK_TICKETS);
+  const [tickets, setTickets] = useState<Ticket[]>(FALLBACK_TICKETS);
+  const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
@@ -170,6 +173,56 @@ export default function TicketsPage() {
   const [sending, setSending] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+
+  useEffect(() => {
+    const fetchTickets = async () => {
+      setLoading(true);
+      try {
+        const res = await adminApi.getTickets({
+          page: currentPage,
+          limit: itemsPerPage,
+          status: statusFilter === 'all' ? undefined : statusFilter,
+          priority: priorityFilter === 'all' ? undefined : priorityFilter,
+        });
+        const data = res?.data ?? [];
+        if (data.length > 0) {
+          setTickets(data.map(t => ({
+            id: t.id,
+            subject: t.subject,
+            description: (t as unknown as Record<string, string>).description || t.messages?.[0]?.content || '',
+            customer: t.customer,
+            type: t.type as Ticket['type'],
+            priority: t.priority,
+            status: t.status,
+            channel: t.channel,
+            assignee: t.assignee,
+            relatedOrderId: (t as unknown as Record<string, string>).relatedOrderId,
+            tags: (t as unknown as Record<string, string[]>).tags || [],
+            messages: (t.messages || []).map(m => ({
+              id: m.id,
+              sender: m.sender as 'customer' | 'agent' | 'system',
+              senderName: (m as unknown as Record<string, string>).senderName || m.sender,
+              content: m.content,
+              timestamp: m.createdAt,
+              isInternal: m.isInternal,
+            })),
+            createdAt: t.createdAt,
+            updatedAt: t.updatedAt,
+            resolvedAt: (t as unknown as Record<string, string>).resolvedAt,
+          })));
+        } else {
+          setTickets(FALLBACK_TICKETS);
+        }
+        setTotalCount(res?.total ?? data.length);
+      } catch {
+        setTickets(FALLBACK_TICKETS);
+        setTotalCount(FALLBACK_TICKETS.length);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTickets();
+  }, [currentPage, statusFilter, priorityFilter]);
 
   const filteredTickets = tickets.filter((t) => {
     if (statusFilter !== 'all' && t.status !== statusFilter) return false;

@@ -1,13 +1,22 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { CheckoutService } from '../services/checkout.service';
+import { authenticate, optionalAuth } from '../middleware/auth';
 
 const router = Router();
 const checkoutService = new CheckoutService();
 
+/**
+ * Helper: extract user ID from JWT auth (preferred) or fallback to x-user-id header
+ * for backward compatibility with internal service-to-service calls.
+ */
+function getUserId(req: Request): string {
+  return req.user?.sub || (req.headers['x-user-id'] as string) || '';
+}
+
 // Initialize checkout
-router.post('/initiate', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/initiate', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = getUserId(req);
     const input = req.body;
     
     const checkout = await checkoutService.initiateCheckout(userId, input);
@@ -19,9 +28,9 @@ router.post('/initiate', async (req: Request, res: Response, next: NextFunction)
 });
 
 // Get checkout session
-router.get('/:checkoutId', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:checkoutId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = getUserId(req);
     const { checkoutId } = req.params;
     
     const checkout = await checkoutService.getCheckout(checkoutId, userId);
@@ -33,9 +42,9 @@ router.get('/:checkoutId', async (req: Request, res: Response, next: NextFunctio
 });
 
 // Calculate totals
-router.post('/:checkoutId/totals', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/:checkoutId/totals', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = getUserId(req);
     const { checkoutId } = req.params;
     const { promoCode } = req.body;
     
@@ -48,9 +57,9 @@ router.post('/:checkoutId/totals', async (req: Request, res: Response, next: Nex
 });
 
 // Apply promo code
-router.post('/:checkoutId/promo', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/:checkoutId/promo', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = getUserId(req);
     const { checkoutId } = req.params;
     const { code } = req.body;
     
@@ -63,9 +72,9 @@ router.post('/:checkoutId/promo', async (req: Request, res: Response, next: Next
 });
 
 // Remove promo code
-router.delete('/:checkoutId/promo', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:checkoutId/promo', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = getUserId(req);
     const { checkoutId } = req.params;
     
     const result = await checkoutService.removePromoCode(checkoutId, userId);
@@ -77,9 +86,9 @@ router.delete('/:checkoutId/promo', async (req: Request, res: Response, next: Ne
 });
 
 // Get shipping options
-router.get('/:checkoutId/shipping', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:checkoutId/shipping', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = getUserId(req);
     const { checkoutId } = req.params;
     
     const options = await checkoutService.getShippingOptions(checkoutId, userId);
@@ -91,9 +100,9 @@ router.get('/:checkoutId/shipping', async (req: Request, res: Response, next: Ne
 });
 
 // Set click & collect
-router.post('/:checkoutId/click-collect', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/:checkoutId/click-collect', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = getUserId(req);
     const { checkoutId } = req.params;
     const data = req.body;
     
@@ -106,9 +115,9 @@ router.post('/:checkoutId/click-collect', async (req: Request, res: Response, ne
 });
 
 // Confirm checkout (place order)
-router.post('/:checkoutId/confirm', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/:checkoutId/confirm', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.headers['x-user-id'] as string;
+    const userId = getUserId(req);
     const { checkoutId } = req.params;
     const payment = req.body;
     

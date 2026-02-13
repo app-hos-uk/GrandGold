@@ -37,8 +37,17 @@ app.use(errorHandler);
 
 const PORT = parseInt(process.env.PORT || '4010', 10);
 const HOST = process.env.HOST || '0.0.0.0';
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`Promotion service started on ${HOST}:${PORT}`);
+});
+
+// Graceful shutdown for Cloud Run
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
 
 export { app };

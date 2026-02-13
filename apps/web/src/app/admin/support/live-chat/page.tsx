@@ -56,7 +56,7 @@ interface ChatMessage {
   status?: 'sent' | 'delivered' | 'read';
 }
 
-const MOCK_SESSIONS: ChatSession[] = [
+const FALLBACK_SESSIONS: ChatSession[] = [
   {
     id: 'CHAT-001',
     customer: { id: 'C1', name: 'Priya Sharma', email: 'priya@email.com', country: 'IN' },
@@ -115,8 +115,8 @@ const AI_SUGGESTIONS = [
 ];
 
 export default function LiveChatPage() {
-  const [sessions, setSessions] = useState<ChatSession[]>(MOCK_SESSIONS);
-  const [activeSession, setActiveSession] = useState<ChatSession | null>(MOCK_SESSIONS[0]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [messageInput, setMessageInput] = useState('');
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [agentStatus, setAgentStatus] = useState<'online' | 'busy' | 'away'>('online');
@@ -124,6 +124,56 @@ export default function LiveChatPage() {
 
   const waitingCount = sessions.filter((s) => s.status === 'waiting').length;
   const activeCount = sessions.filter((s) => s.status === 'active').length;
+
+  // Load initial sessions from support tickets API, then fall back to demo data
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { adminApi } = await import('@/lib/api');
+        const res = await adminApi.getTickets({ limit: 20, status: 'open' });
+        const tickets: Array<Record<string, unknown>> = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.data as Array<Record<string, unknown>>) || [];
+        if (!cancelled && tickets.length > 0) {
+          const mapped: ChatSession[] = tickets.slice(0, 10).map((t) => {
+            const customer = t.customer as Record<string, string> | undefined;
+            const messages = (t.messages as Array<Record<string, unknown>>) || [];
+            return {
+              id: String(t.id),
+              customer: {
+                id: customer?.id || 'unknown',
+                name: customer?.name || 'Customer',
+                email: customer?.email || '',
+                country: String(t.country || 'IN'),
+              },
+              status: t.status === 'open' ? 'waiting' as const : 'active' as const,
+              assignee: (t.assignee as Record<string, string>)?.name,
+              startedAt: String(t.createdAt || new Date().toISOString()),
+              lastMessageAt: String(t.updatedAt || new Date().toISOString()),
+              unreadCount: 0,
+              messages: messages.map((m) => ({
+                id: String(m.id),
+                sender: String(m.senderType || 'customer') as 'customer' | 'agent' | 'bot',
+                senderName: String(m.sender || 'Customer'),
+                content: String(m.content || ''),
+                timestamp: String(m.createdAt || new Date().toISOString()),
+              })),
+            };
+          });
+          setSessions(mapped);
+          setActiveSession(mapped[0] || null);
+        } else if (!cancelled) {
+          setSessions(FALLBACK_SESSIONS);
+          setActiveSession(FALLBACK_SESSIONS[0] || null);
+        }
+      } catch {
+        if (!cancelled) {
+          setSessions(FALLBACK_SESSIONS);
+          setActiveSession(FALLBACK_SESSIONS[0] || null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

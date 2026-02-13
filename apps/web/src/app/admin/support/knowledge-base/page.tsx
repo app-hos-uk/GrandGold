@@ -52,7 +52,8 @@ interface KBCategory {
   isActive: boolean;
 }
 
-const MOCK_CATEGORIES: KBCategory[] = [
+// Fallback data — used until a dedicated Knowledge Base service/API is implemented
+const FALLBACK_CATEGORIES: KBCategory[] = [
   { id: 'cat-1', name: 'Orders & Shipping', slug: 'orders-shipping', description: 'Order tracking, delivery, shipping policies', icon: '📦', articleCount: 12, isActive: true },
   { id: 'cat-2', name: 'Returns & Refunds', slug: 'returns-refunds', description: 'Return policy, refund process, exchanges', icon: '🔄', articleCount: 8, isActive: true },
   { id: 'cat-3', name: 'Payments', slug: 'payments', description: 'Payment methods, EMI, invoices', icon: '💳', articleCount: 6, isActive: true },
@@ -61,7 +62,7 @@ const MOCK_CATEGORIES: KBCategory[] = [
   { id: 'cat-6', name: 'Seller Help', slug: 'seller-help', description: 'Seller onboarding, dashboard, payouts', icon: '🏪', articleCount: 15, isActive: true },
 ];
 
-const MOCK_ARTICLES: KBArticle[] = [
+const FALLBACK_ARTICLES: KBArticle[] = [
   { id: 'art-1', title: 'How to track my order?', slug: 'track-order', content: 'You can track your order from...', category: 'cat-1', audience: 'customer', status: 'published', views: 1250, helpful: 98, notHelpful: 5, aiEnabled: true, tags: ['tracking', 'order', 'delivery'], createdAt: '2024-01-15', updatedAt: '2024-02-01' },
   { id: 'art-2', title: 'What is the return policy?', slug: 'return-policy', content: 'Our 15-day return policy...', category: 'cat-2', audience: 'customer', status: 'published', views: 890, helpful: 78, notHelpful: 12, aiEnabled: true, tags: ['return', 'policy', 'refund'], createdAt: '2024-01-10', updatedAt: '2024-01-28' },
   { id: 'art-3', title: 'How to verify gold purity?', slug: 'verify-gold-purity', content: 'All our gold is BIS hallmarked...', category: 'cat-5', audience: 'customer', status: 'published', views: 2100, helpful: 195, notHelpful: 8, aiEnabled: true, tags: ['gold', 'purity', 'hallmark', 'certification'], createdAt: '2024-01-05', updatedAt: '2024-02-02' },
@@ -78,8 +79,8 @@ const audienceConfig = {
 
 export default function KnowledgeBasePage() {
   const toast = useToast();
-  const [categories] = useState<KBCategory[]>(MOCK_CATEGORIES);
-  const [articles, setArticles] = useState<KBArticle[]>(MOCK_ARTICLES);
+  const [categories] = useState<KBCategory[]>(FALLBACK_CATEGORIES);
+  const [articles, setArticles] = useState<KBArticle[]>(FALLBACK_ARTICLES);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');

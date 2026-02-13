@@ -5,6 +5,9 @@ export interface AuthUser {
   sub: string;
   email: string;
   role: string;
+  country?: string;
+  tenantId?: string;
+  permissions?: string[];
 }
 
 /* eslint-disable @typescript-eslint/no-namespace */
@@ -12,6 +15,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: AuthUser;
+      country?: string;
     }
   }
 }
@@ -35,7 +39,9 @@ export const authenticate = async (
     const token = authHeader.substring(7);
     const decoded = await verifyToken(token);
 
-    req.user = decoded as AuthUser;
+    const user = decoded as AuthUser;
+    req.user = user;
+    req.country = user.country;
     next();
   } catch (error) {
     res.status(401).json({
@@ -56,7 +62,9 @@ export const optionalAuth = async (
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       const decoded = await verifyToken(token);
-      req.user = decoded as AuthUser;
+      const user = decoded as AuthUser;
+      req.user = user;
+      req.country = user.country;
     }
 
     next();

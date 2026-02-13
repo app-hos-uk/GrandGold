@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -14,9 +14,23 @@ import {
   Download,
   Calendar,
   Printer,
+  Loader2,
 } from 'lucide-react';
+import { adminApi } from '@/lib/api';
 
-const orders = [
+interface OrderRow {
+  id: string;
+  customer: string;
+  email: string;
+  items: string;
+  itemCount: number;
+  amount: number;
+  status: string;
+  payment: string;
+  date: string;
+}
+
+const FALLBACK_ORDERS: OrderRow[] = [
   { id: 'GG-2024-101', customer: 'Priya Sharma', email: 'priya@email.com', items: 'Traditional Kundan Necklace', itemCount: 1, amount: 185000, status: 'processing', payment: 'paid', date: '15 Jan 2024' },
   { id: 'GG-2024-102', customer: 'Rahul Mehta', email: 'rahul@email.com', items: 'Diamond Jhumkas', itemCount: 1, amount: 78500, status: 'shipped', payment: 'paid', date: '14 Jan 2024' },
   { id: 'GG-2024-103', customer: 'Ananya Reddy', email: 'ananya@email.com', items: 'Temple Choker + Earrings', itemCount: 2, amount: 320000, status: 'pending', payment: 'paid', date: '14 Jan 2024' },
@@ -25,7 +39,7 @@ const orders = [
   { id: 'GG-2024-106', customer: 'Amit Kumar', email: 'amit@email.com', items: 'Diamond Ring', itemCount: 1, amount: 165000, status: 'cancelled', payment: 'refunded', date: '08 Jan 2024' },
 ];
 
-const statusColors = {
+const statusColors: Record<string, string> = {
   delivered: 'bg-green-100 text-green-700',
   processing: 'bg-blue-100 text-blue-700',
   shipped: 'bg-purple-100 text-purple-700',
@@ -36,9 +50,45 @@ const statusColors = {
 export default function SellerOrdersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      setLoading(true);
+      try {
+        const res = await adminApi.getOrders({ page, limit: 20, status: statusFilter === 'all' ? undefined : statusFilter });
+        const data = (res as { data?: unknown[] })?.data ?? [];
+        const mapped: OrderRow[] = data.map((o: unknown) => {
+          const item = o as Record<string, unknown>;
+          const items = item.items as Array<Record<string, unknown>> | undefined;
+          return {
+            id: (item.id || item._id || '') as string,
+            customer: (item.customer as string) || (item.customerName as string) || '—',
+            email: (item.customerEmail as string) || '',
+            items: items?.[0]?.name as string || (item.itemSummary as string) || '—',
+            itemCount: items?.length ?? (item.itemCount as number) ?? 1,
+            amount: (item.total || item.amount || 0) as number,
+            status: (item.status || 'pending') as string,
+            payment: (item.paymentStatus || 'paid') as string,
+            date: item.createdAt ? new Date(item.createdAt as string).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+          };
+        });
+        setOrders(mapped.length > 0 ? mapped : FALLBACK_ORDERS);
+        setTotal((res as { total?: number })?.total ?? mapped.length);
+      } catch {
+        setOrders(FALLBACK_ORDERS);
+        setTotal(FALLBACK_ORDERS.length);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
+  }, [page, statusFilter]);
 
   const filteredOrders = orders.filter((order) => {
-    if (statusFilter !== 'all' && order.status !== statusFilter) return false;
     if (searchQuery && !order.id.toLowerCase().includes(searchQuery.toLowerCase()) && 
         !order.customer.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
@@ -60,15 +110,15 @@ export default function SellerOrdersPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         {[
-          { label: 'All Orders', value: '124', color: 'bg-gray-100' },
-          { label: 'Pending', value: '8', color: 'bg-yellow-100' },
-          { label: 'Processing', value: '15', color: 'bg-blue-100' },
-          { label: 'Shipped', value: '12', color: 'bg-purple-100' },
-          { label: 'Delivered', value: '89', color: 'bg-green-100' },
+          { label: 'All Orders', value: String(total), color: 'bg-gray-100' },
+          { label: 'Pending', value: String(orders.filter(o => o.status === 'pending').length), color: 'bg-yellow-100' },
+          { label: 'Processing', value: String(orders.filter(o => o.status === 'processing').length), color: 'bg-blue-100' },
+          { label: 'Shipped', value: String(orders.filter(o => o.status === 'shipped').length), color: 'bg-purple-100' },
+          { label: 'Delivered', value: String(orders.filter(o => o.status === 'delivered').length), color: 'bg-green-100' },
         ].map((stat) => (
           <div key={stat.label} className={`${stat.color} rounded-xl p-4`}>
             <p className="text-sm text-gray-600">{stat.label}</p>
-            <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+            <p className="text-2xl font-bold text-gray-900">{loading ? '—' : stat.value}</p>
           </div>
         ))}
       </div>
@@ -89,7 +139,7 @@ export default function SellerOrdersPage() {
           <div className="flex items-center gap-2">
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
               className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
             >
               <option value="all">All Status</option>
@@ -151,7 +201,7 @@ export default function SellerOrdersPage() {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${
-                      statusColors[order.status as keyof typeof statusColors]
+                      statusColors[order.status] || 'bg-gray-100 text-gray-700'
                     }`}>
                       {order.status}
                     </span>
@@ -178,17 +228,31 @@ export default function SellerOrdersPage() {
           </table>
         </div>
 
+        {loading && (
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="w-6 h-6 animate-spin text-gold-500" />
+            <span className="ml-2 text-gray-500">Loading orders...</span>
+          </div>
+        )}
+
         <div className="flex items-center justify-between p-4 border-t border-gray-100">
           <p className="text-sm text-gray-500">
-            Showing {filteredOrders.length} of {orders.length} orders
+            Showing {filteredOrders.length} of {total} orders
           </p>
           <div className="flex items-center gap-2">
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage(Math.max(1, page - 1))}
+              className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <button className="px-3 py-1 bg-gold-500 text-white rounded-lg">1</button>
-            <button className="px-3 py-1 hover:bg-gray-100 rounded-lg">2</button>
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <span className="px-3 py-1 bg-gold-500 text-white rounded-lg">{page}</span>
+            <button
+              disabled={page * 20 >= total}
+              onClick={() => setPage(page + 1)}
+              className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>

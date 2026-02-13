@@ -177,6 +177,83 @@ router.post('/:id/invoice', authenticate, requireSeller, async (req: Request, re
 });
 
 /**
+ * POST /api/sellers/settlements/:id/dispute
+ * Raise a dispute on a settlement (Seller)
+ */
+router.post('/:id/dispute', authenticate, requireSeller, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      throw new Error('User not authenticated');
+    }
+    
+    const { reason, details, expectedAmount } = req.body;
+    
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 10) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'BAD_REQUEST', message: 'Dispute reason must be at least 10 characters' },
+      });
+      return;
+    }
+
+    const dispute = await settlementService.raiseDispute(
+      req.params.id,
+      req.user.sub,
+      { reason: reason.trim(), details, expectedAmount: expectedAmount ? parseFloat(expectedAmount) : undefined }
+    );
+    
+    res.json({
+      success: true,
+      data: dispute,
+      message: 'Settlement dispute raised successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/sellers/settlements/:id/dispute/resolve
+ * Resolve a settlement dispute (Admin)
+ */
+router.patch(
+  '/:id/dispute/resolve',
+  authenticate,
+  authorize('super_admin', 'country_admin'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        throw new Error('User not authenticated');
+      }
+      
+      const { resolution, adjustedAmount, notes } = req.body;
+      
+      if (!resolution || !['accepted', 'rejected', 'adjusted'].includes(resolution)) {
+        res.status(400).json({
+          success: false,
+          error: { code: 'BAD_REQUEST', message: 'Resolution must be accepted, rejected, or adjusted' },
+        });
+        return;
+      }
+
+      const result = await settlementService.resolveDispute(
+        req.params.id,
+        req.user.sub,
+        { resolution, adjustedAmount: adjustedAmount ? parseFloat(adjustedAmount) : undefined, notes }
+      );
+      
+      res.json({
+        success: true,
+        data: result,
+        message: `Dispute ${resolution}`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * POST /api/sellers/settlements/process
  * Process pending settlements (Admin/Cron)
  */

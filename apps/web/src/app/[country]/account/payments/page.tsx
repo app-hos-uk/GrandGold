@@ -57,12 +57,11 @@ export default function PaymentsPage() {
   });
 
   useEffect(() => {
-    // Fetch saved payment methods
+    // Fetch saved payment methods (auth via httpOnly cookie or legacy token)
     const fetchPaymentMethods = async () => {
       try {
-        const token = localStorage.getItem('grandgold_token');
         const res = await fetch('/api/payments/saved', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: 'include',
         });
         if (res.ok) {
           const data = await res.json();
@@ -102,12 +101,11 @@ export default function PaymentsPage() {
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('grandgold_token');
       const res = await fetch('/api/payments/saved/card', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           cardNumber: cardForm.cardNumber.replace(/\s/g, ''),
@@ -162,12 +160,11 @@ export default function PaymentsPage() {
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('grandgold_token');
       await fetch('/api/payments/saved/upi', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           vpa: upiForm.vpa,

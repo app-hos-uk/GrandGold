@@ -29,15 +29,8 @@ export function WishlistProvider({
 
   const refreshWishlist = useCallback(async () => {
     try {
-      const token =
-        typeof window !== 'undefined'
-          ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
-          : null;
-      if (!token) {
-        setWishlistCount(0);
-        setProductIds(new Set());
-        return;
-      }
+      // Auth handled by httpOnly cookie or legacy localStorage token.
+      // If unauthenticated, the API call will fail and we use empty state.
       const data = await wishlistApi.get();
       const items = data?.items ?? [];
       setWishlistCount(items.length);

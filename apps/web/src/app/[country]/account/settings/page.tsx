@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
@@ -19,25 +19,29 @@ import {
   Download,
   Trash2,
   FileText,
+  Loader2,
 } from 'lucide-react';
+import { authApi, userApi, api } from '@/lib/api';
 
-const user = {
-  firstName: 'Priya',
-  lastName: 'Sharma',
-  email: 'priya.sharma@email.com',
-  phone: '+91 98765 43210',
+const defaultUser = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
   language: 'English',
   currency: 'INR',
 };
 
 export default function SettingsPage() {
   const params = useParams();
+  const router = useRouter();
   const country = (params.country as 'in' | 'ae' | 'uk') || 'in';
   
   const [activeTab, setActiveTab] = useState('profile');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
-  const [profileData, setProfileData] = useState(user);
+  const [profileData, setProfileData] = useState(defaultUser);
+  const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState({
     orderUpdates: true,
     priceAlerts: true,
@@ -46,11 +50,88 @@ export default function SettingsPage() {
     sms: false,
   });
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  useEffect(() => {
+    // Auth handled by httpOnly cookie or legacy localStorage token.
+    authApi.getMe()
+      .then((user) => {
+        setProfileData({
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          email: user.email || '',
+          phone: user.phone || '',
+          language: 'English',
+          currency: country === 'ae' ? 'AED' : country === 'uk' ? 'GBP' : 'INR',
+        });
+      })
+      .catch(() => {
+        router.replace(`/${country}/login?redirect=${encodeURIComponent(`/${country}/account/settings`)}`);
+      })
+      .finally(() => setLoading(false));
+  }, [country, router]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await userApi.updateProfile({
+        firstName: profileData.firstName,
+        lastName: profileData.lastName,
+        phone: profileData.phone,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      // Silently fail - in a production app we'd show an error
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handlePasswordChange = async () => {
+    setPasswordError('');
+    setPasswordSuccess(false);
+    if (!passwordData.currentPassword || !passwordData.newPassword) {
+      setPasswordError('Please fill in all password fields');
+      return;
+    }
+    if (passwordData.newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters');
+      return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+    try {
+      await api.post('/api/auth/password/change', {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
+      setPasswordSuccess(true);
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    } catch (err: unknown) {
+      const message = err && typeof err === 'object' && 'message' in err
+        ? (err as { message: string }).message
+        : 'Failed to change password';
+      setPasswordError(message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-cream-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-gold-500" />
+          <p className="text-gray-500 font-medium">Loading settings...</p>
+        </div>
+      </main>
+    );
+  }
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -171,10 +252,11 @@ export default function SettingsPage() {
 
                       <button
                         onClick={handleSave}
-                        className="px-6 py-3 bg-gold-500 hover:bg-gold-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                        disabled={saving}
+                        className="px-6 py-3 bg-gold-500 hover:bg-gold-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2 disabled:opacity-70"
                       >
-                        {saved ? <Check className="w-5 h-5" /> : null}
-                        {saved ? 'Saved!' : 'Save Changes'}
+                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : saved ? <Check className="w-5 h-5" /> : null}
+                        {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
                       </button>
                     </div>
                   </motion.div>
@@ -190,6 +272,17 @@ export default function SettingsPage() {
                     <h2 className="text-lg font-semibold mb-6">Change Password</h2>
                     
                     <div className="space-y-6 max-w-md">
+                      {passwordSuccess && (
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex items-center gap-2">
+                          <Check className="w-5 h-5" />
+                          Password updated successfully!
+                        </div>
+                      )}
+                      {passwordError && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                          {passwordError}
+                        </div>
+                      )}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Current Password
@@ -197,6 +290,8 @@ export default function SettingsPage() {
                         <div className="relative">
                           <input
                             type={showCurrentPassword ? 'text' : 'password'}
+                            value={passwordData.currentPassword}
+                            onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
                             className="w-full px-4 py-3 border border-cream-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500 pr-12"
                           />
                           <button
@@ -216,6 +311,8 @@ export default function SettingsPage() {
                         <div className="relative">
                           <input
                             type={showNewPassword ? 'text' : 'password'}
+                            value={passwordData.newPassword}
+                            onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                             className="w-full px-4 py-3 border border-cream-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500 pr-12"
                           />
                           <button
@@ -237,11 +334,16 @@ export default function SettingsPage() {
                         </label>
                         <input
                           type="password"
+                          value={passwordData.confirmPassword}
+                          onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                           className="w-full px-4 py-3 border border-cream-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
                         />
                       </div>
 
-                      <button className="px-6 py-3 bg-gold-500 hover:bg-gold-600 text-white font-medium rounded-lg transition-colors">
+                      <button
+                        onClick={handlePasswordChange}
+                        className="px-6 py-3 bg-gold-500 hover:bg-gold-600 text-white font-medium rounded-lg transition-colors"
+                      >
                         Update Password
                       </button>
                     </div>

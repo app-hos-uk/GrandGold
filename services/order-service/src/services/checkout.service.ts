@@ -8,6 +8,52 @@ import type { CheckoutRecord, CartItem, OrderRecord, ShippingAddress } from '../
 // In-memory store for demo
 const checkoutStore = new Map<string, CheckoutRecord>();
 
+// ── Inventory reservation helper ─────────────────────────────────────
+const INVENTORY_SERVICE_URL = process.env.INVENTORY_SERVICE_URL || 'http://localhost:4008';
+
+async function reserveInventory(
+  items: { productId: string; quantity: number }[],
+  cartId: string,
+  userId?: string
+): Promise<string[]> {
+  const reservationIds: string[] = [];
+  for (const item of items) {
+    try {
+      const res = await fetch(`${INVENTORY_SERVICE_URL}/api/inventory/reserve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: item.productId,
+          quantity: item.quantity,
+          cartId,
+          userId,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.data?.reservationId) {
+          reservationIds.push(data.data.reservationId);
+        }
+      }
+    } catch {
+      // Inventory service unavailable — proceed without reservation (graceful degradation)
+    }
+  }
+  return reservationIds;
+}
+
+async function releaseReservations(reservationIds: string[]): Promise<void> {
+  for (const id of reservationIds) {
+    try {
+      await fetch(`${INVENTORY_SERVICE_URL}/api/inventory/reserve/${id}`, {
+        method: 'DELETE',
+      });
+    } catch {
+      // Best effort
+    }
+  }
+}
+
 interface CheckoutInput {
   shippingAddress: CheckoutRecord['shippingAddress'];
   billingAddress: { sameAsShipping: boolean; line1?: string; line2?: string; city?: string; state?: string; postalCode?: string; country?: Country };
@@ -18,7 +64,12 @@ interface CheckoutInput {
   insuranceIncluded?: boolean;
   scheduledDeliveryDate?: string;
   isExpressCheckout?: boolean;
+  /** Influencer / affiliate referral code for attribution tracking */
+  referralCode?: string;
 }
+
+// ── Influencer commission rates by channel ────────────────────────────
+const INFLUENCER_COMMISSION_RATE = 0.05; // 5% default influencer commission
 
 const cartService = new CartService();
 const taxService = new TaxService();
@@ -104,6 +155,19 @@ export class CheckoutService {
       insuranceCost -
       checkout.discount;
     
+    // ── Store referral code for attribution at confirmation ──────────
+    if (input.referralCode) {
+      (checkout as Record<string, unknown>).referralCode = input.referralCode;
+    }
+
+    // ── Reserve inventory for checkout duration ─────────────────────
+    const itemsToReserve = cart.items.map((item: CartItem) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+    }));
+    const reservationIds = await reserveInventory(itemsToReserve, checkoutId, userId);
+    (checkout as Record<string, unknown>).reservationIds = reservationIds;
+
     checkoutStore.set(checkoutId, checkout);
     
     return checkout;
@@ -119,8 +183,13 @@ export class CheckoutService {
       throw new NotFoundError('Checkout');
     }
     
-    // Check if expired
+    // Check if expired — release inventory reservations on expiry
     if (new Date() > new Date(checkout.expiresAt)) {
+      const reservationIds = (checkout as Record<string, unknown>).reservationIds as string[] | undefined;
+      if (reservationIds?.length) {
+        releaseReservations(reservationIds).catch(() => {});
+        (checkout as Record<string, unknown>).reservationIds = [];
+      }
       throw new ValidationError('Checkout session expired');
     }
     
@@ -199,7 +268,11 @@ export class CheckoutService {
   }
 
   /**
-   * Confirm checkout and create order
+   * Confirm checkout and create order.
+   *
+   * When cart contains items from multiple sellers, a parent order is created
+   * with fulfillment groups split by seller. Each group tracks its own
+   * shipping status independently so sellers only see their own items.
    */
   async confirmCheckout(
     checkoutId: string,
@@ -217,23 +290,51 @@ export class CheckoutService {
     
     // Generate order number
     const orderNumber = this.generateOrderNumber(checkout.shippingAddress.country);
-    
+
+    // ── Group items by seller for split fulfillment ──────────────────
+    const itemsBySeller = new Map<string, CartItem[]>();
+    for (const item of checkout.cart.items as CartItem[]) {
+      const sellerId = item.sellerId || 'platform';
+      const group = itemsBySeller.get(sellerId) ?? [];
+      group.push(item);
+      itemsBySeller.set(sellerId, group);
+    }
+
+    const fulfillmentGroups = Array.from(itemsBySeller.entries()).map(
+      ([sellerId, items], idx) => {
+        const groupSubtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+        return {
+          id: generateId('fg'),
+          sellerId,
+          groupIndex: idx + 1,
+          items: items.map((item) => ({
+            productId: item.productId,
+            productName: item.name,
+            productImage: item.image,
+            sellerId: item.sellerId,
+            quantity: item.quantity,
+            price: item.price,
+            goldWeight: item.goldWeight,
+            purity: item.purity,
+          })),
+          subtotal: groupSubtotal,
+          status: 'confirmed' as const,
+          trackingNumber: null as string | null,
+          shippedAt: null as Date | null,
+          deliveredAt: null as Date | null,
+        };
+      }
+    );
+
+    const allItems = fulfillmentGroups.flatMap((g) => g.items);
+
     const order: OrderRecord = {
       id: generateId('ord'),
       orderNumber,
       invoiceNumber: `INV-${orderNumber}`,
       checkoutId,
       customerId: userId,
-      items: checkout.cart.items.map((item: CartItem) => ({
-        productId: item.productId,
-        productName: item.name,
-        productImage: item.image,
-        sellerId: item.sellerId, // Hidden until now
-        quantity: item.quantity,
-        price: item.price,
-        goldWeight: item.goldWeight,
-        purity: item.purity,
-      })),
+      items: allItems,
       shippingAddress: checkout.shippingAddress,
       billingAddress: checkout.billingAddress,
       deliveryOption: checkout.deliveryOption,
@@ -255,6 +356,27 @@ export class CheckoutService {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
+
+    // Attach fulfillment groups for multi-seller tracking
+    if (fulfillmentGroups.length > 1) {
+      (order as Record<string, unknown>).fulfillmentGroups = fulfillmentGroups;
+      (order as Record<string, unknown>).isMultiSeller = true;
+    }
+
+    // ── Influencer / referral attribution ────────────────────────────
+    const referralCode = (checkout as Record<string, unknown>).referralCode as string | undefined;
+    if (referralCode) {
+      const commissionAmount = Math.round(order.total * INFLUENCER_COMMISSION_RATE * 100) / 100;
+      order.referral = {
+        referrerId: referralCode, // In production, resolve code -> userId
+        channel: 'influencer_rack',
+        code: referralCode,
+        commissionRate: INFLUENCER_COMMISSION_RATE * 100,
+        commissionAmount,
+        commissionPaid: false,
+        attributedAt: new Date(),
+      };
+    }
     
     // Mark checkout as completed
     checkout.status = 'completed';

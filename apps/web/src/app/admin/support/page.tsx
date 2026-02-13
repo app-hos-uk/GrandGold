@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { formatRelativeDate } from '@/lib/format';
+import { adminApi } from '@/lib/api';
 
 interface SupportStats {
   openTickets: number;
@@ -39,7 +40,7 @@ interface SupportStats {
   customerSatisfaction: number;
 }
 
-const MOCK_STATS: SupportStats = {
+const FALLBACK_STATS: SupportStats = {
   openTickets: 47,
   ticketsChange: -12,
   avgResponseTime: 25,
@@ -65,7 +66,7 @@ interface RecentTicket {
   country: string;
 }
 
-const MOCK_TICKETS: RecentTicket[] = [
+const FALLBACK_TICKETS: RecentTicket[] = [
   { id: 'TKT-2024-001', subject: 'Order not delivered - ORD-2024-1234', customer: 'Priya Sharma', type: 'order', priority: 'high', status: 'in_progress', channel: 'chat', assignee: 'Rahul M.', createdAt: '2024-02-03T14:30:00Z', country: 'IN' },
   { id: 'TKT-2024-002', subject: 'Refund not received', customer: 'Ahmed Al-Farsi', type: 'payment', priority: 'urgent', status: 'open', channel: 'email', createdAt: '2024-02-03T14:15:00Z', country: 'AE' },
   { id: 'TKT-2024-003', subject: 'Wrong product received', customer: 'James Wilson', type: 'return', priority: 'high', status: 'pending', channel: 'phone', assignee: 'Sarah K.', createdAt: '2024-02-03T13:45:00Z', country: 'UK' },
@@ -83,7 +84,7 @@ interface LiveAgent {
   avgRating: number;
 }
 
-const MOCK_AGENTS: LiveAgent[] = [
+const FALLBACK_AGENTS: LiveAgent[] = [
   { id: 'A1', name: 'Rahul Mehta', avatar: 'RM', status: 'online', activeChats: 3, resolvedToday: 12, avgRating: 4.8 },
   { id: 'A2', name: 'Sarah Khan', avatar: 'SK', status: 'busy', activeChats: 4, resolvedToday: 8, avgRating: 4.9 },
   { id: 'A3', name: 'John Smith', avatar: 'JS', status: 'online', activeChats: 1, resolvedToday: 15, avgRating: 4.6 },
@@ -120,15 +121,54 @@ const agentStatusConfig = {
 };
 
 export default function SupportDashboard() {
-  const [stats] = useState<SupportStats>(MOCK_STATS);
-  const [tickets] = useState<RecentTicket[]>(MOCK_TICKETS);
-  const [agents] = useState<LiveAgent[]>(MOCK_AGENTS);
-  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState<SupportStats>(FALLBACK_STATS);
+  const [tickets, setTickets] = useState<RecentTicket[]>(FALLBACK_TICKETS);
+  const [agents, setAgents] = useState<LiveAgent[]>(FALLBACK_AGENTS);
+  const [loading, setLoading] = useState(true);
 
-  const handleRefresh = async () => {
+  const loadData = async () => {
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
+    try {
+      const res = await adminApi.getTickets({ limit: 5 });
+      if (res?.data && res.data.length > 0) {
+        setTickets(res.data.map(t => ({
+          id: t.id,
+          subject: t.subject,
+          customer: t.customer?.name || '—',
+          type: t.type as RecentTicket['type'],
+          priority: t.priority,
+          status: t.status,
+          channel: t.channel,
+          assignee: t.assignee?.name,
+          createdAt: t.createdAt,
+          country: t.country,
+        })));
+      }
+      if (res?.stats) {
+        setStats(prev => ({
+          ...prev,
+          openTickets: res.stats!.openTickets ?? prev.openTickets,
+          avgResponseTime: res.stats!.avgResponseTime ?? prev.avgResponseTime,
+          resolutionRate: res.stats!.resolutionRate ?? prev.resolutionRate,
+          activeChats: res.stats!.activeChats ?? prev.activeChats,
+          waitingCustomers: res.stats!.waitingCustomers ?? prev.waitingCustomers,
+          aiResolutionRate: res.stats!.aiResolutionRate ?? prev.aiResolutionRate,
+          customerSatisfaction: res.stats!.customerSatisfaction ?? prev.customerSatisfaction,
+        }));
+      }
+    } catch {
+      // keep fallback
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleRefresh = () => {
+    loadData();
   };
 
   return (

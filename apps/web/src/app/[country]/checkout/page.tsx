@@ -20,7 +20,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useCart } from '@/contexts/cart-context';
-import { stripeApi, razorpayApi, checkoutApi } from '@/lib/api';
+import { authApi, stripeApi, razorpayApi, checkoutApi } from '@/lib/api';
 
 const countryConfig = {
   in: { currency: '₹', currencyCode: 'INR', country: 'IN', paymentProvider: 'razorpay' as const },
@@ -96,15 +96,25 @@ export default function CheckoutPage() {
   const [saveCard, setSaveCard] = useState(false);
 
   useEffect(() => {
-    const token =
-      typeof window !== 'undefined'
-        ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
-        : null;
-    setIsLoggedIn(!!token);
-    setIsCheckingAuth(false);
+    // Check auth state: try getMe() — works with both httpOnly cookie and legacy localStorage
+    const legacyToken = typeof window !== 'undefined'
+      ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
+      : null;
+
+    if (legacyToken) {
+      // Legacy session — known logged in
+      setIsLoggedIn(true);
+      setIsCheckingAuth(false);
+    } else {
+      // May have httpOnly cookie — try a lightweight auth check
+      authApi.getMe()
+        .then(() => setIsLoggedIn(true))
+        .catch(() => setIsLoggedIn(false))
+        .finally(() => setIsCheckingAuth(false));
+    }
 
     // Load saved cards for Stripe users
-    if (token && config.paymentProvider === 'stripe') {
+    if (config.paymentProvider === 'stripe') {
       stripeApi.getSavedCards().then(setSavedCards).catch(() => {});
     }
 

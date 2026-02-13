@@ -43,14 +43,8 @@ export default function AccountPage() {
   }, []);
 
   useEffect(() => {
-    const token =
-      typeof window !== 'undefined'
-        ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
-        : null;
-    if (!token) {
-      router.replace(`/${country}/login?redirect=${encodeURIComponent(`/${country}/account`)}`);
-      return;
-    }
+    // Auth is handled by httpOnly cookie (primary) or localStorage (legacy).
+    // Just call getMe() — if no auth is present, the API returns 401 and we redirect.
     authApi.getMe()
       .then((user) => setProfile(user))
       .catch(() => {

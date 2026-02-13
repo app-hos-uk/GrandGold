@@ -1,30 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Supported countries and their paths
+// ─── Country routing ──────────────────────────────────────────────────────────
 const SUPPORTED_COUNTRIES = ['in', 'ae', 'uk'] as const;
 type SupportedCountry = typeof SUPPORTED_COUNTRIES[number];
 
-// Country detection: prefer cookie (user choice), otherwise default to India
 function detectCountry(request: NextRequest): SupportedCountry {
-  // 1. Check URL path first
   const pathname = request.nextUrl.pathname;
   for (const country of SUPPORTED_COUNTRIES) {
-    if (pathname.startsWith(`/${country}`)) {
-      return country;
-    }
+    if (pathname.startsWith(`/${country}`)) return country;
   }
-
-  // 2. Check cookie for user preference (e.g. from country selector)
   const countryCookie = request.cookies.get('country')?.value?.toLowerCase() as SupportedCountry;
-  if (countryCookie && SUPPORTED_COUNTRIES.includes(countryCookie)) {
-    return countryCookie;
-  }
-
-  // 3. Default to India (no geo or Accept-Language so first-time visitors get India)
+  if (countryCookie && SUPPORTED_COUNTRIES.includes(countryCookie)) return countryCookie;
   return 'in';
 }
 
-// Paths that don't need country prefix
 const PUBLIC_PATHS = [
   '/api',
   '/_next',
@@ -39,64 +28,111 @@ const PUBLIC_PATHS = [
   '/seller',
 ];
 
-// Check if path is public
 function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+  return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 }
 
-// Check if path has country prefix
 function hasCountryPrefix(pathname: string): boolean {
-  return SUPPORTED_COUNTRIES.some((country) => 
-    pathname === `/${country}` || pathname.startsWith(`/${country}/`)
-  );
+  return SUPPORTED_COUNTRIES.some((c) => pathname === `/${c}` || pathname.startsWith(`/${c}/`));
 }
 
+// ─── CSP nonce helper ─────────────────────────────────────────────────────────
+function generateNonce(): string {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode(...array));
+}
+
+// ─── Middleware ────────────────────────────────────────────────────────────────
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip public paths
-  if (isPublicPath(pathname)) {
+  // ── API paths: inject httpOnly cookie token into Authorization header ──────
+  if (pathname.startsWith('/api/')) {
+    const accessToken = request.cookies.get('gg_access_token')?.value;
+    const hasAuthHeader = request.headers.get('authorization');
+
+    if (accessToken && !hasAuthHeader) {
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set('Authorization', `Bearer ${accessToken}`);
+      return NextResponse.next({ request: { headers: requestHeaders } });
+    }
+
     return NextResponse.next();
   }
 
-  // If already has country prefix, continue
+  // ── Generate CSP nonce for page responses ──────────────────────────────────
+  const nonce = generateNonce();
+
+  // Build Content-Security-Policy
+  // Tailwind uses inline styles, so style-src 'unsafe-inline' is necessary.
+  // Scripts are nonce-gated except for 'self'.
+  const csp = [
+    `default-src 'self'`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `style-src 'self' 'unsafe-inline'`, // Tailwind & Framer Motion need inline styles
+    `img-src 'self' data: blob: https://storage.googleapis.com https://lh3.googleusercontent.com https://platform-lookaside.fbsbx.com`,
+    `font-src 'self' data:`,
+    `connect-src 'self' https://*.googleapis.com https://*.razorpay.com https://*.stripe.com`,
+    `frame-src 'self' https://*.stripe.com https://*.razorpay.com`,
+    `object-src 'none'`,
+    `base-uri 'self'`,
+    `form-action 'self'`,
+    `frame-ancestors 'none'`,
+    `upgrade-insecure-requests`,
+  ].join('; ');
+
+  // Helper: create NextResponse.next() with nonce in both request & response headers
+  const nextWithCsp = (extraRequestHeaders?: Record<string, string>) => {
+    const reqHeaders = new Headers(request.headers);
+    reqHeaders.set('x-nonce', nonce);
+    if (extraRequestHeaders) {
+      Object.entries(extraRequestHeaders).forEach(([k, v]) => reqHeaders.set(k, v));
+    }
+    const response = NextResponse.next({ request: { headers: reqHeaders } });
+    response.headers.set('x-nonce', nonce);
+    response.headers.set('Content-Security-Policy', csp);
+    return response;
+  };
+
+  // ── Non-country paths ──────────────────────────────────────────────────────
+  if (isPublicPath(pathname)) {
+    return nextWithCsp();
+  }
+
+  // ── Country-prefixed paths ─────────────────────────────────────────────────
   if (hasCountryPrefix(pathname)) {
-    // Extract country and set header for downstream use
     const country = pathname.split('/')[1] as SupportedCountry;
-    const response = NextResponse.next();
-    response.headers.set('x-grandgold-country', country);
-    
-    // Set cookie if not set
+    const response = nextWithCsp({ 'x-grandgold-country': country });
+
     if (!request.cookies.has('country')) {
       response.cookies.set('country', country, {
-        maxAge: 60 * 60 * 24 * 365, // 1 year
+        maxAge: 60 * 60 * 24 * 365,
         path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
       });
     }
-    
     return response;
   }
 
-  // Detect country and redirect
+  // ── Redirect to country-prefixed URL ───────────────────────────────────────
   const detectedCountry = detectCountry(request);
-  
-  // Build new URL with country prefix
   const newUrl = request.nextUrl.clone();
   newUrl.pathname = `/${detectedCountry}${pathname === '/' ? '' : pathname}`;
 
-  // Redirect to country-specific URL
   const response = NextResponse.redirect(newUrl);
   response.cookies.set('country', detectedCountry, {
-    maxAge: 60 * 60 * 24 * 365, // 1 year
+    maxAge: 60 * 60 * 24 * 365,
     path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
   });
-
   return response;
 }
 
 export const config = {
   matcher: [
-    // Match all paths except static files
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

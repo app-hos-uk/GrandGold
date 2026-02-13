@@ -10,6 +10,116 @@ const orderService = new OrderService();
 const veilService = new VeilService();
 const reorderService = new ReorderService();
 
+// ── Static/admin routes MUST be registered before parameterized routes ──
+// Express matches routes in registration order. Routes like /admin/all and
+// /reorder/suggestions must come before /:id, otherwise "admin" or "reorder"
+// would be captured as an :id parameter.
+
+/**
+ * GET /api/orders/admin/all
+ * Get all orders (Admin)
+ */
+router.get(
+  '/admin/all',
+  authenticate,
+  authorize('super_admin', 'country_admin', 'manager', 'staff'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        throw new Error('User not authenticated');
+      }
+      
+      const country = req.query.country as string;
+      const status = req.query.status as string;
+      const dateFrom = req.query.dateFrom as string;
+      const dateTo = req.query.dateTo as string;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      
+      // super_admin has global access — don't restrict by admin's country
+      const adminCountry = req.user.role === 'super_admin' ? undefined : req.user.country;
+
+      const orders = await orderService.getAllOrders({
+        country,
+        status,
+        dateFrom,
+        dateTo,
+        page,
+        limit,
+        adminCountry,
+      });
+      
+      res.json({
+        success: true,
+        data: orders,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PATCH /api/orders/admin/:id/status
+ * Update order status (Admin)
+ */
+router.patch(
+  '/admin/:id/status',
+  authenticate,
+  authorize('super_admin', 'country_admin', 'manager'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        throw new Error('User not authenticated');
+      }
+      
+      const { status, note } = req.body;
+      
+      // super_admin has global access — don't restrict by admin's country
+      const adminCountry = req.user.role === 'super_admin' ? undefined : req.user.country;
+
+      const order = await orderService.updateOrderStatus(
+        req.params.id,
+        status,
+        req.user.sub,
+        note,
+        adminCountry
+      );
+      
+      res.json({
+        success: true,
+        data: order,
+        message: 'Order status updated',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/orders/reorder/suggestions
+ * Get reorder suggestions
+ */
+router.get('/reorder/suggestions', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      throw new Error('User not authenticated');
+    }
+    
+    const suggestions = await reorderService.getReorderSuggestions(req.user.sub);
+    
+    res.json({
+      success: true,
+      data: suggestions,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Customer-facing routes ──────────────────────────────────────────────
+
 /**
  * GET /api/orders
  * Get customer's orders
@@ -187,104 +297,5 @@ router.post('/:id/reorder', authenticate, async (req: Request, res: Response, ne
     next(error);
   }
 });
-
-/**
- * GET /api/orders/reorder/suggestions
- * Get reorder suggestions
- */
-router.get('/reorder/suggestions', authenticate, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!req.user) {
-      throw new Error('User not authenticated');
-    }
-    
-    const suggestions = await reorderService.getReorderSuggestions(req.user.sub);
-    
-    res.json({
-      success: true,
-      data: suggestions,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Admin routes
-
-/**
- * GET /api/orders/admin/all
- * Get all orders (Admin)
- */
-router.get(
-  '/admin/all',
-  authenticate,
-  authorize('super_admin', 'country_admin'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      if (!req.user) {
-        throw new Error('User not authenticated');
-      }
-      
-      const country = req.query.country as string;
-      const status = req.query.status as string;
-      const dateFrom = req.query.dateFrom as string;
-      const dateTo = req.query.dateTo as string;
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 20;
-      
-      const orders = await orderService.getAllOrders({
-        country,
-        status,
-        dateFrom,
-        dateTo,
-        page,
-        limit,
-        adminCountry: req.user.country,
-      });
-      
-      res.json({
-        success: true,
-        data: orders,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * PATCH /api/orders/admin/:id/status
- * Update order status (Admin)
- */
-router.patch(
-  '/admin/:id/status',
-  authenticate,
-  authorize('super_admin', 'country_admin'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      if (!req.user) {
-        throw new Error('User not authenticated');
-      }
-      
-      const { status, note } = req.body;
-      
-      const order = await orderService.updateOrderStatus(
-        req.params.id,
-        status,
-        req.user.sub,
-        note,
-        req.user.country // Pass admin's country for authorization
-      );
-      
-      res.json({
-        success: true,
-        data: order,
-        message: 'Order status updated',
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
 
 export { router as orderRouter };

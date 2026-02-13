@@ -23,6 +23,28 @@ interface CreateReturnInput {
   preferredResolution: 'refund' | 'exchange' | 'store_credit';
 }
 
+// ── Return shipping cost policy rules ────────────────────────────────
+type ReturnShippingPolicy = 'seller_fault' | 'customer_choice' | 'platform_goodwill' | 'free_return';
+
+const SELLER_FAULT_REASONS = new Set(['defective', 'wrong_item', 'not_as_described']);
+
+// Flat return shipping rates by country (in local currency)
+const RETURN_SHIPPING_RATES: Record<string, number> = {
+  IN: 350,   // INR
+  AE: 50,    // AED
+  UK: 15,    // GBP
+};
+
+function determineReturnShippingPolicy(
+  reason: string,
+  _orderTotal?: number
+): { policy: ReturnShippingPolicy; paidBy: 'customer' | 'seller' | 'platform'; cost: number | null } {
+  if (SELLER_FAULT_REASONS.has(reason)) {
+    return { policy: 'seller_fault', paidBy: 'seller', cost: null }; // Seller pays — cost determined on label generation
+  }
+  return { policy: 'customer_choice', paidBy: 'customer', cost: null }; // Customer pays flat rate
+}
+
 export class ReturnService {
   /**
    * Initiate return request
@@ -54,6 +76,13 @@ export class ReturnService {
 
     const returnId = generateId('ret');
 
+    // Determine who bears the return shipping cost
+    const shippingPolicy = determineReturnShippingPolicy(input.reason);
+    const country = 'IN'; // Would come from order.country in production
+    const returnShippingCost = shippingPolicy.paidBy === 'customer'
+      ? (RETURN_SHIPPING_RATES[country] ?? 350)
+      : 0;
+
     const returnRequest = {
       id: returnId,
       orderId: input.orderId,
@@ -64,6 +93,10 @@ export class ReturnService {
       images: input.images || [],
       preferredResolution: input.preferredResolution,
       status: 'pending',
+      // Return shipping policy
+      returnShippingPolicy: shippingPolicy.policy,
+      returnShippingPaidBy: shippingPolicy.paidBy,
+      returnShippingCost,
       requestedAt: new Date(),
       approvedAt: null,
       rejectedAt: null,

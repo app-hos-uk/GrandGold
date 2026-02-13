@@ -51,14 +51,7 @@ export default function WishlistPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const token =
-          typeof window !== 'undefined'
-            ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
-            : null;
-        if (!token) {
-          setWishlistItems([]);
-          return;
-        }
+        // Try to load from API (auth via httpOnly cookie or legacy token)
         const data = await wishlistApi.get();
         const items = (data?.items ?? []) as { productId: string }[];
         const displayItems: WishlistItemDisplay[] = items

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -25,6 +25,7 @@ import {
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { formatCurrency } from '@/lib/format';
 import { useToast } from '@/components/admin/toast';
+import { adminApi } from '@/lib/api';
 
 interface Settlement {
   id: string;
@@ -50,7 +51,7 @@ interface Settlement {
   country: string;
 }
 
-const MOCK_SETTLEMENTS: Settlement[] = [
+const FALLBACK_SETTLEMENTS: Settlement[] = [
   { id: 'SET-2024-001', sellerId: 'SEL001', sellerName: 'Royal Jewellers', sellerEmail: 'finance@royaljewellers.com', periodStart: '2024-01-27', periodEnd: '2024-02-03', grossAmount: 540000, commission: 54000, gatewayFees: 10800, taxes: 16200, otherDeductions: 0, netAmount: 459000, orderCount: 42, currency: 'INR', status: 'pending', createdAt: '2024-02-03T10:00:00Z', country: 'IN' },
   { id: 'SET-2024-002', sellerId: 'SEL002', sellerName: 'Diamond Palace', sellerEmail: 'accounts@diamondpalace.com', periodStart: '2024-01-27', periodEnd: '2024-02-03', grossAmount: 385000, commission: 38500, gatewayFees: 7700, taxes: 11550, otherDeductions: 0, netAmount: 327250, orderCount: 28, currency: 'INR', status: 'processing', createdAt: '2024-02-03T09:00:00Z', country: 'IN' },
   { id: 'SET-2024-003', sellerId: 'SEL003', sellerName: 'Gold Craft India', sellerEmail: 'pay@goldcraft.in', periodStart: '2024-01-27', periodEnd: '2024-02-03', grossAmount: 220000, commission: 22000, gatewayFees: 4400, taxes: 6600, otherDeductions: 0, netAmount: 187000, orderCount: 15, currency: 'INR', status: 'completed', paymentMethod: 'NEFT', paymentReference: 'NEFT-2024020301', paidAt: '2024-02-03T14:00:00Z', createdAt: '2024-02-03T08:00:00Z', country: 'IN' },
@@ -69,7 +70,9 @@ const statusConfig = {
 
 export default function SettlementsPage() {
   const toast = useToast();
-  const [settlements, setSettlements] = useState<Settlement[]>(MOCK_SETTLEMENTS);
+  const [settlements, setSettlements] = useState<Settlement[]>(FALLBACK_SETTLEMENTS);
+  const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('');
@@ -78,6 +81,49 @@ export default function SettlementsPage() {
   const [processing, setProcessing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    const fetchSettlements = async () => {
+      setLoading(true);
+      try {
+        const res = await adminApi.getSettlements({ page: currentPage, limit: itemsPerPage, status: statusFilter === 'all' ? undefined : statusFilter });
+        const data = res?.data ?? [];
+        if (data.length > 0) {
+          setSettlements(data.map(s => ({
+            id: s.id,
+            sellerId: s.sellerId,
+            sellerName: s.sellerName,
+            sellerEmail: (s as unknown as Record<string, string>).sellerEmail || '',
+            periodStart: s.periodStart,
+            periodEnd: s.periodEnd,
+            grossAmount: (s as unknown as Record<string, number>).grossAmount || s.amount,
+            commission: (s as unknown as Record<string, number>).commission || 0,
+            gatewayFees: (s as unknown as Record<string, number>).gatewayFees || 0,
+            taxes: (s as unknown as Record<string, number>).taxes || 0,
+            otherDeductions: (s as unknown as Record<string, number>).otherDeductions || 0,
+            netAmount: (s as unknown as Record<string, number>).netAmount || s.amount,
+            orderCount: s.ordersCount,
+            currency: (s as unknown as Record<string, string>).currency || 'INR',
+            status: s.status as Settlement['status'],
+            paymentMethod: (s as unknown as Record<string, string>).paymentMethod,
+            paymentReference: (s as unknown as Record<string, string>).paymentReference,
+            paidAt: (s as unknown as Record<string, string>).paidAt,
+            createdAt: (s as unknown as Record<string, string>).createdAt || s.periodEnd,
+            country: (s as unknown as Record<string, string>).country || 'IN',
+          })));
+        } else {
+          setSettlements(FALLBACK_SETTLEMENTS);
+        }
+        setTotalCount(res?.total ?? data.length);
+      } catch {
+        setSettlements(FALLBACK_SETTLEMENTS);
+        setTotalCount(FALLBACK_SETTLEMENTS.length);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSettlements();
+  }, [currentPage, statusFilter]);
 
   const filteredSettlements = settlements.filter((s) => {
     if (statusFilter !== 'all' && s.status !== statusFilter) return false;

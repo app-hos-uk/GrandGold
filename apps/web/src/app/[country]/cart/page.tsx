@@ -45,13 +45,12 @@ export default function CartPage() {
     setSavingItem(productId);
     try {
       await saveForLater([productId]);
-      const token =
-        typeof window !== 'undefined'
-          ? localStorage.getItem('grandgold_token') || localStorage.getItem('accessToken')
-          : null;
-      if (token) {
+      // Try to sync with server wishlist (works with both cookie and localStorage auth)
+      try {
         const countryCode = country.toUpperCase();
         await wishlistApi.add(productId, countryCode);
+      } catch {
+        // Not logged in or API unavailable — local save-for-later still works
       }
     } catch {
       // Save for later failed - silently ignore

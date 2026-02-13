@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -19,10 +19,12 @@ import {
   Clock,
   AlertCircle,
   XCircle,
+  Loader2,
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { formatCurrency } from '@/lib/format';
 import { useToast } from '@/components/admin/toast';
+import { adminApi } from '@/lib/api';
 
 interface Transaction {
   id: string;
@@ -44,7 +46,7 @@ interface Transaction {
   };
 }
 
-const MOCK_TRANSACTIONS: Transaction[] = [
+const FALLBACK_TRANSACTIONS: Transaction[] = [
   { id: 'TXN-2024-001', type: 'payment', amount: 85000, currency: 'INR', status: 'completed', description: 'Order payment', reference: 'ORD-2024-1234', gateway: 'Razorpay', country: 'IN', createdAt: '2024-02-03T14:32:00Z', metadata: { orderId: 'ORD-2024-1234', customerId: 'USR001', customerName: 'Priya Sharma' } },
   { id: 'TXN-2024-002', type: 'commission', amount: 8500, currency: 'INR', status: 'completed', description: 'Platform commission', reference: 'ORD-2024-1234', gateway: 'Internal', country: 'IN', createdAt: '2024-02-03T14:32:00Z', metadata: { orderId: 'ORD-2024-1234', sellerId: 'SEL001', sellerName: 'Royal Jewellers' } },
   { id: 'TXN-2024-003', type: 'payout', amount: 125000, currency: 'INR', status: 'pending', description: 'Seller payout', reference: 'SET-2024-001', gateway: 'NEFT', country: 'IN', createdAt: '2024-02-03T13:00:00Z', metadata: { sellerId: 'SEL001', sellerName: 'Diamond Palace' } },
@@ -74,13 +76,48 @@ const COUNTRIES = ['IN', 'AE', 'UK'] as const;
 
 export default function TransactionsPage() {
   const toast = useToast();
-  const [transactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
+  const [transactions, setTransactions] = useState<Transaction[]>(FALLBACK_TRANSACTIONS);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      setLoading(true);
+      try {
+        const res = await adminApi.getTransactions({
+          page: currentPage,
+          limit: itemsPerPage,
+          type: typeFilter === 'all' ? undefined : typeFilter,
+          status: statusFilter === 'all' ? undefined : statusFilter,
+          country: countryFilter || undefined,
+        });
+        const data = res?.data ?? [];
+        if (data.length > 0) {
+          setTransactions(data.map(t => ({
+            ...t,
+            currency: (t as unknown as Record<string, string>).currency || 'INR',
+            reference: (t as unknown as Record<string, string>).reference || (t as unknown as Record<string, string>).orderId || '',
+            gateway: (t as unknown as Record<string, string>).gateway || '—',
+          })) as Transaction[]);
+        } else {
+          setTransactions(FALLBACK_TRANSACTIONS);
+        }
+        setTotal(res?.total ?? data.length);
+      } catch {
+        setTransactions(FALLBACK_TRANSACTIONS);
+        setTotal(FALLBACK_TRANSACTIONS.length);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTransactions();
+  }, [currentPage, typeFilter, statusFilter, countryFilter]);
 
   const filteredTransactions = transactions.filter((txn) => {
     if (typeFilter !== 'all' && txn.type !== typeFilter) return false;

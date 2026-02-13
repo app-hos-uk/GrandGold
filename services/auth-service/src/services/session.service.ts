@@ -1,10 +1,12 @@
-import { generateId } from '@grandgold/utils';
+import { generateId, sha256 } from '@grandgold/utils';
 import {
   createSession as dbCreateSession,
   findSessionById,
   findSessionByRefreshToken,
+  findSessionByTokenHash,
   getUserActiveSessions,
   updateSessionActivity,
+  updateSessionTokenHash,
   invalidateSession,
   invalidateAllUserSessions,
   logUserActivity,
@@ -15,6 +17,7 @@ import type { Session, UserActivity } from '@grandgold/database';
 interface CreateSessionData {
   userId: string;
   refreshToken: string;
+  accessToken?: string; // Used to create a hash for token-based session matching
   deviceId?: string;
   deviceName?: string;
   ipAddress: string;
@@ -23,6 +26,7 @@ interface CreateSessionData {
 
 interface UpdateSessionData {
   refreshToken?: string;
+  accessToken?: string; // New access token to update the hash
   lastActiveAt?: Date;
 }
 
@@ -37,10 +41,14 @@ export class SessionService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
+    // Store SHA-256 hash of access token for token-based session matching
+    const accessTokenHash = data.accessToken ? sha256(data.accessToken) : undefined;
+
     const session = await dbCreateSession({
       id: sessionId,
       userId: data.userId,
       refreshToken: data.refreshToken,
+      accessTokenHash: accessTokenHash ?? null,
       deviceId: data.deviceId,
       deviceName: this.parseDeviceName(data.userAgent),
       ipAddress: data.ipAddress,
@@ -90,10 +98,21 @@ export class SessionService {
    * Update session
    */
   async updateSession(sessionId: string, data: UpdateSessionData): Promise<void> {
-    if (data.lastActiveAt) {
+    // Update access token hash when tokens are rotated (e.g., refresh)
+    if (data.accessToken) {
+      const newHash = sha256(data.accessToken);
+      await updateSessionTokenHash(sessionId, newHash);
+    } else if (data.lastActiveAt) {
       await updateSessionActivity(sessionId);
     }
-    // For refresh token update, would need to add that to the database module
+  }
+
+  /**
+   * Find the current session by matching the access token hash
+   */
+  async findByAccessToken(userId: string, accessToken: string): Promise<Session | undefined> {
+    const tokenHash = sha256(accessToken);
+    return findSessionByTokenHash(userId, tokenHash);
   }
 
   /**
@@ -113,19 +132,20 @@ export class SessionService {
   }
 
   /**
-   * Invalidate session by token
+   * Invalidate session by access token (hash-based matching)
    */
-  async invalidateByToken(userId: string, _token: string): Promise<void> {
-    // Hash the token to find the session
-    // In a real implementation, you'd store and compare hashed tokens
-    const sessions = await getUserActiveSessions(userId);
-    
-    for (const session of sessions) {
-      // Compare token (simplified - in production, use proper token matching)
-      await invalidateSession(session.id);
-    }
+  async invalidateByToken(userId: string, token: string): Promise<void> {
+    const tokenHash = sha256(token);
+    const session = await findSessionByTokenHash(userId, tokenHash);
 
-    await this.logActivity(userId, 'logout', {});
+    if (session) {
+      await invalidateSession(session.id);
+      await this.logActivity(userId, 'logout', { sessionId: session.id });
+    } else {
+      // Fallback: if no session matches the hash (e.g., legacy sessions without hash),
+      // log the logout but don't blindly revoke all sessions
+      await this.logActivity(userId, 'logout', { note: 'no-matching-session' });
+    }
   }
 
   /**
@@ -137,14 +157,15 @@ export class SessionService {
   }
 
   /**
-   * Revoke all sessions except the current one
+   * Revoke all sessions except the current one (identified by access token hash)
    */
-  async revokeAllExceptCurrent(userId: string, currentToken: string): Promise<void> {
-    const sessions = await getUserActiveSessions(userId);
+  async revokeAllExceptCurrent(userId: string, currentAccessToken: string): Promise<void> {
+    const currentTokenHash = sha256(currentAccessToken);
+    const allSessions = await getUserActiveSessions(userId);
     
-    for (const session of sessions) {
-      // Skip current session (simplified comparison)
-      if (session.refreshToken !== currentToken) {
+    for (const session of allSessions) {
+      // Skip current session using token hash matching
+      if (session.accessTokenHash !== currentTokenHash) {
         await invalidateSession(session.id);
       }
     }

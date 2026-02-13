@@ -8,7 +8,7 @@ import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { authApi, ApiError } from '@/lib/api';
 import { Logo } from '@/components/brand/logo';
 
-const ADMIN_ROLES = ['super_admin', 'country_admin'];
+const ADMIN_ROLES = ['super_admin', 'country_admin', 'manager', 'staff', 'support'];
 
 export default function AdminLoginPage() {
   const router = useRouter();

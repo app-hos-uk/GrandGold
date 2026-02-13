@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { VisualSearch } from '@/components/search/visual-search';
 import { MOCK_PRODUCTS, fuzzySearchProducts } from '@/lib/product-data';
+import { catalogApi } from '@/lib/api';
 
 interface Product {
   id: string;
@@ -39,8 +40,8 @@ interface Product {
   inStock?: boolean;
 }
 
-// Use shared product data as source of truth
-const products: Product[] = MOCK_PRODUCTS.map((p) => ({
+// Fallback: use shared seed product data
+const fallbackProducts: Product[] = MOCK_PRODUCTS.map((p) => ({
   id: p.id,
   name: p.name,
   category: p.category,
@@ -53,7 +54,7 @@ const products: Product[] = MOCK_PRODUCTS.map((p) => ({
   inStock: p.inStock,
 }));
 
-const categories = ['All', ...new Set(MOCK_PRODUCTS.map((p) => p.category))];
+const defaultCategories = ['All', ...new Set(MOCK_PRODUCTS.map((p) => p.category))];
 const sortOptions = ['Featured', 'Price: Low to High', 'Price: High to Low', 'Newest First'];
 const purityOptions = ['All', '24K', '22K', '18K', '14K'];
 
@@ -81,6 +82,9 @@ function CollectionsContent() {
   const urlSearch = searchParams.get('search') || '';
   const urlCategory = searchParams.get('category') || '';
   
+  const [products, setProducts] = useState<Product[]>(fallbackProducts);
+  const [categories, setCategories] = useState<string[]>(defaultCategories);
+  const [apiLoaded, setApiLoaded] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState('Featured');
@@ -94,6 +98,38 @@ function CollectionsContent() {
   const [searchQuery, setSearchQuery] = useState(urlSearch);
   const [searchCorrection, setSearchCorrection] = useState<string | null>(null);
 
+  // Fetch products from product-service API with fallback to seed data
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await catalogApi.getProducts({ limit: 200, country: country.toUpperCase() });
+        const raw = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.data as Array<Record<string, unknown>>) || [];
+        if (!cancelled && raw.length > 0) {
+          const mapped: Product[] = raw.map((p) => ({
+            id: String(p.id),
+            name: String(p.name || ''),
+            category: String(p.category || 'Uncategorized'),
+            price: Number(p.basePrice || p.price || 0),
+            weight: String(p.goldWeight ? `${p.goldWeight}g` : p.weight || ''),
+            purity: String(p.purity || '22K'),
+            image: Array.isArray(p.images) && p.images.length > 0 ? String(p.images[0]) : '/products/placeholder.jpg',
+            isNew: Boolean(p.isNew || p.newArrival),
+            description: String(p.description || ''),
+            inStock: p.stockQuantity !== undefined ? Number(p.stockQuantity) > 0 : Boolean(p.inStock ?? true),
+          }));
+          setProducts(mapped);
+          const cats = ['All', ...new Set(mapped.map((p) => p.category))];
+          setCategories(cats);
+          setApiLoaded(true);
+        }
+      } catch {
+        // Keep fallback seed data
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [country]);
+
   // Sync URL search param on mount
   useEffect(() => {
     if (urlSearch) setSearchQuery(urlSearch);
@@ -104,17 +140,26 @@ function CollectionsContent() {
       );
       if (matchingCat) setSelectedCategory(matchingCat);
     }
-  }, [urlSearch, urlCategory]);
+  }, [urlSearch, urlCategory, categories]);
 
   // Compute search results & correction (pure computation, no setState during render)
   const { searchPool, computedCorrection } = (() => {
     if (!searchQuery.trim()) return { searchPool: products, computedCorrection: null };
-    const { results, correction } = fuzzySearchProducts(searchQuery.trim());
-    if (results.length > 0) {
-      const matchIds = new Set(results.map((r) => r.id));
-      return { searchPool: products.filter((p) => matchIds.has(p.id)), computedCorrection: correction };
+    // Use fuzzy search against seed data if API products not loaded, otherwise simple filter
+    if (!apiLoaded) {
+      const { results, correction } = fuzzySearchProducts(searchQuery.trim());
+      if (results.length > 0) {
+        const matchIds = new Set(results.map((r) => r.id));
+        return { searchPool: products.filter((p) => matchIds.has(p.id)), computedCorrection: correction };
+      }
+      return { searchPool: [] as Product[], computedCorrection: correction };
     }
-    return { searchPool: [] as Product[], computedCorrection: correction };
+    // API products: simple case-insensitive filter (Meilisearch handles fuzzy server-side)
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = products.filter(
+      (p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q)
+    );
+    return { searchPool: filtered, computedCorrection: null };
   })();
 
   // Sync correction state via useEffect (avoids setState during render)

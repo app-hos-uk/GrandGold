@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Store,
@@ -12,7 +12,9 @@ import {
   Check,
   Upload,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
+import { authApi, userApi } from '@/lib/api';
 
 const tabs = [
   { id: 'store', label: 'Store Profile', icon: Store },
@@ -25,11 +27,67 @@ const tabs = [
 export default function SellerSettingsPage() {
   const [activeTab, setActiveTab] = useState('store');
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    storeName: '',
+    storeDescription: '',
+    businessEmail: '',
+    businessPhone: '',
+    businessAddress: '',
+  });
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  useEffect(() => {
+    authApi.getMe()
+      .then((user: Record<string, unknown>) => {
+        setProfile({
+          firstName: (user.firstName as string) || '',
+          lastName: (user.lastName as string) || '',
+          email: (user.email as string) || '',
+          phone: (user.phone as string) || '',
+          storeName: (user.businessName as string) || (user.storeName as string) || '',
+          storeDescription: (user.storeDescription as string) || '',
+          businessEmail: (user.businessEmail as string) || (user.email as string) || '',
+          businessPhone: (user.businessPhone as string) || (user.phone as string) || '',
+          businessAddress: (user.businessAddress as string) || '',
+        });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await userApi.updateProfile({
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        phone: profile.phone,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      // ignore
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handleChange = (field: string, value: string) => {
+    setProfile(prev => ({ ...prev, [field]: value }));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-gold-500" />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -46,8 +104,8 @@ export default function SellerSettingsPage() {
               : 'bg-gold-500 text-white hover:bg-gold-600'
           }`}
         >
-          {saved ? <Check className="w-5 h-5" /> : <Save className="w-5 h-5" />}
-          {saved ? 'Saved!' : 'Save Changes'}
+          {saved ? <Check className="w-5 h-5" /> : saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+          {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
         </button>
       </div>
 
@@ -108,8 +166,10 @@ export default function SellerSettingsPage() {
                   </label>
                   <input
                     type="text"
-                    defaultValue="Royal Jewellers"
+                    value={profile.storeName}
+                    onChange={(e) => handleChange('storeName', e.target.value)}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                    placeholder="Your store name"
                   />
                 </div>
                 <div>
@@ -118,8 +178,10 @@ export default function SellerSettingsPage() {
                   </label>
                   <textarea
                     rows={3}
-                    defaultValue="Premium handcrafted gold jewellery with traditional and contemporary designs. Serving customers since 1985."
+                    value={profile.storeDescription}
+                    onChange={(e) => handleChange('storeDescription', e.target.value)}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                    placeholder="Describe your store..."
                   />
                 </div>
                 <div className="grid md:grid-cols-2 gap-6">
@@ -129,8 +191,10 @@ export default function SellerSettingsPage() {
                     </label>
                     <input
                       type="email"
-                      defaultValue="contact@royaljewellers.com"
+                      value={profile.businessEmail}
+                      onChange={(e) => handleChange('businessEmail', e.target.value)}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                      placeholder="business@example.com"
                     />
                   </div>
                   <div>
@@ -139,8 +203,10 @@ export default function SellerSettingsPage() {
                     </label>
                     <input
                       type="tel"
-                      defaultValue="+91 98765 43210"
+                      value={profile.businessPhone}
+                      onChange={(e) => handleChange('businessPhone', e.target.value)}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                      placeholder="+91 98765 43210"
                     />
                   </div>
                 </div>
@@ -150,8 +216,10 @@ export default function SellerSettingsPage() {
                   </label>
                   <textarea
                     rows={2}
-                    defaultValue="123 Jewellers Lane, Zaveri Bazaar, Mumbai 400003"
+                    value={profile.businessAddress}
+                    onChange={(e) => handleChange('businessAddress', e.target.value)}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                    placeholder="Street address, City, State, PIN"
                   />
                 </div>
               </div>
@@ -173,7 +241,8 @@ export default function SellerSettingsPage() {
                     </label>
                     <input
                       type="text"
-                      defaultValue="Ravi"
+                      value={profile.firstName}
+                      onChange={(e) => handleChange('firstName', e.target.value)}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
                     />
                   </div>
@@ -183,7 +252,8 @@ export default function SellerSettingsPage() {
                     </label>
                     <input
                       type="text"
-                      defaultValue="Kumar"
+                      value={profile.lastName}
+                      onChange={(e) => handleChange('lastName', e.target.value)}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
                     />
                   </div>
@@ -194,9 +264,12 @@ export default function SellerSettingsPage() {
                   </label>
                   <input
                     type="email"
-                    defaultValue="ravi@royaljewellers.com"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                    value={profile.email}
+                    onChange={(e) => handleChange('email', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500 bg-gray-50"
+                    readOnly
                   />
+                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed. Contact support if needed.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -204,7 +277,8 @@ export default function SellerSettingsPage() {
                   </label>
                   <input
                     type="tel"
-                    defaultValue="+91 98765 43210"
+                    value={profile.phone}
+                    onChange={(e) => handleChange('phone', e.target.value)}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
                   />
                 </div>

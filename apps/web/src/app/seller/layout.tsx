@@ -21,7 +21,8 @@ import {
   HelpCircle,
   FileCheck,
 } from 'lucide-react';
-import { authApi, getStoredToken, ApiError, type CurrentUserProfile } from '@/lib/api';
+import { authApi, ApiError, type CurrentUserProfile } from '@/lib/api';
+import { ToastProvider } from '@/components/admin/toast';
 
 const navigation = [
   { name: 'Dashboard', href: '/seller', icon: LayoutDashboard },
@@ -48,14 +49,11 @@ export default function SellerLayout({
 
   const fetchProfile = useCallback(async () => {
     if (isRedirectingRef.current) return;
-    
-    const token = getStoredToken();
-    if (!token) {
-      isRedirectingRef.current = true;
-      router.replace('/seller/login');
-      return;
-    }
 
+    // Always attempt getMe() — auth is handled by either:
+    //   1. httpOnly cookie (middleware injects Authorization header), or
+    //   2. Legacy localStorage token (getAuthHeaders adds the header)
+    // If neither is present the API returns 401 and we redirect.
     try {
       const user = await authApi.getMe();
       if (user.role !== 'seller') {
@@ -255,7 +253,9 @@ export default function SellerLayout({
 
         {/* Page content */}
         <main className="p-4 lg:p-8">
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </main>
       </div>
     </div>

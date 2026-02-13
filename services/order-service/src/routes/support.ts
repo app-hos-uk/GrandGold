@@ -108,6 +108,13 @@ router.get(
 
       let tickets = Array.from(ticketsStore.values());
 
+      // Country admins can only see tickets from their country
+      const isCountryAdmin = req.user?.role === 'country_admin';
+      const adminCountry = req.user?.country;
+      if (isCountryAdmin && adminCountry) {
+        tickets = tickets.filter((t) => t.country === adminCountry);
+      }
+
       // Filter
       if (status) {
         tickets = tickets.filter((t) => t.status === status);
@@ -126,8 +133,10 @@ router.get(
       const start = (page - 1) * limit;
       const paginated = tickets.slice(start, start + limit);
 
-      // Calculate stats
-      const allTickets = Array.from(ticketsStore.values());
+      // Calculate stats — scoped to the same country filter
+      const allTickets = isCountryAdmin && adminCountry
+        ? Array.from(ticketsStore.values()).filter((t) => t.country === adminCountry)
+        : Array.from(ticketsStore.values());
       const stats = {
         openTickets: allTickets.filter((t) => t.status === 'open').length,
         avgResponseTime: 25, // In production, calculate from actual data
@@ -173,6 +182,15 @@ router.get(
         res.status(403).json({
           success: false,
           error: { code: 'FORBIDDEN', message: 'Access denied' },
+        });
+        return;
+      }
+
+      // Country admins can only see tickets from their country
+      if (req.user?.role === 'country_admin' && req.user?.country && ticket.country !== req.user.country) {
+        res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'You can only access tickets from your assigned country' },
         });
         return;
       }
@@ -261,6 +279,15 @@ router.patch(
       const ticket = ticketsStore.get(id);
       if (!ticket) {
         throw new NotFoundError('Ticket not found');
+      }
+
+      // Country admins can only update tickets from their country
+      if (req.user?.role === 'country_admin' && req.user?.country && ticket.country !== req.user.country) {
+        res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'You can only update tickets from your assigned country' },
+        });
+        return;
       }
 
       if (data.status) {

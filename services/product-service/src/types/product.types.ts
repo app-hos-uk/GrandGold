@@ -102,6 +102,8 @@ export interface ProductListOptions {
   limit: number;
   status?: string;
   category?: string;
+  /** When set, only return products available in this country */
+  country?: string;
 }
 
 /**

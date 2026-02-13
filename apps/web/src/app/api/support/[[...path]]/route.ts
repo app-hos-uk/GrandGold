@@ -34,6 +34,15 @@ export async function PATCH(
   return proxy(request, pathStr);
 }
 
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ path?: string[] }> }
+) {
+  const pathSegments = (await params).path;
+  const pathStr = pathSegments && pathSegments.length > 0 ? `/${pathSegments.join('/')}` : '';
+  return proxy(request, pathStr);
+}
+
 async function proxy(request: NextRequest, path: string) {
   const url = `${ORDER_SERVICE_URL}/api/support${path}${request.nextUrl.search}`;
   const auth = request.headers.get('authorization');

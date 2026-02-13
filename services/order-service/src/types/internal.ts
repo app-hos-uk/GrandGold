@@ -134,9 +134,32 @@ export interface OrderRecord {
   shippedAt?: Date;
   deliveredAt?: Date;
   cancelledAt?: Date;
+  // Influencer / referral attribution
+  referral?: ReferralAttribution;
   createdAt: Date;
   updatedAt: Date;
   [key: string]: unknown;
+}
+
+// ── Referral / Influencer Attribution ─────────────────────────────────
+
+export interface ReferralAttribution {
+  /** Influencer or affiliate user ID */
+  referrerId: string;
+  /** Channel through which the referral arrived */
+  channel: 'influencer_rack' | 'affiliate_link' | 'referral_code' | 'social_share';
+  /** The referral / promo code used (if any) */
+  code?: string;
+  /** Commission rate (%) that the referrer earns on this order */
+  commissionRate: number;
+  /** Calculated commission amount */
+  commissionAmount: number;
+  /** Whether commission has been paid out */
+  commissionPaid: boolean;
+  /** The settlement ID once paid */
+  settlementId?: string;
+  /** Timestamp of the click / visit that attributed this order */
+  attributedAt: Date;
 }
 
 export interface StatusHistoryEntry {

@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { Inter, Playfair_Display, Cormorant_Garamond } from 'next/font/google';
+import Script from 'next/script';
 import './globals.css';
 
 const inter = Inter({
@@ -95,11 +97,15 @@ export const viewport: Viewport = {
   maximumScale: 5,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Read CSP nonce from middleware-injected request header
+  const headersList = await headers();
+  const nonce = headersList.get('x-nonce') || '';
+
   return (
     <html 
       lang="en" 
@@ -108,6 +114,23 @@ export default function RootLayout({
     >
       <body className="font-sans antialiased bg-cream-50 text-gray-900">
         {children}
+        {/* Register service worker with nonce */}
+        {nonce && (
+          <Script
+            nonce={nonce}
+            strategy="afterInteractive"
+            id="sw-register"
+            dangerouslySetInnerHTML={{
+              __html: `
+                if ('serviceWorker' in navigator) {
+                  window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js');
+                  });
+                }
+              `,
+            }}
+          />
+        )}
       </body>
     </html>
   );

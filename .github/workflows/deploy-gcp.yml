@@ -9,11 +9,11 @@
 #   GCP_SA_KEY            — Service account JSON key with Cloud Run Admin, Cloud Build Editor, Storage Admin
 #   GCP_PROJECT_NUMBER    — e.g. "484382472654" (for Cloud Run service URLs)
 #   GCP_REGION            — e.g. "asia-south1" (primary deploy region)
+#   DATABASE_URL          — PostgreSQL connection string (REQUIRED for services)
+#   JWT_SECRET            — JWT signing key (REQUIRED for services)
 #
-# Optional Secrets (for backend services):
-#   DATABASE_URL          — PostgreSQL connection string
-#   JWT_SECRET            — JWT signing key
-#   REDIS_URL             — Redis connection string
+# Optional Secrets:
+#   REDIS_URL             — Redis connection string (defaults to internal VPC Redis)
 
 name: Deploy to GCP Cloud Run
 
@@ -81,20 +81,69 @@ jobs:
             elif [[ "$TARGET" == "web-only" ]]; then
               echo "list=[]" >> $GITHUB_OUTPUT
             else
-              echo 'list=["auth-service","kyc-service","seller-service","fintech-service","order-service","payment-service","product-service","inventory-service","promotion-service","notification-service","ai-service"]' >> $GITHUB_OUTPUT
+              echo 'list=["auth-service","kyc-service","seller-service","fintech-service","order-service","payment-service","product-service","inventory-service","promotion-service","notification-service","ai-service","cms-service"]' >> $GITHUB_OUTPUT
             fi
           elif [[ "${{ steps.filter.outputs.services }}" == "true" ]]; then
-            echo 'list=["auth-service","kyc-service","seller-service","fintech-service","order-service","payment-service","product-service","inventory-service","promotion-service","notification-service","ai-service"]' >> $GITHUB_OUTPUT
+            echo 'list=["auth-service","kyc-service","seller-service","fintech-service","order-service","payment-service","product-service","inventory-service","promotion-service","notification-service","ai-service","cms-service"]' >> $GITHUB_OUTPUT
           else
             echo "list=[]" >> $GITHUB_OUTPUT
           fi
+
+  # ─────────────────────────────────────────────────────
+  # Job 1.5: Lint & Typecheck quality gate
+  # ─────────────────────────────────────────────────────
+  quality:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ESLint
+        run: pnpm lint
+
+      - name: TypeScript type-check (packages)
+        run: |
+          pnpm --filter @grandgold/types exec tsc --noEmit
+          pnpm --filter @grandgold/utils exec tsc --noEmit
+
+      - name: TypeScript type-check (services)
+        run: |
+          pnpm --filter @grandgold/auth-service exec tsc --noEmit
+          pnpm --filter @grandgold/order-service exec tsc --noEmit
+          pnpm --filter @grandgold/product-service exec tsc --noEmit
+          pnpm --filter @grandgold/seller-service exec tsc --noEmit
+          pnpm --filter @grandgold/fintech-service exec tsc --noEmit
+          pnpm --filter @grandgold/payment-service exec tsc --noEmit
+          pnpm --filter @grandgold/kyc-service exec tsc --noEmit
+          pnpm --filter @grandgold/inventory-service exec tsc --noEmit
+          pnpm --filter @grandgold/ai-service exec tsc --noEmit
+          pnpm --filter @grandgold/promotion-service exec tsc --noEmit
+          pnpm --filter @grandgold/notification-service exec tsc --noEmit
+          pnpm --filter @grandgold/cms-service exec tsc --noEmit
+
+      - name: TypeScript type-check (web)
+        run: pnpm --filter @grandgold/web exec tsc --noEmit
 
   # ─────────────────────────────────────────────────────
   # Job 2: Build & deploy backend services
   # ─────────────────────────────────────────────────────
   deploy-services:
     name: Deploy ${{ matrix.service }}
-    needs: changes
+    needs: [changes, quality]
     if: needs.changes.outputs.services_list != '[]'
     runs-on: ubuntu-latest
     strategy:
@@ -160,7 +209,7 @@ jobs:
             --max-instances 10 \
             --concurrency 80 \
             --timeout 60s \
-            --update-env-vars "^#^NODE_ENV=production#CLOUD_SQL_CONNECTION_NAME=${{ env.GCP_PROJECT_ID }}:${REGION}:grandgold-db#REDIS_URL=redis://10.10.168.107:6379#CORS_ORIGINS=${CORS}" \
+            --update-env-vars "^#^NODE_ENV=production#CLOUD_SQL_CONNECTION_NAME=${{ env.GCP_PROJECT_ID }}:${REGION}:grandgold-db#DATABASE_URL=${{ secrets.DATABASE_URL }}#JWT_SECRET=${{ secrets.JWT_SECRET }}#REDIS_URL=${{ secrets.REDIS_URL || 'redis://10.10.168.107:6379' }}#CORS_ORIGINS=${CORS}" \
             --add-cloudsql-instances "${{ env.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:grandgold-db" \
             --vpc-connector "projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.GCP_REGION }}/connectors/grandgold-connector" \
             --vpc-egress private-ranges-only \
@@ -182,7 +231,7 @@ jobs:
   # ─────────────────────────────────────────────────────
   deploy-web:
     name: Deploy Web App
-    needs: changes
+    needs: [changes, quality]
     if: >
       needs.changes.outputs.web == 'true' ||
       github.event.inputs.deploy_target == 'all' ||
@@ -262,7 +311,7 @@ jobs:
   # ─────────────────────────────────────────────────────
   summary:
     name: Deployment Summary
-    needs: [changes, deploy-services, deploy-web]
+    needs: [changes, quality, deploy-services, deploy-web]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -277,5 +326,6 @@ jobs:
           echo "| Triggered by | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Web changed | ${{ needs.changes.outputs.web }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Services changed | ${{ needs.changes.outputs.services }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality gate | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Services job | ${{ needs.deploy-services.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Web job | ${{ needs.deploy-web.result }} |" >> $GITHUB_STEP_SUMMARY

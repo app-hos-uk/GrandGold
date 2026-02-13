@@ -6,16 +6,13 @@ const router = Router();
 const trackingService = new TrackingService();
 
 /**
- * GET /api/tracking/:orderId
- * Get order tracking info
+ * GET /api/tracking/number/:trackingNumber
+ * Get tracking by tracking number
+ * NOTE: Must be defined BEFORE /:orderId to prevent "number" matching as :orderId
  */
-router.get('/:orderId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/number/:trackingNumber', optionalAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!req.user) {
-      throw new Error('User not authenticated');
-    }
-    
-    const tracking = await trackingService.getTracking(req.params.orderId, req.user.sub);
+    const tracking = await trackingService.getTrackingByNumber(req.params.trackingNumber);
     
     res.json({
       success: true,
@@ -27,12 +24,16 @@ router.get('/:orderId', authenticate, async (req: Request, res: Response, next: 
 });
 
 /**
- * GET /api/tracking/number/:trackingNumber
- * Get tracking by tracking number
+ * GET /api/tracking/:orderId
+ * Get order tracking info
  */
-router.get('/number/:trackingNumber', optionalAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:orderId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const tracking = await trackingService.getTrackingByNumber(req.params.trackingNumber);
+    if (!req.user) {
+      throw new Error('User not authenticated');
+    }
+    
+    const tracking = await trackingService.getTracking(req.params.orderId, req.user.sub);
     
     res.json({
       success: true,

@@ -27,10 +27,11 @@ import { Recommendations } from '@/components/product/recommendations';
 import { CompleteTheLook } from '@/components/product/complete-the-look';
 import { TrustBadges } from '@/components/product/trust-badges';
 import { MOCK_PRODUCTS, type MockProduct } from '@/lib/product-data';
+import { catalogApi } from '@/lib/api';
 
 /* ------------------------------------------------------------------ */
 /*  Extended product info (rating, reviews, features, sku, images)      */
-/*  Kept here until the product-service API provides these fields.      */
+/*  Kept here as fallback until the product-service API returns these.  */
 /* ------------------------------------------------------------------ */
 
 interface ProductDetail {
@@ -54,8 +55,8 @@ const productExtras: Record<string, ProductDetail> = {
   '10': { features: ['18K rose gold', 'Diamond accents', 'Heart-shaped design', 'Adjustable chain length', 'Gift-ready packaging', 'Certificate of authenticity included'], images: ['/products/heart-pendant-1.jpg'], rating: 4.9, reviews: 112, sku: 'GG-PD-010' },
 };
 
-/** Combine MOCK_PRODUCTS source-of-truth with detail extras */
-function getProduct(id: string) {
+/** Combine MOCK_PRODUCTS source-of-truth with detail extras (local fallback) */
+function getLocalProduct(id: string) {
   const base = MOCK_PRODUCTS.find((p) => p.id === id);
   if (!base) return null;
   const extras = productExtras[id] || {
@@ -82,7 +83,9 @@ export default function ProductPage() {
   const { addItem: addToCart } = useCart();
   const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
 
-  const product = getProduct(productId);
+  // Start with local fallback, try API
+  const localProduct = getLocalProduct(productId);
+  const [product, setProduct] = useState(localProduct);
   const inWishlist = isInWishlist(productId);
 
   const [quantity, setQuantity] = useState(1);
@@ -90,6 +93,45 @@ export default function ProductPage() {
   const [addedToCart, setAddedToCart] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
   const [activeTab, setActiveTab] = useState<'description' | 'features' | 'shipping'>('description');
+
+  // Fetch from product-service API (preferred), fall back to seed data
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await catalogApi.getProduct(productId);
+        const raw = (res as Record<string, unknown>)?.data || res;
+        if (cancelled || !raw) return;
+        const p = raw as Record<string, unknown>;
+        const extras = productExtras[productId];
+        const apiProduct = {
+          id: String(p.id),
+          name: String(p.name || ''),
+          slug: String(p.slug || ''),
+          category: String(p.category || ''),
+          description: String(p.description || ''),
+          price: Number(p.basePrice || p.price || 0),
+          weight: String(p.goldWeight ? `${p.goldWeight}g` : ''),
+          purity: String(p.purity || '22K'),
+          metalType: String(p.metalType || 'gold'),
+          inStock: p.stockQuantity !== undefined ? Number(p.stockQuantity) > 0 : Boolean(p.isActive ?? true),
+          images: Array.isArray(p.images) && p.images.length > 0 ? p.images.map(String) : extras?.images || ['/products/placeholder.jpg'],
+          features: extras?.features || [`${p.purity || '22K'} ${p.metalType || 'Gold'}`, 'BIS Hallmarked', 'Certificate of authenticity included'],
+          rating: extras?.rating || 4.5,
+          reviews: extras?.reviews || 0,
+          sku: extras?.sku || String(p.sku || `GG-${productId}`),
+          isNew: Boolean(p.isNew || p.newArrival || false),
+          tags: Array.isArray(p.tags) ? p.tags.map(String) : [],
+          countries: Array.isArray(p.countries) ? p.countries.map(String) : [],
+          newArrival: Boolean(p.isNew || p.newArrival || false),
+        };
+        if (!cancelled) setProduct(apiProduct);
+      } catch {
+        // Keep local fallback
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [productId]);
 
   // Dynamic page title
   useEffect(() => {

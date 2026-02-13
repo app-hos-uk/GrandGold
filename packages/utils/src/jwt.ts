@@ -9,8 +9,16 @@ interface JwtConfig {
   audience?: string;
 }
 
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL: JWT_SECRET environment variable is required in production. Do not deploy without it.');
+  }
+  return secret || 'dev-only-default-secret-DO-NOT-USE-IN-PRODUCTION';
+}
+
 let config: JwtConfig = {
-  secret: process.env.JWT_SECRET || 'default-secret',
+  secret: getJwtSecret(),
   accessExpiresIn: process.env.JWT_ACCESS_EXPIRY || '15m',
   refreshExpiresIn: process.env.JWT_REFRESH_EXPIRY || '7d',
   issuer: 'grandgold',

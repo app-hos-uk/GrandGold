@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Wallet,
@@ -14,9 +14,27 @@ import {
   ArrowUpRight,
   IndianRupee,
   Building,
+  Loader2,
 } from 'lucide-react';
+import { adminApi } from '@/lib/api';
 
-const payouts = [
+interface PayoutRow {
+  id: string;
+  amount: number;
+  orders: number;
+  status: string;
+  date: string;
+  method: string;
+}
+
+interface PendingRow {
+  orderId: string;
+  amount: number;
+  date: string;
+  status: string;
+}
+
+const FALLBACK_PAYOUTS: PayoutRow[] = [
   { id: 'PAY-001', amount: 285000, orders: 12, status: 'completed', date: '15 Jan 2024', method: 'Bank Transfer' },
   { id: 'PAY-002', amount: 420000, orders: 18, status: 'completed', date: '01 Jan 2024', method: 'Bank Transfer' },
   { id: 'PAY-003', amount: 195000, orders: 8, status: 'completed', date: '15 Dec 2023', method: 'Bank Transfer' },
@@ -24,7 +42,7 @@ const payouts = [
   { id: 'PAY-005', amount: 156000, orders: 6, status: 'completed', date: '15 Nov 2023', method: 'Bank Transfer' },
 ];
 
-const pendingPayouts = [
+const FALLBACK_PENDING: PendingRow[] = [
   { orderId: 'GG-2024-101', amount: 166500, date: '15 Jan 2024', status: 'processing' },
   { orderId: 'GG-2024-102', amount: 70650, date: '14 Jan 2024', status: 'processing' },
   { orderId: 'GG-2024-103', amount: 288000, date: '14 Jan 2024', status: 'pending' },
@@ -32,6 +50,58 @@ const pendingPayouts = [
 
 export default function SellerPayoutsPage() {
   const [dateRange, setDateRange] = useState('all');
+  const [payouts, setPayouts] = useState<PayoutRow[]>(FALLBACK_PAYOUTS);
+  const [pendingPayouts, setPendingPayouts] = useState<PendingRow[]>(FALLBACK_PENDING);
+  const [loading, setLoading] = useState(true);
+  const [availableBalance, setAvailableBalance] = useState(525150);
+  const [pendingAmount, setPendingAmount] = useState(525150);
+  const [totalEarned, setTotalEarned] = useState(4520000);
+
+  useEffect(() => {
+    const fetchPayouts = async () => {
+      setLoading(true);
+      try {
+        const [settlementsRes, statsRes] = await Promise.all([
+          adminApi.getSettlements({ limit: 20 }).catch(() => null),
+          adminApi.getFinanceStats({}).catch(() => null),
+        ]);
+
+        if (settlementsRes?.data && settlementsRes.data.length > 0) {
+          const completed = settlementsRes.data.filter(s => s.status === 'completed');
+          const pending = settlementsRes.data.filter(s => s.status === 'ready' || s.status === 'processing');
+          
+          if (completed.length > 0) {
+            setPayouts(completed.map(s => ({
+              id: s.id,
+              amount: s.amount,
+              orders: s.ordersCount,
+              status: s.status,
+              date: new Date(s.periodEnd).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+              method: 'Bank Transfer',
+            })));
+          }
+          if (pending.length > 0) {
+            setPendingPayouts(pending.map(s => ({
+              orderId: s.id,
+              amount: s.amount,
+              date: new Date(s.periodEnd).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+              status: s.status === 'ready' ? 'pending' : 'processing',
+            })));
+            setPendingAmount(pending.reduce((sum, s) => sum + s.amount, 0));
+          }
+        }
+        if (statsRes) {
+          if (statsRes.totalRevenue) setTotalEarned(statsRes.totalRevenue);
+          if (statsRes.platformBalance) setAvailableBalance(statsRes.platformBalance);
+        }
+      } catch {
+        // keep fallback data
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPayouts();
+  }, []);
 
   return (
     <div>
@@ -59,7 +129,7 @@ export default function SellerPayoutsPage() {
             </div>
             <p className="text-gold-100">Available Balance</p>
           </div>
-          <p className="text-4xl font-bold mb-2">₹5,25,150</p>
+          <p className="text-4xl font-bold mb-2">{loading ? '—' : `₹${availableBalance.toLocaleString('en-IN')}`}</p>
           <button className="mt-4 px-4 py-2 bg-white text-gold-600 rounded-lg font-medium hover:bg-gold-50 transition-colors">
             Request Payout
           </button>
@@ -77,8 +147,8 @@ export default function SellerPayoutsPage() {
             </div>
             <p className="text-gray-500">Pending</p>
           </div>
-          <p className="text-3xl font-bold text-gray-900">₹5,25,150</p>
-          <p className="text-sm text-gray-500 mt-1">3 orders in processing</p>
+          <p className="text-3xl font-bold text-gray-900">{loading ? '—' : `₹${pendingAmount.toLocaleString('en-IN')}`}</p>
+          <p className="text-sm text-gray-500 mt-1">{pendingPayouts.length} orders in processing</p>
         </motion.div>
 
         <motion.div
@@ -93,7 +163,7 @@ export default function SellerPayoutsPage() {
             </div>
             <p className="text-gray-500">Total Earned</p>
           </div>
-          <p className="text-3xl font-bold text-gray-900">₹45,20,000</p>
+          <p className="text-3xl font-bold text-gray-900">{loading ? '—' : `₹${totalEarned.toLocaleString('en-IN')}`}</p>
           <div className="flex items-center gap-1 text-green-600 text-sm mt-1">
             <ArrowUpRight className="w-4 h-4" />
             <span>+18.2% this month</span>
@@ -129,7 +199,7 @@ export default function SellerPayoutsPage() {
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Pending Settlements</h2>
           <span className="px-2.5 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm font-medium">
-            3 orders
+            {pendingPayouts.length} orders
           </span>
         </div>
         <div className="divide-y divide-gray-100">
@@ -168,6 +238,12 @@ export default function SellerPayoutsPage() {
           </select>
         </div>
         <div className="overflow-x-auto">
+          {loading && (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="w-6 h-6 animate-spin text-gold-500" />
+              <span className="ml-2 text-gray-500">Loading payouts...</span>
+            </div>
+          )}
           <table className="w-full">
             <thead>
               <tr className="text-left text-sm text-gray-500 border-b border-gray-100">
@@ -201,7 +277,7 @@ export default function SellerPayoutsPage() {
           </table>
         </div>
         <div className="flex items-center justify-between p-4 border-t border-gray-100">
-          <p className="text-sm text-gray-500">Showing 5 payouts</p>
+          <p className="text-sm text-gray-500">Showing {payouts.length} payouts</p>
           <div className="flex items-center gap-2">
             <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
               <ChevronLeft className="w-4 h-4" />

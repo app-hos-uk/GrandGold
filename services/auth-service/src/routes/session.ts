@@ -10,7 +10,8 @@ router.use(authenticate);
 
 /**
  * GET /api/sessions
- * Get all active sessions for current user
+ * Get all active sessions for current user.
+ * The current session is identified via SHA-256 hash of the bearer token.
  */
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -19,14 +20,18 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
     
     const sessions = await sessionService.getUserSessions(req.user.sub);
-    
-    // Mark current session
-    // const authHeader = req.headers.authorization;
-    // const currentToken = authHeader?.split(' ')[1]; // TODO: use for proper session matching
+
+    // Token-based session matching: hash the current access token to find the active session
+    const authHeader = req.headers.authorization;
+    const currentToken = authHeader?.split(' ')[1];
+    let currentSession: { id: string } | undefined;
+    if (currentToken) {
+      currentSession = await sessionService.findByAccessToken(req.user.sub, currentToken);
+    }
     
     const sessionsWithCurrent = sessions.map(session => ({
       ...session,
-      isCurrent: session.id === req.user?.sub, // This would need proper matching
+      isCurrent: currentSession ? session.id === currentSession.id : false,
     }));
     
     res.json({

@@ -9,7 +9,7 @@ const withPWA = require('next-pwa')({
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
-  eslint: { ignoreDuringBuilds: true },
+  eslint: { ignoreDuringBuilds: true }, // Linting runs in CI quality gate (pnpm lint); skip during build to avoid double-run
   typescript: { ignoreBuildErrors: false },
   
   // Transpile workspace packages
@@ -55,6 +55,10 @@ const nextConfig = {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
           },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(self), payment=(self)',
+          },
         ],
       },
     ];
@@ -82,6 +86,10 @@ const nextConfig = {
     const aiUrl = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:4009';
     const kycUrl = process.env.NEXT_PUBLIC_KYC_SERVICE_URL || 'http://localhost:4006';
     return [
+      // NOTE: /api/auth/session and /api/auth/session/refresh are handled by
+      // Next.js API routes (app/api/auth/session/) for httpOnly cookie auth.
+      // Next.js API routes take precedence over rewrites, so no exclusion needed,
+      // but we document this for clarity.
       { source: '/api/auth/:path*', destination: `${authUrl}/api/auth/:path*` },
       { source: '/api/kyc/:path*', destination: `${kycUrl}/api/kyc/:path*` },
       { source: '/api/user/:path*', destination: `${authUrl}/api/user/:path*` },
@@ -98,6 +106,7 @@ const nextConfig = {
       { source: '/api/cart/:path*', destination: `${orderUrl}/api/cart/:path*` },
       { source: '/api/cart', destination: `${orderUrl}/api/cart` },
       { source: '/api/checkout/:path*', destination: `${orderUrl}/api/checkout/:path*` },
+      { source: '/api/tracking/:path*', destination: `${orderUrl}/api/tracking/:path*` },
       { source: '/api/click-collect/:path*', destination: `${orderUrl}/api/click-collect/:path*` },
       { source: '/api/consultation/:path*', destination: `${orderUrl}/api/consultation/:path*` },
       { source: '/api/notifications/:path*', destination: `${orderUrl}/api/notifications/:path*` },
@@ -112,6 +121,8 @@ const nextConfig = {
       { source: '/api/categories', destination: `${productUrl}/api/categories` },
       { source: '/api/products/:path*', destination: `${productUrl}/api/products/:path*` },
       { source: '/api/products', destination: `${productUrl}/api/products` },
+      { source: '/api/bundles/:path*', destination: `${productUrl}/api/bundles/:path*` },
+      { source: '/api/bundles', destination: `${productUrl}/api/bundles` },
       { source: '/api/collections/:path*', destination: `${productUrl}/api/collections/:path*` },
       { source: '/api/search/:path*', destination: `${productUrl}/api/search/:path*` },
       { source: '/api/influencers', destination: `${productUrl}/api/influencers` },

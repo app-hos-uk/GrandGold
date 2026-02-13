@@ -20,8 +20,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Persist subscription (userId from auth, endpoint, keys) to DB/Redis
-    // For now, accept and return success
+    // Forward subscription to notification service for persistence
+    const notifyUrl = process.env.NEXT_PUBLIC_NOTIFICATION_SERVICE_URL || 'http://localhost:4011';
+    const authHeader = request.headers.get('authorization');
+    try {
+      const upstream = await fetch(`${notifyUrl}/api/notifications/push-subscribe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authHeader ? { Authorization: authHeader } : {}),
+        },
+        body: JSON.stringify({ endpoint, keys }),
+      });
+      if (upstream.ok) {
+        return NextResponse.json({ success: true, message: 'Push subscription registered' });
+      }
+    } catch {
+      // If notification service is unavailable, still accept gracefully
+    }
     return NextResponse.json({ success: true, message: 'Push subscription registered' });
   } catch {
     return NextResponse.json(

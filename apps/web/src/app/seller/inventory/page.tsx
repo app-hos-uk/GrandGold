@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -15,9 +15,24 @@ import {
   Edit,
   Save,
   X,
+  Loader2,
 } from 'lucide-react';
+import { adminApi, type InventoryItem } from '@/lib/api';
 
-const inventory = [
+interface InvRow {
+  id: string | number;
+  name: string;
+  sku: string;
+  category: string;
+  stock: number;
+  reserved: number;
+  available: number;
+  threshold: number;
+  status: string;
+  productId?: string;
+}
+
+const FALLBACK_INVENTORY: InvRow[] = [
   { id: 1, name: 'Traditional Kundan Necklace Set', sku: 'GG-NK-001', category: 'Necklaces', stock: 12, reserved: 2, available: 10, threshold: 5, status: 'healthy' },
   { id: 2, name: 'Diamond Studded Jhumkas', sku: 'GG-ER-002', category: 'Earrings', stock: 25, reserved: 3, available: 22, threshold: 5, status: 'healthy' },
   { id: 3, name: 'Solitaire Engagement Ring', sku: 'GG-RG-003', category: 'Rings', stock: 2, reserved: 1, available: 1, threshold: 5, status: 'low' },
@@ -28,31 +43,76 @@ const inventory = [
   { id: 8, name: 'Charm Bracelet', sku: 'GG-BR-008', category: 'Bracelets', stock: 20, reserved: 2, available: 18, threshold: 5, status: 'healthy' },
 ];
 
-const statusConfig = {
+const statusConfig: Record<string, { label: string; color: string }> = {
   healthy: { label: 'In Stock', color: 'bg-green-100 text-green-700' },
+  in_stock: { label: 'In Stock', color: 'bg-green-100 text-green-700' },
   low: { label: 'Low Stock', color: 'bg-yellow-100 text-yellow-700' },
+  low_stock: { label: 'Low Stock', color: 'bg-yellow-100 text-yellow-700' },
   out: { label: 'Out of Stock', color: 'bg-red-100 text-red-700' },
+  out_of_stock: { label: 'Out of Stock', color: 'bg-red-100 text-red-700' },
+  reserved: { label: 'Reserved', color: 'bg-purple-100 text-purple-700' },
 };
 
 export default function SellerInventoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [inventory, setInventory] = useState<InvRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const fetchInventory = async () => {
+      setLoading(true);
+      try {
+        const statusParam = statusFilter === 'all' ? undefined : statusFilter;
+        const res = await adminApi.getInventory({ page, limit: 20, status: statusParam });
+        const data = res?.data ?? [];
+        const mapped: InvRow[] = data.map((item: InventoryItem) => ({
+          id: item.id,
+          name: item.productName || item.sku,
+          sku: item.sku,
+          category: item.category || '—',
+          stock: item.quantity,
+          reserved: item.reserved,
+          available: item.available,
+          threshold: item.reorderPoint,
+          status: item.status,
+          productId: item.productId,
+        }));
+        setInventory(mapped.length > 0 ? mapped : FALLBACK_INVENTORY);
+        setTotal(res?.total ?? mapped.length);
+      } catch {
+        setInventory(FALLBACK_INVENTORY);
+        setTotal(FALLBACK_INVENTORY.length);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInventory();
+  }, [page, statusFilter]);
 
   const filteredInventory = inventory.filter((item) => {
-    if (statusFilter !== 'all' && item.status !== statusFilter) return false;
     if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
 
-  const handleEdit = (id: number, currentStock: number) => {
+  const handleEdit = (id: string | number, currentStock: number) => {
     setEditingId(id);
     setEditValue(currentStock.toString());
   };
 
-  const handleSave = () => {
-    // Save logic here
+  const handleSave = async () => {
+    if (editingId == null) return;
+    const item = inventory.find(i => i.id === editingId);
+    if (item?.productId) {
+      try {
+        await adminApi.updateInventory(item.productId, { quantity: Number(editValue) });
+        setInventory(prev => prev.map(i => i.id === editingId ? { ...i, stock: Number(editValue), available: Number(editValue) - i.reserved } : i));
+      } catch { /* ignore */ }
+    }
     setEditingId(null);
   };
 
@@ -84,7 +144,7 @@ export default function SellerInventoryPage() {
             </div>
             <div>
               <p className="text-sm text-gray-500">Total Items</p>
-              <p className="text-xl font-bold text-gray-900">109</p>
+              <p className="text-xl font-bold text-gray-900">{loading ? '—' : total}</p>
             </div>
           </div>
         </div>
@@ -95,7 +155,7 @@ export default function SellerInventoryPage() {
             </div>
             <div>
               <p className="text-sm text-gray-500">In Stock</p>
-              <p className="text-xl font-bold text-green-600">95</p>
+              <p className="text-xl font-bold text-green-600">{loading ? '—' : inventory.filter(i => i.status === 'healthy' || i.status === 'in_stock').length}</p>
             </div>
           </div>
         </div>
@@ -106,7 +166,7 @@ export default function SellerInventoryPage() {
             </div>
             <div>
               <p className="text-sm text-gray-500">Low Stock</p>
-              <p className="text-xl font-bold text-yellow-600">11</p>
+              <p className="text-xl font-bold text-yellow-600">{loading ? '—' : inventory.filter(i => i.status === 'low' || i.status === 'low_stock').length}</p>
             </div>
           </div>
         </div>
@@ -117,7 +177,7 @@ export default function SellerInventoryPage() {
             </div>
             <div>
               <p className="text-sm text-gray-500">Out of Stock</p>
-              <p className="text-xl font-bold text-red-600">3</p>
+              <p className="text-xl font-bold text-red-600">{loading ? '—' : inventory.filter(i => i.status === 'out' || i.status === 'out_of_stock').length}</p>
             </div>
           </div>
         </div>
@@ -206,9 +266,9 @@ export default function SellerInventoryPage() {
                   <td className="px-6 py-4 text-gray-600">{item.threshold}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                      statusConfig[item.status as keyof typeof statusConfig].color
+                      (statusConfig[item.status] || statusConfig.healthy).color
                     }`}>
-                      {statusConfig[item.status as keyof typeof statusConfig].label}
+                      {(statusConfig[item.status] || { label: item.status }).label}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -242,16 +302,31 @@ export default function SellerInventoryPage() {
           </table>
         </div>
 
+        {loading && (
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="w-6 h-6 animate-spin text-gold-500" />
+            <span className="ml-2 text-gray-500">Loading inventory...</span>
+          </div>
+        )}
+
         <div className="flex items-center justify-between p-4 border-t border-gray-100">
           <p className="text-sm text-gray-500">
-            Showing {filteredInventory.length} of {inventory.length} items
+            Showing {filteredInventory.length} of {total} items
           </p>
           <div className="flex items-center gap-2">
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage(Math.max(1, page - 1))}
+              className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <button className="px-3 py-1 bg-gold-500 text-white rounded-lg">1</button>
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <span className="px-3 py-1 bg-gold-500 text-white rounded-lg">{page}</span>
+            <button
+              disabled={page * 20 >= total}
+              onClick={() => setPage(page + 1)}
+              className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>

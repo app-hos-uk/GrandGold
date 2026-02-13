@@ -57,7 +57,7 @@ export default function SegmentDetailPage() {
     const fetchSegment = async () => {
       try {
         const res = await fetch(`/api/marketing/segments/${id}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('grandgold_token')}` },
+          credentials: 'include',
         });
         if (!res.ok) throw new Error('Segment not found');
         const data = await res.json();

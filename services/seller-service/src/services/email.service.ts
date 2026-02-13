@@ -241,7 +241,7 @@ export class EmailService {
       <p>We typically review applications within 24-48 hours. You'll receive an email update once your account is approved.</p>
       
       <h3>Questions?</h3>
-      <p>Our support team is here to help! Contact us at <strong>support@grandgold.com</strong> or call <strong>+1-XXX-XXX-XXXX</strong></p>
+      <p>Our support team is here to help! Contact us at <strong>support@grandgold.com</strong></p>
       
       <p>Best regards,<br>The GrandGold Team</p>
     </div>
@@ -505,8 +505,7 @@ export class EmailService {
       please reach out to our seller support team:</p>
       <p>
         Email: <strong>sellers@grandgold.com</strong><br>
-        Phone: <strong>+1-XXX-XXX-XXXX</strong><br>
-        Hours: Monday-Friday, 9 AM - 6 PM EST
+        Hours: Monday-Friday, 9 AM - 6 PM (local time)
       </p>
       
       <p>We appreciate your understanding and hope to welcome you to GrandGold in the future!</p>

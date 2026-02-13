@@ -34,6 +34,15 @@ export async function PUT(
   return proxy(request, pathStr);
 }
 
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ path?: string[] }> }
+) {
+  const pathSegments = (await params).path;
+  const pathStr = pathSegments && pathSegments.length > 0 ? `/${pathSegments.join('/')}` : '';
+  return proxy(request, pathStr);
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ path?: string[] }> }

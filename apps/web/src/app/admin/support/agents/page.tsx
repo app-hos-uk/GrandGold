@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { useToast } from '@/components/admin/toast';
+import { adminApi } from '@/lib/api';
 
 interface SupportAgent {
   id: string;
@@ -36,7 +37,7 @@ interface SupportAgent {
   createdAt: string;
 }
 
-const MOCK_AGENTS: SupportAgent[] = [
+const FALLBACK_AGENTS: SupportAgent[] = [
   {
     id: '1',
     name: 'Priya Sharma',
@@ -119,11 +120,39 @@ export default function SupportAgentsPage() {
   const [editingAgent, setEditingAgent] = useState<SupportAgent | null>(null);
 
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setAgents(MOCK_AGENTS);
-      setLoading(false);
-    }, 500);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminApi.getAgents();
+        const raw = Array.isArray(res) ? res : (res as { data?: unknown[] })?.data || [];
+        if (!cancelled && raw.length > 0) {
+          // Map backend SupportAgent shape to local shape
+          const mapped: SupportAgent[] = (raw as Array<Record<string, unknown>>).map((a) => ({
+            id: String(a.id),
+            name: String(a.name || ''),
+            email: String(a.email || ''),
+            phone: a.phone ? String(a.phone) : undefined,
+            role: (['agent', 'supervisor', 'manager'].includes(String(a.role)) ? String(a.role) : 'agent') as SupportAgent['role'],
+            status: (['online', 'offline', 'away', 'busy'].includes(String(a.status)) ? String(a.status) : 'offline') as SupportAgent['status'],
+            department: String(a.department || 'Customer Support'),
+            skills: Array.isArray(a.skills) ? a.skills.map(String) : [],
+            ticketsAssigned: Number(a.activeChats || a.ticketsAssigned || 0),
+            ticketsResolved: Number(a.resolvedToday || a.ticketsResolved || 0),
+            avgResponseTime: a.avgResponseTime ? String(a.avgResponseTime) : '--',
+            rating: Number(a.avgRating || a.rating || 0),
+            createdAt: String(a.createdAt || new Date().toISOString()),
+          }));
+          setAgents(mapped);
+        } else if (!cancelled) {
+          setAgents(FALLBACK_AGENTS);
+        }
+      } catch {
+        if (!cancelled) setAgents(FALLBACK_AGENTS);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const filteredAgents = agents.filter(

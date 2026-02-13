@@ -71,6 +71,7 @@ const server = app.listen(PORT, HOST, () => {
     import('./middleware/not-found'),
     import('./middleware/veil'),
     import('./jobs/abandoned-cart-cron'),
+    import('./jobs/order-sla-cron'),
   ])
     .then(([
       { orderRouter },
@@ -89,12 +90,16 @@ const server = app.listen(PORT, HOST, () => {
       { notFoundHandler },
       { veilResponseMiddleware },
       { startAbandonedCartCron },
+      { startOrderSlaCron },
     ]) => {
       // API routes (with metadata stripping for cart/order responses)
-      app.use('/api/orders', veilResponseMiddleware(), orderRouter);
+      // IMPORTANT: Mount sub-routers with static path segments (returns, modifications,
+      // invoice) BEFORE the main orderRouter. The orderRouter has parameterized routes
+      // like /:id that would shadow static paths (e.g. "returns" matched as :id).
+      app.use('/api/orders', returnRouter);
       app.use('/api/orders', modificationRouter);
       app.use('/api/orders', invoiceRouter);
-      app.use('/api/orders', returnRouter);
+      app.use('/api/orders', veilResponseMiddleware(), orderRouter);
       app.use('/api/cart', veilResponseMiddleware(), cartRouter);
       app.use('/api/checkout', checkoutRouter);
       app.use('/api/tracking', trackingRouter);
@@ -107,6 +112,7 @@ const server = app.listen(PORT, HOST, () => {
       app.use(errorHandler);
       logger.info('API routes mounted');
       startAbandonedCartCron();
+      startOrderSlaCron();
     })
     .catch((err) => {
       logger.error({ err }, 'Failed to mount routes');

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 
 const AUTH_SERVICE_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:4001';
-const NOTIFICATION_SERVICE_URL = process.env.NEXT_PUBLIC_NOTIFICATION_SERVICE_URL || 'http://localhost:4004';
+const NOTIFICATION_SERVICE_URL = process.env.NEXT_PUBLIC_NOTIFICATION_SERVICE_URL || 'http://localhost:4011';
 const WEB_URL = process.env.NEXT_PUBLIC_WEB_URL || 'http://localhost:3000';
 
 /**
@@ -124,8 +124,9 @@ export async function POST(request: NextRequest) {
               userCreated: true,
               emailSent: false,
               email,
-              password,  // Use the actual password variable (generated or provided)
               onboardingUrl,
+              // NOTE: password is intentionally omitted from responses for security.
+              // Admin should use "resend invitation" or "reset password" flow instead.
             },
           },
         },
@@ -186,7 +187,10 @@ function renderInvitationTemplate(data: {
   const businessName = escapeHtml(data.businessName);
   const email = escapeHtml(data.email);
   const tempPassword = escapeHtml(data.tempPassword);
-  const onboardingUrl = escapeHtml(data.onboardingUrl);
+  // URLs in href attributes must NOT be HTML-escaped (& → &amp; breaks query params,
+  // " → &quot; breaks attribute boundaries). The onboardingUrl is server-controlled
+  // (WEB_URL env + hardcoded path), so it's safe to embed directly.
+  const onboardingUrl = data.onboardingUrl;
   return `
 <!DOCTYPE html>
 <html lang="en">
