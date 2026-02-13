@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm';
 import { db } from '../client';
-import { orders } from '../schema/orders';
+import { orders, orderItems } from '../schema/orders';
 
 export interface DeliveredOrderForSettlement {
   id: string;
@@ -52,7 +52,7 @@ export async function getOrderById(orderId: string) {
  * Get all orders for a specific customer (used for GDPR export, order history, etc.)
  */
 export async function getOrdersByCustomerId(customerId: string) {
-  return db
+  const customerOrders = await db
     .select({
       id: orders.id,
       orderNumber: orders.orderNumber,
@@ -64,11 +64,33 @@ export async function getOrdersByCustomerId(customerId: string) {
       country: orders.country,
       shippingAddress: orders.shippingAddress,
       billingAddress: orders.billingAddress,
-      items: orders.items,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
     })
     .from(orders)
     .where(eq(orders.customerId, customerId))
     .orderBy(orders.createdAt);
+
+  // Enrich each order with its line items
+  const enriched = await Promise.all(
+    customerOrders.map(async (order) => {
+      const items = await db
+        .select({
+          id: orderItems.id,
+          productId: orderItems.productId,
+          productSnapshot: orderItems.productSnapshot,
+          quantity: orderItems.quantity,
+          unitPrice: orderItems.unitPrice,
+          subtotal: orderItems.subtotal,
+          total: orderItems.total,
+          status: orderItems.status,
+        })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, order.id));
+
+      return { ...order, items };
+    })
+  );
+
+  return enriched;
 }
