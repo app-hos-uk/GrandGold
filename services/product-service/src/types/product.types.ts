@@ -38,12 +38,38 @@ export interface Product {
 export type ProductStatus = 'draft' | 'pending' | 'active' | 'rejected' | 'archived';
 
 /**
- * Stone information
+ * Stone information (jewelry-standard detail)
  */
 export interface ProductStone {
-  type: string;
-  weight: number;
+  type: string;             // diamond, ruby, emerald, sapphire …
+  cut?: string;             // round, princess, oval …
+  clarity?: string;         // IF, VVS1, VS1, SI1 …
+  color?: string;           // D-Z (diamonds) or descriptive
+  caratWeight?: number;     // per-stone carat weight
   count: number;
+  weight?: number;          // legacy alias for caratWeight
+  ratePerCarat?: number;    // price per carat
+  totalValue?: number;      // pre-calculated total value
+  certification?: string;   // GIA, IGI, HRD …
+  certificationNumber?: string;
+}
+
+/**
+ * Product specifications
+ */
+export interface ProductSpecifications {
+  grossWeight?: number;     // total piece weight (grams)
+  netWeight?: number;       // metal-only weight (grams)
+  dimensions?: {
+    length?: number;
+    width?: number;
+    height?: number;
+    unit: 'mm' | 'cm' | 'inch';
+  };
+  size?: string;            // ring size, bangle size …
+  hallmarkNumber?: string;  // BIS hallmark (India)
+  certifications?: string[];
+  customAttributes?: Record<string, string>;
 }
 
 /**
@@ -56,12 +82,31 @@ export interface CreateProductInput {
   category: string;
   subcategory?: string;
   images: string[];
+  // Pricing
   price?: number;
+  currency?: string;
   pricingModel: 'fixed' | 'dynamic';
+  // Metal
+  metalType?: string;
   goldWeight?: number;
   purity?: GoldPurity;
-  stones?: ProductStone[];
+  wastagePercent?: number;
+  // Making & charges
+  makingCharges?: number;
+  makingChargeType?: 'per_gram' | 'percentage' | 'flat';
   laborCost?: number;
+  wastageCharges?: number;
+  otherCharges?: number;
+  otherChargesNote?: string;
+  // Stones
+  stones?: ProductStone[];
+  // Specifications
+  specifications?: ProductSpecifications;
+  // Metadata
+  occasion?: string;
+  gender?: 'men' | 'women' | 'unisex' | 'kids';
+  style?: string;
+  // Inventory
   sku: string;
   stock: number;
   countries: Country[];

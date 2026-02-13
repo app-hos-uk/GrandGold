@@ -395,12 +395,50 @@ export const adminApi = {
     slug: string;
     category: string;
     description?: string;
+    // Pricing
     basePrice: number;
     currency: string;
     pricingModel: 'fixed' | 'live_rate';
-    goldWeight?: number;
-    purity?: string;
+    // Metal details
     metalType?: string;
+    purity?: string;
+    goldWeight?: number;
+    wastagePercent?: number;
+    // Making & charges
+    makingCharges?: number;
+    makingChargeType?: 'per_gram' | 'percentage' | 'flat';
+    laborCost?: number;
+    wastageCharges?: number;
+    otherCharges?: number;
+    otherChargesNote?: string;
+    // Stone details
+    stones?: Array<{
+      type: string;
+      cut?: string;
+      clarity?: string;
+      color?: string;
+      caratWeight?: number;
+      count: number;
+      ratePerCarat?: number;
+      totalValue?: number;
+      certification?: string;
+      certificationNumber?: string;
+    }>;
+    // Specifications
+    specifications?: {
+      grossWeight?: number;
+      netWeight?: number;
+      dimensions?: { length?: number; width?: number; height?: number; unit?: string };
+      size?: string;
+      hallmarkNumber?: string;
+      certifications?: string[];
+      customAttributes?: Record<string, string>;
+    };
+    // Metadata
+    occasion?: string;
+    gender?: 'men' | 'women' | 'unisex' | 'kids';
+    style?: string;
+    // Inventory
     stockQuantity?: number;
     tags?: string[];
     countries: string[];
@@ -414,9 +452,21 @@ export const adminApi = {
     basePrice: number;
     currency: string;
     pricingModel: 'fixed' | 'live_rate';
-    goldWeight: number;
-    purity: string;
     metalType: string;
+    purity: string;
+    goldWeight: number;
+    wastagePercent: number;
+    makingCharges: number;
+    makingChargeType: 'per_gram' | 'percentage' | 'flat';
+    laborCost: number;
+    wastageCharges: number;
+    otherCharges: number;
+    otherChargesNote: string;
+    stones: Array<{ type: string; cut?: string; clarity?: string; color?: string; caratWeight?: number; count: number; ratePerCarat?: number; totalValue?: number; certification?: string; certificationNumber?: string }>;
+    specifications: { grossWeight?: number; netWeight?: number; dimensions?: { length?: number; width?: number; height?: number; unit?: string }; size?: string; hallmarkNumber?: string; certifications?: string[]; customAttributes?: Record<string, string> };
+    occasion: string;
+    gender: 'men' | 'women' | 'unisex' | 'kids';
+    style: string;
     stockQuantity: number;
     tags: string[];
     countries: string[];

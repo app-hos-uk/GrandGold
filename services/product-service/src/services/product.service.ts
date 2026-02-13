@@ -63,12 +63,30 @@ export class ProductService {
       category: input.category,
       subcategory: input.subcategory,
       images: input.images,
+      // Pricing
       price: input.price,
+      currency: input.currency,
       pricingModel: input.pricingModel,
+      // Metal
+      metalType: input.metalType,
       goldWeight: input.goldWeight,
       purity: input.purity,
-      stones: input.stones || [],
+      wastagePercent: input.wastagePercent,
+      // Making & charges
+      makingCharges: input.makingCharges,
+      makingChargeType: input.makingChargeType,
       laborCost: input.laborCost,
+      wastageCharges: input.wastageCharges,
+      otherCharges: input.otherCharges,
+      otherChargesNote: input.otherChargesNote,
+      // Stones & specs
+      stones: input.stones || [],
+      specifications: input.specifications || {},
+      // Metadata
+      occasion: input.occasion,
+      gender: input.gender,
+      style: input.style,
+      // Inventory & misc
       sku: input.sku,
       stock: input.stock,
       countries: input.countries,
