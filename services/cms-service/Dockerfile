@@ -66,9 +66,10 @@ RUN pnpm install --prod --frozen-lockfile
 USER grandgold
 
 ENV HOST=0.0.0.0
-ENV PORT=1337
+# Cloud Run injects PORT=8080; Strapi respects the PORT env var
+ENV PORT=8080
 
-EXPOSE 1337
+EXPOSE 8080
 
 WORKDIR /app/services/cms-service
 CMD ["pnpm", "start"]
