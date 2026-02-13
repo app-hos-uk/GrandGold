@@ -118,6 +118,7 @@ jobs:
         run: |
           pnpm --filter @grandgold/types run build
           pnpm --filter @grandgold/utils run build
+          pnpm --filter @grandgold/database run build
 
       - name: TypeScript type-check (packages)
         run: |
