@@ -131,14 +131,15 @@ const DEFAULT_PREFS: NotificationPrefs = {
 };
 
 // Lazy Redis init (same pattern used by other services)
-let redis: import('ioredis').default | null = null;
+import Redis from 'ioredis';
 
-function getRedis(): import('ioredis').default {
+let redis: Redis | null = null;
+
+function getRedis(): Redis {
   if (!redis) {
-    const Redis = require('ioredis');
     redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
   }
-  return redis!;
+  return redis;
 }
 
 async function loadPrefs(userId: string): Promise<NotificationPrefs> {
