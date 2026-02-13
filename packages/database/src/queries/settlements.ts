@@ -66,7 +66,13 @@ export async function getAllSettlementOrderIds(): Promise<string[]> {
 export async function updateSettlementStatus(
   id: string,
   status: 'pending' | 'processing' | 'completed' | 'failed',
-  details?: { paymentReference?: string; paymentMethod?: string; paidAt?: Date }
+  details?: {
+    paymentReference?: string;
+    paymentMethod?: string;
+    paidAt?: Date;
+    /** Allow extra metadata fields (dispute info, etc.) to be stored */
+    [key: string]: unknown;
+  }
 ): Promise<SellerSettlement | undefined> {
   const updates: Record<string, unknown> = {
     status,
