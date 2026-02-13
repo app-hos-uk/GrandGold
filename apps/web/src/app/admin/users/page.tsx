@@ -552,9 +552,11 @@ export default function UsersPage() {
                 }) as { data?: { userId?: string; user?: { id?: string } }; userId?: string };
                 const userId = res?.data?.userId ?? res?.data?.user?.id ?? (res as { userId?: string }).userId;
                 
-                // Only super_admin can set roles other than customer
-                if (currentUserRole === 'super_admin' && data.role && data.role !== 'customer' && userId) {
-                  await adminApi.setUserRole(userId, data.role, userCountry);
+                // Set role if not default customer — super_admin and country_admin can assign roles
+                if (data.role && data.role !== 'customer' && userId) {
+                  if (currentUserRole === 'super_admin' || currentUserRole === 'country_admin') {
+                    await adminApi.setUserRole(userId, data.role, userCountry);
+                  }
                 }
                 setSuccess('User created successfully. They will receive a verification email.');
                 setTimeout(() => { 
@@ -594,6 +596,7 @@ const SUPER_ADMIN_ROLES = [
   { value: 'seller', label: 'Seller' },
   { value: 'influencer', label: 'Influencer' },
   { value: 'consultant', label: 'Consultant' },
+  { value: 'support', label: 'Support' },
   { value: 'staff', label: 'Staff' },
   { value: 'manager', label: 'Manager' },
   { value: 'country_admin', label: 'Country Admin' },

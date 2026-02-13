@@ -1145,10 +1145,10 @@ export const checkoutApi = {
     };
     paymentMethod: 'stripe' | 'razorpay' | 'cod';
     deliveryOption?: 'standard' | 'express' | 'click_collect';
-  }) => api.post<{ orderId: string; paymentRequired: boolean }>('/api/checkout/create', data),
+  }) => api.post<{ orderId: string; paymentRequired: boolean }>('/api/checkout/initiate', data),
   
   completeOrder: (orderId: string, paymentDetails: { paymentId: string; provider: string }) =>
-    api.post<{ order: unknown }>(`/api/checkout/${orderId}/complete`, paymentDetails),
+    api.post<{ order: unknown }>(`/api/checkout/${orderId}/confirm`, paymentDetails),
 };
 
 // ── Storefront Product Catalog API ────────────────────────────────────────────
