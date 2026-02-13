@@ -50,7 +50,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (activeTab !== 'integrations') return;
-    fetch('/api/admin/config')
+    fetch('/api/admin/config', { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
         const mp = d?.data?.integrations?.metalPricing;
@@ -674,7 +674,7 @@ function MetalPricingConfigModal({
     setTesting(true);
     setError(null);
     try {
-      const res = await fetch('/api/rates/metals?currencies=INR');
+      const res = await fetch('/api/rates/metals?force=true', { credentials: 'include', cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Test failed');
       setSuccess('Connection successful. Rates are being fetched.');
@@ -694,6 +694,7 @@ function MetalPricingConfigModal({
     try {
       const res = await fetch('/api/admin/config', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           integrations: {
@@ -869,7 +870,7 @@ function ApiConfigModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/admin/config')
+    fetch('/api/admin/config', { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
         if (d?.data) setForm((f) => ({ ...f, keyId: d.data.razorpay?.keyId || '', publishableKey: d.data.stripe?.publishableKey || '' }));
@@ -884,6 +885,7 @@ function ApiConfigModal({
     try {
       const res = await fetch('/api/admin/config', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           provider === 'razorpay'

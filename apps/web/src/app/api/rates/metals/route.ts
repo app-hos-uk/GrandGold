@@ -141,8 +141,10 @@ async function getCachedRates(): Promise<CachedRates | null> {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Config (env vars or config.json)                                    */
+/*  Config (env vars → admin config store → config.json file)           */
 /* ------------------------------------------------------------------ */
+
+import { getMetalPricingFromStore } from '@/app/api/admin/config/config-store';
 
 const CONFIG_FILE = path.join(process.cwd(), '.grandgold', 'config.json');
 
@@ -152,6 +154,7 @@ async function getMetalPricingConfig(): Promise<{
   baseUrl?: string;
   enabled: boolean;
 } | null> {
+  // 1. Environment variables (highest priority — set at deploy time)
   if (process.env.METAL_PRICING_API_KEY) {
     const provider = (process.env.METAL_PRICING_PROVIDER || 'metalpriceapi').toString().toLowerCase();
     const enabled = process.env.METAL_PRICING_ENABLED !== 'false' && process.env.METAL_PRICING_ENABLED !== '0';
@@ -163,6 +166,19 @@ async function getMetalPricingConfig(): Promise<{
     };
   }
 
+  // 2. Admin config store (set via Admin → Settings → API Integrations)
+  const storeConfig = getMetalPricingFromStore();
+  if (storeConfig?.apiKey) {
+    const provider = (storeConfig.provider || 'metalpriceapi').toString().toLowerCase();
+    return {
+      provider: provider === 'metalsdev' ? 'metalsdev' : 'metalpriceapi',
+      apiKey: storeConfig.apiKey,
+      baseUrl: storeConfig.baseUrl?.trim() || undefined,
+      enabled: storeConfig.enabled !== false,
+    };
+  }
+
+  // 3. File-based config (legacy fallback for local development)
   try {
     const data = await fs.readFile(CONFIG_FILE, 'utf-8').catch(() => '{}');
     const config = JSON.parse(data);
