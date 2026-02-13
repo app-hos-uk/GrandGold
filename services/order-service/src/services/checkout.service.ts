@@ -161,7 +161,7 @@ export class CheckoutService {
     }
 
     // ── Reserve inventory for checkout duration ─────────────────────
-    const itemsToReserve = cart.items.map((item: CartItem) => ({
+    const itemsToReserve = cart.items.map((item) => ({
       productId: item.productId,
       quantity: item.quantity,
     }));
