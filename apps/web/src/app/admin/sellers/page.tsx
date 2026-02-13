@@ -79,10 +79,28 @@ export default function SellersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Current admin user info (for country admin isolation)
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [adminCountry, setAdminCountry] = useState<string | null>(null);
+
+  useEffect(() => {
+    adminApi.getMe().then((user) => {
+      setCurrentUserRole(user?.role || null);
+      setAdminCountry(user?.country || null);
+    }).catch(() => {
+      // Layout handles auth
+    });
+  }, []);
+
   const loadSellers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await adminApi.getUsers({ role: 'seller', limit: 500 });
+      const params: { role: string; limit: number; country?: string } = { role: 'seller', limit: 500 };
+      // Country admins only see sellers from their country
+      if (currentUserRole === 'country_admin' && adminCountry) {
+        params.country = adminCountry;
+      }
+      const res = await adminApi.getUsers(params);
       const r = res as unknown as { users?: unknown[]; data?: { users?: unknown[] } };
       const userList = r?.users ?? r?.data?.users ?? [];
       const list = Array.isArray(userList) ? userList.map((raw: unknown) => {
@@ -106,7 +124,7 @@ export default function SellersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentUserRole, adminCountry]);
 
   useEffect(() => {
     loadSellers();
@@ -381,16 +399,22 @@ export default function SellersPage() {
           <AddSellerModal
             key="add-seller-modal"
             onClose={() => setAddSellerOpen(false)}
+            adminRole={currentUserRole}
+            adminCountry={adminCountry}
             onSubmit={async (data) => {
               setSubmitting(true);
               try {
+                // For country admins, force their country
+                const sellerCountry = currentUserRole === 'country_admin' && adminCountry
+                  ? adminCountry
+                  : data.country;
                 await adminApi.inviteSeller({
                   email: data.email,
                   firstName: data.firstName,
                   lastName: data.lastName,
                   phone: data.phone,
                   businessName: data.businessName,
-                  country: data.country,
+                  country: sellerCountry,
                   tempPassword: data.tempPassword || undefined,
                 });
                 await loadSellers();
@@ -410,19 +434,25 @@ export default function SellersPage() {
 function AddSellerModal({
   onClose,
   onSubmit,
+  adminRole,
+  adminCountry,
   submitting,
 }: {
   onClose: () => void;
   onSubmit: (data: { email: string; firstName: string; lastName: string; phone: string; businessName: string; country: string; tempPassword?: string }) => Promise<void>;
+  adminRole: string | null;
+  adminCountry: string | null;
   submitting: boolean;
 }) {
+  const isCountryAdmin = adminRole === 'country_admin';
+  const lockedCountry = isCountryAdmin && adminCountry ? adminCountry : null;
   const [form, setForm] = useState({
     email: '',
     firstName: '',
     lastName: '',
     phone: '',
     businessName: '',
-    country: 'IN',
+    country: lockedCountry || 'IN',
     tempPassword: '',
   });
   const [error, setError] = useState<string | null>(null);
@@ -533,14 +563,20 @@ function AddSellerModal({
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
             <select
-              value={form.country}
-              onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+              value={lockedCountry || form.country}
+              onChange={(e) => !lockedCountry && setForm((f) => ({ ...f, country: e.target.value }))}
+              disabled={!!lockedCountry}
+              className={`w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500 ${
+                lockedCountry ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
             >
               <option value="IN">India</option>
               <option value="AE">UAE</option>
               <option value="UK">UK</option>
             </select>
+            {lockedCountry && (
+              <p className="text-xs text-gray-500 mt-1">Country is locked to your assigned country.</p>
+            )}
           </div>
           <div className="flex gap-3 pt-4">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">

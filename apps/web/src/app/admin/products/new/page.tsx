@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Loader2, CheckCircle, AlertCircle, Upload, X } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { adminApi, ApiError } from '@/lib/api';
 
-const CATEGORIES = [
+const FALLBACK_CATEGORIES = [
   { value: 'necklaces', label: 'Necklaces' },
   { value: 'earrings', label: 'Earrings' },
   { value: 'rings', label: 'Rings' },
@@ -29,6 +29,25 @@ const COUNTRIES = [
 
 export default function NewProductPage() {
   const router = useRouter();
+
+  // Current admin user info (for country admin isolation)
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [adminCountry, setAdminCountry] = useState<string | null>(null);
+  const isCountryAdmin = currentUserRole === 'country_admin';
+
+  useEffect(() => {
+    adminApi.getMe().then((user) => {
+      setCurrentUserRole(user?.role || null);
+      setAdminCountry(user?.country || null);
+      // For country admins, lock countries to their country
+      if (user?.role === 'country_admin' && user?.country) {
+        setForm((prev) => ({ ...prev, countries: [user.country!] }));
+      }
+    }).catch(() => {
+      // Layout handles auth
+    });
+  }, []);
+
   const [form, setForm] = useState({
     name: '',
     sku: '',
@@ -45,6 +64,19 @@ export default function NewProductPage() {
     tags: '',
     countries: ['IN'],
   });
+  // Load categories from API, fallback to static list
+  const [categories, setCategories] = useState(FALLBACK_CATEGORIES);
+  useEffect(() => {
+    adminApi.getCategories({ flat: true }).then((res) => {
+      const data = Array.isArray(res) ? res : [];
+      if (data.length > 0) {
+        setCategories(data.map((c: { slug: string; name: string }) => ({ value: c.slug, label: c.name })));
+      }
+    }).catch(() => {
+      // Use fallback categories
+    });
+  }, []);
+
   const [images, setImages] = useState<{ file?: File; url: string; type: 'main' | 'gallery' | '360' }[]>([]);
   const [imageUrl, setImageUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -64,6 +96,8 @@ export default function NewProductPage() {
   };
 
   const handleCountryToggle = (country: string) => {
+    // Country admins cannot change the country selection
+    if (isCountryAdmin) return;
     setForm((prev) => ({
       ...prev,
       countries: prev.countries.includes(country)
@@ -96,6 +130,10 @@ export default function NewProductPage() {
 
     setSubmitting(true);
     try {
+      // For country admins, force their country
+      const productCountries = isCountryAdmin && adminCountry
+        ? [adminCountry]
+        : form.countries;
       await adminApi.createProduct({
         name: form.name.trim(),
         sku: form.sku.trim() || undefined,
@@ -110,7 +148,7 @@ export default function NewProductPage() {
         metalType: form.metalType,
         stockQuantity: form.stockQuantity ? Number(form.stockQuantity) : 0,
         tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
-        countries: form.countries,
+        countries: productCountries,
       });
       setSuccess(true);
       setTimeout(() => router.push('/admin/products'), 1500);
@@ -202,7 +240,7 @@ export default function NewProductPage() {
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
             >
               <option value="">Select category</option>
-              {CATEGORIES.map((c) => (
+              {categories.map((c) => (
                 <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
@@ -455,17 +493,21 @@ export default function NewProductPage() {
             </h2>
             <div className="flex flex-wrap gap-3">
               {COUNTRIES.map((c) => (
-                <label key={c.value} className="flex items-center gap-2 cursor-pointer">
+                <label key={c.value} className={`flex items-center gap-2 ${isCountryAdmin ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                   <input
                     type="checkbox"
                     checked={form.countries.includes(c.value)}
                     onChange={() => handleCountryToggle(c.value)}
+                    disabled={isCountryAdmin}
                     className="rounded text-gold-500 focus:ring-gold-500"
                   />
                   <span className="text-sm text-gray-700">{c.label}</span>
                 </label>
               ))}
             </div>
+            {isCountryAdmin && (
+              <p className="text-xs text-gray-500 mt-2">Country is locked to your assigned country ({adminCountry}).</p>
+            )}
           </div>
 
           {/* Actions */}
