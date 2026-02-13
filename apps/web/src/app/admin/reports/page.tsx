@@ -14,10 +14,37 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Globe,
+  Scale,
+  Hammer,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { formatCurrency } from '@/lib/format';
+
+interface WeightSummary {
+  totalWeightSoldGrams: number;
+  totalGrossWeightGrams: number;
+  totalStoneWeightCarats: number;
+  totalOrders: number;
+  totalItems: number;
+  avgWeightPerOrder: number;
+  avgWeightPerItem: number;
+  byPurity: Record<string, { weightGrams: number; items: number; revenue: number }>;
+  byMetal: Record<string, { weightGrams: number; items: number; revenue: number }>;
+  byCategory: Record<string, { weightGrams: number; items: number; revenue: number }>;
+  bySeller: Record<string, { weightGrams: number; items: number; revenue: number; sellerName?: string }>;
+}
+
+interface MCSummary {
+  avgMCPerGram: number;
+  avgMCPercent: number;
+  totalMC: number;
+  totalOrders: number;
+  byMCType: Record<string, { totalMC: number; avgMC: number; items: number }>;
+  byPurity: Record<string, { totalMC: number; avgMCPerGram: number; avgMCPercent: number; items: number }>;
+  byCategory: Record<string, { totalMC: number; avgMCPerGram: number; items: number }>;
+  dailyTrend: Array<{ date: string; avgMCPerGram: number; totalMC: number; weightSold: number }>;
+}
 
 interface AnalyticsData {
   metrics: { totalRevenue: number; totalOrders: number; avgOrderValue: number; newUsers: number; revenueChange: number; ordersChange: number };
@@ -83,7 +110,11 @@ function exportToCSV(data: AnalyticsData, dateRange: string) {
 
 export default function ReportsPage() {
   const [dateRange, setDateRange] = useState('30days');
+  const [activeTab, setActiveTab] = useState<'overview' | 'weight' | 'mc'>('overview');
   const [data, setData] = useState<AnalyticsData>(FALLBACK);
+  const [weightData, setWeightData] = useState<WeightSummary | null>(null);
+  const [mcData, setMCData] = useState<MCSummary | null>(null);
+  const [weightLoading, setWeightLoading] = useState(false);
 
   useEffect(() => {
     api
@@ -93,6 +124,33 @@ export default function ReportsPage() {
       })
       .catch(() => {});
   }, [dateRange]);
+
+  // Fetch weight & MC data when switching to those tabs
+  useEffect(() => {
+    if (activeTab === 'weight' && !weightData) {
+      setWeightLoading(true);
+      api.get('/api/analytics/weight-summary')
+        .then((res: unknown) => {
+          const d = (res as { data?: WeightSummary })?.data;
+          if (d) setWeightData(d);
+        })
+        .catch(() => {})
+        .finally(() => setWeightLoading(false));
+    }
+    if ((activeTab === 'mc' || activeTab === 'weight') && !mcData) {
+      api.get('/api/analytics/mc-summary')
+        .then((res: unknown) => {
+          const d = (res as { data?: MCSummary })?.data;
+          if (d) setMCData(d);
+        })
+        .catch(() => {});
+    }
+  }, [activeTab, weightData, mcData]);
+
+  const downloadWeightCSV = () => {
+    // Trigger the server-side CSV endpoint
+    window.open('/api/analytics/weight-report/csv', '_blank');
+  };
 
   const { metrics, revenueData, categoryData, topProducts } = data;
 
@@ -136,6 +194,32 @@ export default function ReportsPage() {
           </button>
         </div>
       </div>
+
+      {/* Tab bar */}
+      <div className="flex border-b border-gray-200 mb-8">
+        {[
+          { key: 'overview' as const, label: 'Overview', icon: BarChart3 },
+          { key: 'weight' as const, label: 'Weight Report', icon: Scale },
+          { key: 'mc' as const, label: 'Making Charges', icon: Hammer },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === tab.key
+                ? 'border-gold-500 text-gold-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── OVERVIEW TAB ──────────────────────────────────────────── */}
+      {activeTab === 'overview' && (<>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -316,6 +400,216 @@ export default function ReportsPage() {
           </table>
         </div>
       </div>
+
+      </>)}
+
+      {/* ── WEIGHT REPORT TAB ─────────────────────────────────────── */}
+      {activeTab === 'weight' && (
+        <div>
+          {weightLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-8 h-8 border-4 border-gold-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              {/* Weight summary cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-gold-500">
+                  <p className="text-sm text-gray-500 mb-1">Total Net Weight Sold</p>
+                  <p className="text-2xl font-bold text-gray-900">{weightData?.totalWeightSoldGrams?.toFixed(2) ?? '0'} g</p>
+                </div>
+                <div className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-amber-500">
+                  <p className="text-sm text-gray-500 mb-1">Total Gross Weight</p>
+                  <p className="text-2xl font-bold text-gray-900">{weightData?.totalGrossWeightGrams?.toFixed(2) ?? '0'} g</p>
+                </div>
+                <div className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-blue-500">
+                  <p className="text-sm text-gray-500 mb-1">Avg Weight / Order</p>
+                  <p className="text-2xl font-bold text-gray-900">{weightData?.avgWeightPerOrder?.toFixed(3) ?? '0'} g</p>
+                </div>
+                <div className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-purple-500">
+                  <p className="text-sm text-gray-500 mb-1">Stone Weight Sold</p>
+                  <p className="text-2xl font-bold text-gray-900">{weightData?.totalStoneWeightCarats?.toFixed(2) ?? '0'} ct</p>
+                </div>
+              </div>
+
+              <div className="grid lg:grid-cols-2 gap-8 mb-8">
+                {/* By Purity */}
+                <div className="bg-white rounded-xl shadow-sm p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Weight by Purity</h2>
+                  {weightData?.byPurity && Object.keys(weightData.byPurity).length > 0 ? (
+                    <div className="space-y-3">
+                      {Object.entries(weightData.byPurity).map(([purity, d]) => (
+                        <div key={purity} className="flex items-center justify-between py-2 border-b border-gray-50">
+                          <span className="font-medium text-gray-800">{purity}</span>
+                          <div className="text-right">
+                            <span className="font-bold text-gray-900">{d.weightGrams.toFixed(2)} g</span>
+                            <span className="text-sm text-gray-500 ml-2">({d.items} items)</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-8">No data available yet.</p>
+                  )}
+                </div>
+
+                {/* By Category */}
+                <div className="bg-white rounded-xl shadow-sm p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Weight by Category</h2>
+                  {weightData?.byCategory && Object.keys(weightData.byCategory).length > 0 ? (
+                    <div className="space-y-3">
+                      {Object.entries(weightData.byCategory).map(([cat, d]) => (
+                        <div key={cat} className="flex items-center justify-between py-2 border-b border-gray-50">
+                          <span className="font-medium text-gray-800 capitalize">{cat}</span>
+                          <div className="text-right">
+                            <span className="font-bold text-gray-900">{d.weightGrams.toFixed(2)} g</span>
+                            <span className="text-sm text-gray-500 ml-2">{formatCurrency(d.revenue)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-8">No data available yet.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* By Seller */}
+              <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">Weight by Seller</h2>
+                  <button
+                    type="button"
+                    onClick={downloadWeightCSV}
+                    className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors text-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export CSV
+                  </button>
+                </div>
+                {weightData?.bySeller && Object.keys(weightData.bySeller).length > 0 ? (
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left text-sm text-gray-500 border-b">
+                        <th className="pb-3 font-medium">Seller</th>
+                        <th className="pb-3 font-medium text-right">Weight (g)</th>
+                        <th className="pb-3 font-medium text-right">Items</th>
+                        <th className="pb-3 font-medium text-right">Revenue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(weightData.bySeller).map(([id, d]) => (
+                        <tr key={id} className="border-b border-gray-50">
+                          <td className="py-3 font-medium text-gray-800">{d.sellerName || id}</td>
+                          <td className="py-3 text-right font-bold">{d.weightGrams.toFixed(3)}</td>
+                          <td className="py-3 text-right text-gray-600">{d.items}</td>
+                          <td className="py-3 text-right text-gray-900">{formatCurrency(d.revenue)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="text-gray-500 text-center py-8">No data available yet.</p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── MAKING CHARGES TAB ────────────────────────────────────── */}
+      {activeTab === 'mc' && (
+        <div>
+          {/* MC summary cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-amber-500">
+              <p className="text-sm text-gray-500 mb-1">Avg MC per Gram</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(mcData?.avgMCPerGram ?? 0)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-gold-500">
+              <p className="text-sm text-gray-500 mb-1">Avg MC %</p>
+              <p className="text-2xl font-bold text-gray-900">{mcData?.avgMCPercent?.toFixed(1) ?? '0'}%</p>
+            </div>
+            <div className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-green-500">
+              <p className="text-sm text-gray-500 mb-1">Total MC Earned</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(mcData?.totalMC ?? 0)}</p>
+            </div>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-8 mb-8">
+            {/* MC by Purity */}
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">MC by Purity</h2>
+              {mcData?.byPurity && Object.keys(mcData.byPurity).length > 0 ? (
+                <div className="space-y-3">
+                  {Object.entries(mcData.byPurity).map(([purity, d]) => (
+                    <div key={purity} className="flex items-center justify-between py-2 border-b border-gray-50">
+                      <span className="font-medium text-gray-800">{purity}</span>
+                      <div className="text-right text-sm">
+                        <span className="font-bold text-gray-900">{formatCurrency(d.avgMCPerGram)}/g</span>
+                        <span className="text-gray-500 ml-2">({d.avgMCPercent}%)</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">No MC data yet.</p>
+              )}
+            </div>
+
+            {/* MC by Category */}
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">MC by Category</h2>
+              {mcData?.byCategory && Object.keys(mcData.byCategory).length > 0 ? (
+                <div className="space-y-3">
+                  {Object.entries(mcData.byCategory).map(([cat, d]) => (
+                    <div key={cat} className="flex items-center justify-between py-2 border-b border-gray-50">
+                      <span className="font-medium text-gray-800 capitalize">{cat}</span>
+                      <div className="text-right text-sm">
+                        <span className="font-bold text-gray-900">{formatCurrency(d.avgMCPerGram)}/g</span>
+                        <span className="text-gray-500 ml-2">Total: {formatCurrency(d.totalMC)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">No MC data yet.</p>
+              )}
+            </div>
+          </div>
+
+          {/* MC Daily Trend */}
+          <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Daily MC Trend</h2>
+            {mcData?.dailyTrend && mcData.dailyTrend.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500 border-b">
+                      <th className="pb-2 font-medium">Date</th>
+                      <th className="pb-2 font-medium text-right">Avg MC/g</th>
+                      <th className="pb-2 font-medium text-right">Total MC</th>
+                      <th className="pb-2 font-medium text-right">Weight Sold (g)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mcData.dailyTrend.map((d) => (
+                      <tr key={d.date} className="border-b border-gray-50">
+                        <td className="py-2 font-medium">{d.date}</td>
+                        <td className="py-2 text-right">{formatCurrency(d.avgMCPerGram)}</td>
+                        <td className="py-2 text-right">{formatCurrency(d.totalMC)}</td>
+                        <td className="py-2 text-right">{d.weightSold.toFixed(3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">No trend data yet. Orders with MC data will appear here.</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

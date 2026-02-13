@@ -136,6 +136,104 @@ export class TaxService {
     return mappings[category.toLowerCase()] || 'gold_jewelry';
   }
 
+  // ─── Refund / Exchange Tax Calculations ──────────────────────────────
+
+  /**
+   * Calculate tax reversal on refund.
+   *
+   * Tax reversal follows strict accounting rules:
+   * - Full refund → full tax reversal
+   * - Partial refund (restocking fee deducted) → tax reversed only on refunded amount
+   * - Restocking fee itself is a service → attracts GST/VAT in India/UAE/UK
+   */
+  calculateRefundTax(
+    refundableAmount: number,
+    restockingFee: number,
+    category: string,
+    destination: Country,
+  ): {
+    taxReversed: number;
+    restockingFeeTax: number;
+    taxRate: number;
+    taxName: string;
+    netRefundAfterTax: number;
+  } {
+    const rule = this.findTaxRule(category, destination);
+
+    // Tax reversed on the refundable amount (before restocking)
+    const taxReversed = Math.round((refundableAmount * rule.rate) / 100 * 100) / 100;
+
+    // Restocking fee is a service; attract service tax (same rate for simplicity)
+    const restockingFeeTax = Math.round((restockingFee * rule.rate) / 100 * 100) / 100;
+
+    // Net refund = refundable + reversed tax − restocking − restocking tax
+    const netRefundAfterTax = Math.round(
+      (refundableAmount + taxReversed - restockingFee - restockingFeeTax) * 100
+    ) / 100;
+
+    return {
+      taxReversed,
+      restockingFeeTax,
+      taxRate: rule.rate,
+      taxName: rule.name,
+      netRefundAfterTax,
+    };
+  }
+
+  /**
+   * Calculate the price difference when exchanging items.
+   *
+   * Returns:
+   * - positive difference → customer pays extra
+   * - negative difference → partial refund to customer
+   * - zero → even exchange
+   *
+   * Tax is recalculated on the new item; credit note issued for old item.
+   */
+  calculateExchangeDifference(
+    returnedItem: {
+      price: number;       // original unit price
+      quantity: number;
+      category: string;
+      taxPaid: number;     // original tax paid
+    },
+    newItem: {
+      price: number;
+      quantity: number;
+      category: string;
+    },
+    destination: Country,
+  ): {
+    returnedValue: number;
+    returnedTax: number;
+    newItemValue: number;
+    newItemTax: number;
+    priceDifference: number;  // positive = customer pays more
+    taxDifference: number;
+    totalDifference: number;  // inclusive of tax
+  } {
+    const returnedValue = returnedItem.price * returnedItem.quantity;
+    const returnedTax = returnedItem.taxPaid;
+
+    const newItemValue = newItem.price * newItem.quantity;
+    const newRule = this.findTaxRule(newItem.category, destination);
+    const newItemTax = Math.round((newItemValue * newRule.rate) / 100 * 100) / 100;
+
+    const priceDifference = Math.round((newItemValue - returnedValue) * 100) / 100;
+    const taxDifference = Math.round((newItemTax - returnedTax) * 100) / 100;
+    const totalDifference = Math.round((priceDifference + taxDifference) * 100) / 100;
+
+    return {
+      returnedValue,
+      returnedTax,
+      newItemValue,
+      newItemTax,
+      priceDifference,
+      taxDifference,
+      totalDifference,
+    };
+  }
+
   /**
    * Calculate import duty for cross-border orders
    */

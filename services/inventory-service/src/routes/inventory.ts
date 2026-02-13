@@ -75,6 +75,13 @@ async function getInventoryFromProducts(
         status,
         lastUpdated: p.updatedAt ? (typeof p.updatedAt === 'string' ? p.updatedAt : new Date(p.updatedAt).toISOString()) : new Date().toISOString(),
         country,
+        // Weight fields (populated from stock records when available)
+        totalWeightGrams: 0,
+        reservedWeightGrams: 0,
+        availableWeightGrams: 0,
+        avgWeightPerUnit: 0,
+        lowWeightThresholdGrams: 100,
+        weightStatus: 'normal' as const,
       };
     });
 

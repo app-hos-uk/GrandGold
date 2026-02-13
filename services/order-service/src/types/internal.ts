@@ -9,6 +9,7 @@ import type { Country, OrderStatus } from '@grandgold/types';
 export interface CartItem {
   productId: string;
   name: string;
+  sku?: string;
   image?: string;
   sellerId?: string;
   sellerName?: string;
@@ -16,8 +17,27 @@ export interface CartItem {
   sellerAddress?: string;
   quantity: number;
   price: number;
-  goldWeight?: number;
+  // Metal details
+  metalType?: string;
+  goldWeight?: number;       // net metal weight (grams)
+  grossWeight?: number;      // total weight incl. stones (grams)
   purity?: string;
+  // Making charges
+  makingCharges?: number;
+  makingChargeType?: string; // 'per_gram' | 'percentage' | 'flat'
+  makingChargePercent?: number;
+  laborCost?: number;
+  wastagePercent?: number;
+  wastageCharges?: number;
+  // Stone details
+  stoneWeight?: number;      // total carat weight of stones
+  stoneValue?: number;       // total value of stones
+  stonesCount?: number;
+  // Pricing breakdown
+  metalValue?: number;       // pure metal value (goldWeight x rate)
+  goldRateAtPurchase?: number;
+  // Hallmark
+  hallmarkNumber?: string;
   category?: string;
   hasClickCollect?: boolean;
   [key: string]: unknown;
@@ -91,14 +111,35 @@ export interface OrderItem {
   productId: string;
   productName: string;
   productImage?: string;
+  sku?: string;
   sellerId?: string;
   sellerName?: string;
   sellerContact?: string;
   sellerAddress?: string;
   quantity: number;
   price: number;
+  // Metal details
+  metalType?: string;
   goldWeight?: number;
+  grossWeight?: number;
   purity?: string;
+  // Making charges
+  makingCharges?: number;
+  makingChargeType?: string;
+  makingChargePercent?: number;
+  laborCost?: number;
+  wastagePercent?: number;
+  wastageCharges?: number;
+  // Stone details
+  stoneWeight?: number;
+  stoneValue?: number;
+  stonesCount?: number;
+  // Pricing breakdown
+  metalValue?: number;
+  goldRateAtPurchase?: number;
+  // Hallmark
+  hallmarkNumber?: string;
+  category?: string;
   [key: string]: unknown;
 }
 

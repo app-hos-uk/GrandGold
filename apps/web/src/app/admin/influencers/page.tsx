@@ -13,12 +13,39 @@ import {
   TrendingUp,
   Pencil,
   Loader2,
+  Scale,
+  Percent,
+  Hammer,
+  Gem,
+  ChevronDown,
 } from 'lucide-react';
 import { AdminBreadcrumbs } from '@/components/admin/breadcrumbs';
 import { InfluencerModal } from '@/components/admin/influencer-modal';
-import { influencerApi, type InfluencerRack } from '@/lib/api';
+import { influencerApi, api, type InfluencerRack } from '@/lib/api';
 import { useToast } from '@/components/admin/toast';
+import { formatCurrency } from '@/lib/format';
 import type { InfluencerFormData } from '@/components/admin/influencer-modal';
+
+interface MarginRecord {
+  id: string;
+  influencerId: string;
+  name: string;
+  code?: string;
+  marginModel: 'combined' | 'split';
+  combinedMarginPercent?: number;
+  metalMarginPercent?: number;
+  stoneMarginPercent?: number;
+  mcMarginPercent?: number;
+  applicableCategories?: string[];
+  applicableMetalTypes?: string[];
+  minOrderWeight?: number;
+  countries?: string[];
+  isActive: boolean;
+  totalOrders: number;
+  totalWeightSold: number;
+  totalEarnings: number;
+  createdAt: string;
+}
 
 const FALLBACK_RACKS: InfluencerRack[] = [
   { slug: 'priya', name: "Priya's Picks", bio: 'Bridal & traditional jewellery curated by fashion influencer Priya', productIds: ['1', '3', '5', '2'], commissionRate: 5 },
@@ -35,6 +62,21 @@ export default function AdminInfluencersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Margin structures
+  const [margins, setMargins] = useState<MarginRecord[]>([]);
+  const [marginsLoading, setMarginsLoading] = useState(true);
+  const [showMarginForm, setShowMarginForm] = useState(false);
+  const [marginForm, setMarginForm] = useState({
+    name: '',
+    code: '',
+    influencerId: '',
+    marginModel: 'combined' as 'combined' | 'split',
+    combinedMarginPercent: 5,
+    metalMarginPercent: 2,
+    stoneMarginPercent: 8,
+    mcMarginPercent: 5,
+    minOrderWeight: 0,
+  });
 
   const loadRacks = () => {
     setLoading(true);
@@ -48,6 +90,41 @@ export default function AdminInfluencersPage() {
   useEffect(() => {
     loadRacks();
   }, []);
+
+  // Fetch influencer margin structures
+  useEffect(() => {
+    setMarginsLoading(true);
+    api.get('/api/influencer-margins?limit=50')
+      .then((res: unknown) => {
+        const d = (res as { data?: MarginRecord[] })?.data;
+        if (d) setMargins(d);
+      })
+      .catch(() => {})
+      .finally(() => setMarginsLoading(false));
+  }, []);
+
+  const handleCreateMargin = async () => {
+    setSubmitting(true);
+    try {
+      await api.post('/api/influencer-margins', {
+        ...marginForm,
+        combinedMarginPercent: marginForm.marginModel === 'combined' ? marginForm.combinedMarginPercent : undefined,
+        metalMarginPercent: marginForm.marginModel === 'split' ? marginForm.metalMarginPercent : undefined,
+        stoneMarginPercent: marginForm.marginModel === 'split' ? marginForm.stoneMarginPercent : undefined,
+        mcMarginPercent: marginForm.marginModel === 'split' ? marginForm.mcMarginPercent : undefined,
+        minOrderWeight: marginForm.minOrderWeight || undefined,
+      });
+      toast.success('Margin structure created');
+      setShowMarginForm(false);
+      // Refresh
+      const res = await api.get('/api/influencer-margins?limit=50') as { data?: MarginRecord[] };
+      if (res?.data) setMargins(res.data);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create margin');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleModalSubmit = async (data: InfluencerFormData) => {
     setSubmitting(true);
@@ -221,6 +298,261 @@ export default function AdminInfluencersPage() {
         </div>
         <div className="p-4 bg-gray-50 border-t border-gray-100 text-sm text-gray-500">
           Add or edit influencers above. Storefronts are available at /[country]/influencer/[slug].
+        </div>
+      </div>
+
+      {/* ── Margin Structures Section ─────────────────────────────── */}
+      <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900">Margin Structures</h2>
+            <p className="text-sm text-gray-500">Define combined or split (metal/stone/MC) margin models for influencers</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowMarginForm(!showMarginForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            New Margin
+          </button>
+        </div>
+
+        {/* Create margin form */}
+        <AnimatePresence>
+          {showMarginForm && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="p-6 bg-gold-50 border-b border-gold-100 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <input
+                      type="text"
+                      value={marginForm.name}
+                      onChange={(e) => setMarginForm({ ...marginForm, name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold-500 focus:outline-none"
+                      placeholder="e.g. Priya Premium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Referral Code</label>
+                    <input
+                      type="text"
+                      value={marginForm.code}
+                      onChange={(e) => setMarginForm({ ...marginForm, code: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold-500 focus:outline-none"
+                      placeholder="e.g. PRIYA2026"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Influencer ID</label>
+                    <input
+                      type="text"
+                      value={marginForm.influencerId}
+                      onChange={(e) => setMarginForm({ ...marginForm, influencerId: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold-500 focus:outline-none"
+                      placeholder="User ID"
+                    />
+                  </div>
+                </div>
+
+                {/* Margin model selector */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Margin Model</label>
+                  <div className="flex gap-4">
+                    <label className={`flex-1 cursor-pointer rounded-lg border-2 p-4 transition-colors ${
+                      marginForm.marginModel === 'combined' ? 'border-gold-500 bg-gold-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="marginModel"
+                        value="combined"
+                        checked={marginForm.marginModel === 'combined'}
+                        onChange={() => setMarginForm({ ...marginForm, marginModel: 'combined' })}
+                        className="sr-only"
+                      />
+                      <div className="flex items-center gap-2 mb-1">
+                        <Percent className="w-5 h-5 text-gold-600" />
+                        <span className="font-semibold text-gray-900">Combined</span>
+                      </div>
+                      <p className="text-xs text-gray-500">Single margin % on total order value</p>
+                    </label>
+                    <label className={`flex-1 cursor-pointer rounded-lg border-2 p-4 transition-colors ${
+                      marginForm.marginModel === 'split' ? 'border-gold-500 bg-gold-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="marginModel"
+                        value="split"
+                        checked={marginForm.marginModel === 'split'}
+                        onChange={() => setMarginForm({ ...marginForm, marginModel: 'split' })}
+                        className="sr-only"
+                      />
+                      <div className="flex items-center gap-2 mb-1">
+                        <Scale className="w-5 h-5 text-gold-600" />
+                        <span className="font-semibold text-gray-900">Split</span>
+                      </div>
+                      <p className="text-xs text-gray-500">Separate %s for metal, stone, MC</p>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Margin values */}
+                {marginForm.marginModel === 'combined' ? (
+                  <div className="max-w-xs">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Commission %</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={marginForm.combinedMarginPercent}
+                      onChange={(e) => setMarginForm({ ...marginForm, combinedMarginPercent: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold-500 focus:outline-none"
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
+                        <Scale className="w-4 h-4 text-gold-500" /> Metal Margin %
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.5}
+                        value={marginForm.metalMarginPercent}
+                        onChange={(e) => setMarginForm({ ...marginForm, metalMarginPercent: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold-500 focus:outline-none"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Typically 1-3% (thin margin)</p>
+                    </div>
+                    <div>
+                      <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
+                        <Gem className="w-4 h-4 text-blue-500" /> Stone Margin %
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.5}
+                        value={marginForm.stoneMarginPercent}
+                        onChange={(e) => setMarginForm({ ...marginForm, stoneMarginPercent: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold-500 focus:outline-none"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Typically 5-15%</p>
+                    </div>
+                    <div>
+                      <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
+                        <Hammer className="w-4 h-4 text-amber-500" /> MC Margin %
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.5}
+                        value={marginForm.mcMarginPercent}
+                        onChange={(e) => setMarginForm({ ...marginForm, mcMarginPercent: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold-500 focus:outline-none"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Typically 3-8%</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={submitting || !marginForm.name || !marginForm.influencerId}
+                    onClick={handleCreateMargin}
+                    className="px-6 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 disabled:opacity-50 transition-colors"
+                  >
+                    {submitting ? 'Creating...' : 'Create Margin'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowMarginForm(false)}
+                    className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Margin list */}
+        <div className="divide-y divide-gray-100">
+          {marginsLoading ? (
+            <div className="p-8 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-gold-500 animate-spin" />
+            </div>
+          ) : margins.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <Scale className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+              <p>No margin structures defined yet.</p>
+              <p className="text-sm">Create one to set up influencer commissions with split or combined models.</p>
+            </div>
+          ) : (
+            margins.map((m) => (
+              <div key={m.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    m.marginModel === 'split' ? 'bg-blue-100' : 'bg-gold-100'
+                  }`}>
+                    {m.marginModel === 'split' ? (
+                      <Scale className="w-5 h-5 text-blue-600" />
+                    ) : (
+                      <Percent className="w-5 h-5 text-gold-600" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-900">{m.name}</h3>
+                      {m.code && (
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded font-mono">{m.code}</span>
+                      )}
+                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                        m.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {m.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                      {m.marginModel === 'combined' ? (
+                        <span>{m.combinedMarginPercent}% combined</span>
+                      ) : (
+                        <>
+                          <span className="flex items-center gap-1">
+                            <Scale className="w-3 h-3" /> Metal {m.metalMarginPercent}%
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Gem className="w-3 h-3" /> Stone {m.stoneMarginPercent}%
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Hammer className="w-3 h-3" /> MC {m.mcMarginPercent}%
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <div className="text-right">
+                    <p className="font-semibold text-gray-900">{formatCurrency(m.totalEarnings)}</p>
+                    <p className="text-xs text-gray-500">{m.totalOrders} orders</p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

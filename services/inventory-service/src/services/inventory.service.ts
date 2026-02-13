@@ -77,6 +77,13 @@ export interface StockRecord {
   poolType: StockPoolType;
   countries: Country[];
   updatedAt: string;
+  // ── Weight tracking (precious metals) ──
+  totalWeightGrams: number;       // total metal weight in stock
+  reservedWeightGrams: number;    // weight reserved for checkout
+  avgWeightPerUnit: number;       // totalWeight / quantity
+  metalType?: string;             // gold | silver | platinum
+  purity?: string;                // 22K, 24K, 18K, 950Pt etc.
+  lowWeightThresholdGrams: number; // alert when total weight drops below
 }
 
 export interface StockReservation {
@@ -86,6 +93,7 @@ export interface StockReservation {
   cartId: string;
   userId?: string;
   expiresAt: string;
+  reservedWeightGrams?: number;
 }
 
 export class InventoryService {
@@ -108,18 +116,34 @@ export class InventoryService {
       lowStockThreshold?: number;
       poolType?: StockPoolType;
       countries?: Country[];
+      // Weight fields
+      totalWeightGrams?: number;
+      metalType?: string;
+      purity?: string;
+      lowWeightThresholdGrams?: number;
     }
   ): Promise<StockRecord> {
     const existing = await this.getStock(productId);
+    const quantity = data.quantity;
+    const totalWeight = data.totalWeightGrams ?? existing?.totalWeightGrams ?? 0;
+    const avgWeight = quantity > 0 ? Math.round((totalWeight / quantity) * 1000) / 1000 : 0;
+
     const record: StockRecord = {
       productId,
       sellerId,
-      quantity: data.quantity,
+      quantity,
       reservedQuantity: existing?.reservedQuantity ?? 0,
       lowStockThreshold: data.lowStockThreshold ?? 5,
       poolType: data.poolType ?? 'physical',
       countries: data.countries ?? ['IN', 'AE', 'UK'],
       updatedAt: new Date().toISOString(),
+      // Weight
+      totalWeightGrams: totalWeight,
+      reservedWeightGrams: existing?.reservedWeightGrams ?? 0,
+      avgWeightPerUnit: avgWeight,
+      metalType: data.metalType ?? existing?.metalType,
+      purity: data.purity ?? existing?.purity,
+      lowWeightThresholdGrams: data.lowWeightThresholdGrams ?? existing?.lowWeightThresholdGrams ?? 100,
     };
 
     await redisSetex(
@@ -157,6 +181,9 @@ export class InventoryService {
     const reservationId = generateId('res');
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
+    // Calculate reserved weight based on avg weight per unit
+    const reservedWeight = Math.round(stock.avgWeightPerUnit * quantity * 1000) / 1000;
+
     const reservation: StockReservation = {
       id: reservationId,
       productId,
@@ -164,6 +191,7 @@ export class InventoryService {
       cartId,
       userId,
       expiresAt: expiresAt.toISOString(),
+      reservedWeightGrams: reservedWeight,
     };
 
     await redisSetex(
@@ -173,6 +201,7 @@ export class InventoryService {
     );
 
     stock.reservedQuantity += quantity;
+    stock.reservedWeightGrams = Math.round((stock.reservedWeightGrams + reservedWeight) * 1000) / 1000;
     stock.updatedAt = new Date().toISOString();
     await redisSetex(
       `${STOCK_PREFIX}${productId}`,
@@ -194,9 +223,10 @@ export class InventoryService {
     const stock = await this.getStock(reservation.productId);
 
     if (stock) {
-      stock.reservedQuantity = Math.max(
+      stock.reservedQuantity = Math.max(0, stock.reservedQuantity - reservation.quantity);
+      stock.reservedWeightGrams = Math.max(
         0,
-        stock.reservedQuantity - reservation.quantity
+        Math.round((stock.reservedWeightGrams - (reservation.reservedWeightGrams || 0)) * 1000) / 1000
       );
       stock.updatedAt = new Date().toISOString();
       await redisSetex(
@@ -217,7 +247,11 @@ export class InventoryService {
     stock: StockRecord
   ): Promise<void> {
     const available = stock.quantity - stock.reservedQuantity;
-    if (available <= stock.lowStockThreshold && available >= 0) {
+    const availableWeight = Math.round((stock.totalWeightGrams - stock.reservedWeightGrams) * 1000) / 1000;
+    const lowQuantity = available <= stock.lowStockThreshold && available >= 0;
+    const lowWeight = availableWeight <= stock.lowWeightThresholdGrams && availableWeight >= 0;
+
+    if (lowQuantity || lowWeight) {
       const alertKey = `${ALERT_PREFIX}${productId}`;
       await redisSetex(
         alertKey,
@@ -227,6 +261,12 @@ export class InventoryService {
           sellerId: stock.sellerId,
           quantity: available,
           threshold: stock.lowStockThreshold,
+          // Weight alert data
+          availableWeightGrams: availableWeight,
+          weightThresholdGrams: stock.lowWeightThresholdGrams,
+          alertType: lowQuantity && lowWeight ? 'both' : lowQuantity ? 'quantity' : 'weight',
+          metalType: stock.metalType,
+          purity: stock.purity,
           alertedAt: new Date().toISOString(),
         })
       );
@@ -299,6 +339,11 @@ export class InventoryService {
           continue;
         }
 
+        const availableWeight = Math.round((stock.totalWeightGrams - stock.reservedWeightGrams) * 1000) / 1000;
+        let weightStatus: 'normal' | 'low_weight' | 'critical' = 'normal';
+        if (availableWeight <= 0) weightStatus = 'critical';
+        else if (availableWeight <= stock.lowWeightThresholdGrams) weightStatus = 'low_weight';
+
         items.push({
           id: stock.productId,
           productId: stock.productId,
@@ -313,6 +358,15 @@ export class InventoryService {
           status,
           lastUpdated: stock.updatedAt,
           country: stock.countries[0] || 'IN',
+          // Weight
+          totalWeightGrams: stock.totalWeightGrams || 0,
+          reservedWeightGrams: stock.reservedWeightGrams || 0,
+          availableWeightGrams: availableWeight,
+          avgWeightPerUnit: stock.avgWeightPerUnit || 0,
+          metalType: stock.metalType,
+          purity: stock.purity,
+          lowWeightThresholdGrams: stock.lowWeightThresholdGrams || 100,
+          weightStatus,
         });
       }
     }
@@ -363,6 +417,15 @@ export interface InventoryAdminItem {
   status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'reserved';
   lastUpdated: string;
   country: string;
+  // Weight fields
+  totalWeightGrams: number;
+  reservedWeightGrams: number;
+  availableWeightGrams: number;
+  avgWeightPerUnit: number;
+  metalType?: string;
+  purity?: string;
+  lowWeightThresholdGrams: number;
+  weightStatus: 'normal' | 'low_weight' | 'critical';
 }
 
 /**

@@ -3,6 +3,7 @@ import type { Country } from '@grandgold/types';
 import { CartService } from './cart.service';
 import { TaxService } from './tax.service';
 import { AbandonedCartService } from './abandoned-cart.service';
+import { InfluencerMarginService } from './influencer-margin.service';
 import type { CheckoutRecord, CartItem, OrderRecord, ShippingAddress } from '../types/internal';
 
 // In-memory store for demo
@@ -69,11 +70,12 @@ interface CheckoutInput {
 }
 
 // ── Influencer commission rates by channel ────────────────────────────
-const INFLUENCER_COMMISSION_RATE = 0.05; // 5% default influencer commission
+const INFLUENCER_COMMISSION_RATE = 0.05; // 5% default fallback
 
 const cartService = new CartService();
 const taxService = new TaxService();
 const abandonedCartService = new AbandonedCartService();
+const influencerMarginService = new InfluencerMarginService();
 
 export class CheckoutService {
   /**
@@ -311,11 +313,32 @@ export class CheckoutService {
             productId: item.productId,
             productName: item.name,
             productImage: item.image,
+            sku: item.sku,
             sellerId: item.sellerId,
             quantity: item.quantity,
             price: item.price,
+            category: item.category,
+            // Metal details
+            metalType: item.metalType,
             goldWeight: item.goldWeight,
+            grossWeight: item.grossWeight,
             purity: item.purity,
+            // Making charges
+            makingCharges: item.makingCharges,
+            makingChargeType: item.makingChargeType,
+            makingChargePercent: item.makingChargePercent,
+            laborCost: item.laborCost,
+            wastagePercent: item.wastagePercent,
+            wastageCharges: item.wastageCharges,
+            // Stone details
+            stoneWeight: item.stoneWeight,
+            stoneValue: item.stoneValue,
+            stonesCount: item.stonesCount,
+            // Pricing breakdown
+            metalValue: item.metalValue,
+            goldRateAtPurchase: item.goldRateAtPurchase,
+            // Hallmark
+            hallmarkNumber: item.hallmarkNumber,
           })),
           subtotal: groupSubtotal,
           status: 'confirmed' as const,
@@ -363,19 +386,57 @@ export class CheckoutService {
       (order as Record<string, unknown>).isMultiSeller = true;
     }
 
-    // ── Influencer / referral attribution ────────────────────────────
+    // ── Influencer / referral attribution with split margin support ──
     const referralCode = (checkout as Record<string, unknown>).referralCode as string | undefined;
     if (referralCode) {
-      const commissionAmount = Math.round(order.total * INFLUENCER_COMMISSION_RATE * 100) / 100;
-      order.referral = {
-        referrerId: referralCode, // In production, resolve code -> userId
-        channel: 'influencer_rack',
-        code: referralCode,
-        commissionRate: INFLUENCER_COMMISSION_RATE * 100,
-        commissionAmount,
-        commissionPaid: false,
-        attributedAt: new Date(),
-      };
+      // Try to resolve the referral code to an influencer margin structure
+      const margin = await influencerMarginService.getMarginByCode(referralCode);
+
+      if (margin) {
+        // Calculate payout using the configured margin model (combined or split)
+        let totalPayout = 0;
+        for (const item of allItems) {
+          const payout = influencerMarginService.calculatePayout(margin, {
+            orderId: order.id,
+            orderItemId: item.productId,
+            metalValue: item.metalValue || 0,
+            stoneValue: item.stoneValue || 0,
+            mcValue: item.makingCharges || 0,
+            orderTotal: item.price * item.quantity,
+            goldWeight: item.goldWeight,
+            metalType: item.metalType,
+            category: item.category,
+          });
+          totalPayout += payout.totalPayout;
+
+          // Record the payout
+          influencerMarginService.recordPayout(payout).catch(() => {});
+        }
+
+        order.referral = {
+          referrerId: margin.influencerId,
+          channel: 'influencer_rack',
+          code: referralCode,
+          commissionRate: margin.marginModel === 'combined'
+            ? (margin.combinedMarginPercent || 0)
+            : 0, // split model doesn't have a single rate
+          commissionAmount: Math.round(totalPayout * 100) / 100,
+          commissionPaid: false,
+          attributedAt: new Date(),
+        };
+      } else {
+        // Fallback to flat commission rate
+        const commissionAmount = Math.round(order.total * INFLUENCER_COMMISSION_RATE * 100) / 100;
+        order.referral = {
+          referrerId: referralCode,
+          channel: 'influencer_rack',
+          code: referralCode,
+          commissionRate: INFLUENCER_COMMISSION_RATE * 100,
+          commissionAmount,
+          commissionPaid: false,
+          attributedAt: new Date(),
+        };
+      }
     }
     
     // Mark checkout as completed

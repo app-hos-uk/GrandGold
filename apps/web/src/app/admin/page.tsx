@@ -24,6 +24,9 @@ import {
   ChevronRight,
   UserCog,
   Zap,
+  Scale,
+  Hammer,
+  Weight,
 } from 'lucide-react';
 import { adminApi, api } from '@/lib/api';
 import { formatRelativeDate, formatCurrency } from '@/lib/format';
@@ -104,6 +107,14 @@ export default function AdminDashboard() {
   const [countryAdminsLoading, setCountryAdminsLoading] = useState(true);
   const [topSellers, setTopSellers] = useState<Array<{ name: string; sales: string; orders: number; rating: number }>>([]);
   const [liveGoldRates, setLiveGoldRates] = useState<{ gold: Record<string, number>; provider: string; pricingMode?: string; updatedAt: string | null } | null>(null);
+  const [weightMetrics, setWeightMetrics] = useState<{
+    totalWeightSold?: { value: number; unit: string };
+    avgMCPerGram?: { value: number; unit: string };
+    avgMCPercent?: { value: number; unit: string };
+    avgWeightPerOrder?: { value: number; unit: string };
+    totalGrossWeight?: { value: number; unit: string };
+    totalStoneWeight?: { value: number; unit: string };
+  } | null>(null);
 
   const isSuperAdmin = profile?.role === 'super_admin';
   const country = profile?.role === 'country_admin' && profile?.country ? profile.country : undefined;
@@ -205,6 +216,19 @@ export default function AdminDashboard() {
       .then((data) => setLiveGoldRates(data))
       .catch(() => {});
   }, []);
+
+  // Fetch weight-based analytics metrics
+  useEffect(() => {
+    if (!profile) return;
+    const params = new URLSearchParams();
+    if (country) params.set('country', country);
+    api.get(`/api/analytics/dashboard?${params.toString()}`)
+      .then((res: unknown) => {
+        const data = (res as { data?: typeof weightMetrics })?.data;
+        if (data) setWeightMetrics(data);
+      })
+      .catch(() => {});
+  }, [profile, country]);
 
   // Fetch recent orders
   useEffect(() => {
@@ -423,6 +447,83 @@ export default function AdminDashboard() {
               </motion.div>
             ))}
       </div>
+
+      {/* Weight-Based Metrics (Precious Metals) */}
+      {weightMetrics && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-gold-500"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-gold-100 rounded-xl flex items-center justify-center">
+                <Scale className="w-6 h-6 text-gold-600" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900">
+              {weightMetrics.totalWeightSold?.value?.toFixed(1) ?? '0'} g
+            </h3>
+            <p className="text-gray-500 text-sm">Total Weight Sold</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-amber-500"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+                <Hammer className="w-6 h-6 text-amber-600" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900">
+              {weightMetrics.avgMCPercent?.value?.toFixed(1) ?? '0'}%
+            </h3>
+            <p className="text-gray-500 text-sm">
+              Avg MC ({formatCurrency(weightMetrics.avgMCPerGram?.value ?? 0)}/g)
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-blue-500"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <Weight className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900">
+              {weightMetrics.avgWeightPerOrder?.value?.toFixed(2) ?? '0'} g
+            </h3>
+            <p className="text-gray-500 text-sm">Avg Weight / Order</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-purple-500"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                <Package className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900">
+              {weightMetrics.totalGrossWeight?.value?.toFixed(1) ?? '0'} g
+            </h3>
+            <p className="text-gray-500 text-sm">
+              Gross Weight (Stones: {weightMetrics.totalStoneWeight?.value?.toFixed(1) ?? '0'} ct)
+            </p>
+          </motion.div>
+        </div>
+      )}
 
       {/* Super Admin: Country Admins Section */}
       {isSuperAdmin && (

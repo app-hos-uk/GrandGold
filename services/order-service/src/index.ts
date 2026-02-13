@@ -67,6 +67,8 @@ const server = app.listen(PORT, HOST, () => {
     import('./routes/notifications'),
     import('./routes/support'),
     import('./routes/shipping'),
+    import('./routes/analytics'),
+    import('./routes/influencer-margin'),
     import('./middleware/error-handler'),
     import('./middleware/not-found'),
     import('./middleware/veil'),
@@ -86,6 +88,8 @@ const server = app.listen(PORT, HOST, () => {
       { notificationsRouter },
       { supportRouter },
       { shippingRouter },
+      { analyticsRouter },
+      { influencerMarginRouter },
       { errorHandler },
       { notFoundHandler },
       { veilResponseMiddleware },
@@ -108,6 +112,8 @@ const server = app.listen(PORT, HOST, () => {
       app.use('/api/notifications', notificationsRouter);
       app.use('/api/support', supportRouter);
       app.use('/api/shipping', shippingRouter);
+      app.use('/api/analytics', analyticsRouter);
+      app.use('/api/influencer-margins', influencerMarginRouter);
       app.use(notFoundHandler);
       app.use(errorHandler);
       logger.info('API routes mounted');
