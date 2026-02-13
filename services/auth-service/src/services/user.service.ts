@@ -314,16 +314,17 @@ export class UserService {
     // Soft delete user — marks isDeleted=true and sets deletedAt
     await deleteUser(userId);
 
-    // Store the scheduled purge date so the cron job knows when to anonymise
-    await updateUser(userId, {
-      // We store the purge date in preferences as a lightweight mechanism.
-      // In a full production system this would be a dedicated column.
-      preferences: {
-        ...(user.preferences as Record<string, unknown> || {}),
-        _deletionScheduledPurgeAt: scheduledPurgeAt.toISOString(),
-        _deletionGracePeriodDays: GRACE_PERIOD_DAYS,
-      },
-    });
+    // Store the scheduled purge date so the cron job knows when to anonymise.
+    // We add internal _deletion* keys alongside the existing preferences.
+    // The cast is safe because jsonb accepts any shape — these keys are only
+    // read by the purge cron, not by the application UserPreferences type.
+    const enrichedPrefs = {
+      ...(user.preferences as Record<string, unknown> || {}),
+      _deletionScheduledPurgeAt: scheduledPurgeAt.toISOString(),
+      _deletionGracePeriodDays: GRACE_PERIOD_DAYS,
+    } as unknown as typeof user.preferences;
+
+    await updateUser(userId, { preferences: enrichedPrefs });
 
     // Invalidate all sessions
     await this.sessionService.invalidateAll(userId);
