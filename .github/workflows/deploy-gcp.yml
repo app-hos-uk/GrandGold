@@ -11,8 +11,9 @@
 #   GCP_REGION            — e.g. "asia-south1" (primary deploy region)
 #
 # Required GCP Secret Manager Secrets (auto-mounted via --update-secrets):
-#   DATABASE_URL          — PostgreSQL connection string
+#   grandgold-db-url      — PostgreSQL connection string (maps to DATABASE_URL env var)
 #   JWT_SECRET            — JWT signing key
+#   (Created by infrastructure/gcp/setup-database.sh or manually)
 #
 # Optional GitHub Secrets:
 #   REDIS_URL             — Redis connection string (defaults to internal VPC Redis)
@@ -146,11 +147,73 @@ jobs:
         run: pnpm --filter @grandgold/web exec tsc --noEmit
 
   # ─────────────────────────────────────────────────────
-  # Job 2: Build & deploy backend services
+  # Job 2a: Ensure GCP Secret Manager secrets exist
+  # ─────────────────────────────────────────────────────
+  setup-secrets:
+    name: Setup Secret Manager
+    needs: [changes, quality]
+    if: needs.changes.outputs.services_list != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Ensure Secret Manager secrets exist
+        env:
+          SECRET_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SECRET_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: |
+          PROJECT="${{ env.GCP_PROJECT_ID }}"
+          SA="${{ env.GCP_PROJECT_NUMBER }}-compute@developer.gserviceaccount.com"
+
+          # Ensures a GCP Secret Manager secret exists.
+          # If it doesn't exist, creates it from the provided value and grants
+          # the Cloud Run default service account read access.
+          ensure_secret() {
+            local SM_NAME=$1   # Secret Manager secret name
+            local VALUE=$2     # Fallback value from GitHub Secrets
+
+            if gcloud secrets describe "$SM_NAME" --project="$PROJECT" &>/dev/null; then
+              echo "✓ Secret $SM_NAME already exists in Secret Manager"
+            elif [ -n "$VALUE" ]; then
+              echo "Creating secret $SM_NAME in Secret Manager..."
+              printf '%s' "$VALUE" | gcloud secrets create "$SM_NAME" \
+                --data-file=- --project="$PROJECT" --replication-policy=automatic
+              # Grant Cloud Run default service account access
+              gcloud secrets add-iam-policy-binding "$SM_NAME" \
+                --member="serviceAccount:${SA}" \
+                --role="roles/secretmanager.secretAccessor" \
+                --project="$PROJECT" --quiet
+              echo "✓ Secret $SM_NAME created and access granted to Cloud Run"
+            else
+              echo "::error::Secret '$SM_NAME' not found in Secret Manager."
+              echo "::error::Either run 'infrastructure/gcp/setup-database.sh' to create it,"
+              echo "::error::or add the value as a GitHub secret (Settings → Secrets → Actions)."
+              exit 1
+            fi
+          }
+
+          # Secret Manager names match those created by infrastructure/gcp/setup-database.sh
+          # DATABASE_URL env var → grandgold-db-url secret
+          # JWT_SECRET env var  → JWT_SECRET secret
+          ensure_secret "grandgold-db-url" "$SECRET_DATABASE_URL"
+          ensure_secret "JWT_SECRET" "$SECRET_JWT_SECRET"
+
+  # ─────────────────────────────────────────────────────
+  # Job 2b: Build & deploy backend services
   # ─────────────────────────────────────────────────────
   deploy-services:
     name: Deploy ${{ matrix.service }}
-    needs: [changes, quality]
+    needs: [changes, quality, setup-secrets]
     if: needs.changes.outputs.services_list != '[]'
     runs-on: ubuntu-latest
     strategy:
@@ -205,7 +268,7 @@ jobs:
           CORS="${WEB_URL},http://localhost:3000"
 
           # Use # as delimiter (^#^) so commas inside CORS_ORIGINS are preserved
-          # DATABASE_URL & JWT_SECRET are managed via GCP Secret Manager (not plain env vars)
+          # DATABASE_URL & JWT_SECRET are mounted from GCP Secret Manager
           gcloud run deploy ${{ matrix.service }} \
             --image gcr.io/${{ env.GCP_PROJECT_ID }}/${{ matrix.service }}:${{ github.sha }} \
             --region ${{ env.GCP_REGION }} \
@@ -218,7 +281,7 @@ jobs:
             --concurrency 80 \
             --timeout 60s \
             --update-env-vars "^#^NODE_ENV=production#CLOUD_SQL_CONNECTION_NAME=${{ env.GCP_PROJECT_ID }}:${REGION}:grandgold-db#REDIS_URL=${{ secrets.REDIS_URL || 'redis://10.10.168.107:6379' }}#CORS_ORIGINS=${CORS}" \
-            --update-secrets "DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest" \
+            --update-secrets "DATABASE_URL=grandgold-db-url:latest,JWT_SECRET=JWT_SECRET:latest" \
             --add-cloudsql-instances "${{ env.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:grandgold-db" \
             --vpc-connector "projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.GCP_REGION }}/connectors/grandgold-connector" \
             --vpc-egress private-ranges-only \
@@ -320,7 +383,7 @@ jobs:
   # ─────────────────────────────────────────────────────
   summary:
     name: Deployment Summary
-    needs: [changes, quality, deploy-services, deploy-web]
+    needs: [changes, quality, setup-secrets, deploy-services, deploy-web]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -336,5 +399,6 @@ jobs:
           echo "| Web changed | ${{ needs.changes.outputs.web }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Services changed | ${{ needs.changes.outputs.services }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Quality gate | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Manager | ${{ needs.setup-secrets.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Services job | ${{ needs.deploy-services.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Web job | ${{ needs.deploy-web.result }} |" >> $GITHUB_STEP_SUMMARY
