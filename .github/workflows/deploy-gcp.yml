@@ -114,6 +114,11 @@ jobs:
       - name: Run ESLint
         run: pnpm lint
 
+      - name: Build shared packages (needed for downstream type-checks)
+        run: |
+          pnpm --filter @grandgold/types run build
+          pnpm --filter @grandgold/utils run build
+
       - name: TypeScript type-check (packages)
         run: |
           pnpm --filter @grandgold/types exec tsc --noEmit
