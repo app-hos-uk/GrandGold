@@ -63,6 +63,12 @@ COPY --from=builder /app/services/cms-service ./services/cms-service
 # Install production dependencies only
 RUN pnpm install --prod --frozen-lockfile
 
+# Strapi needs write access to database/migrations, .cache, public/uploads at runtime
+RUN mkdir -p ./services/cms-service/database/migrations \
+             ./services/cms-service/.cache \
+             ./services/cms-service/public/uploads && \
+    chown -R grandgold:nodejs ./services/cms-service
+
 USER grandgold
 
 ENV HOST=0.0.0.0
