@@ -36,7 +36,7 @@ export const nameSchema = z
   .string()
   .min(1, 'Name is required')
   .max(50, 'Name must be less than 50 characters')
-  .regex(/^[\p{L}\s'.\-]+$/u, 'Name can only contain letters, spaces, hyphens, apostrophes, and dots');
+  .regex(/^[\p{L}\s'.-]+$/u, 'Name can only contain letters, spaces, hyphens, apostrophes, and dots');
 
 // Registration schema
 export const registerSchema = z.object({
