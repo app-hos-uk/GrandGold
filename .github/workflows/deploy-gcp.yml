@@ -9,10 +9,12 @@
 #   GCP_SA_KEY            — Service account JSON key with Cloud Run Admin, Cloud Build Editor, Storage Admin
 #   GCP_PROJECT_NUMBER    — e.g. "484382472654" (for Cloud Run service URLs)
 #   GCP_REGION            — e.g. "asia-south1" (primary deploy region)
-#   DATABASE_URL          — PostgreSQL connection string (REQUIRED for services)
-#   JWT_SECRET            — JWT signing key (REQUIRED for services)
 #
-# Optional Secrets:
+# Required GCP Secret Manager Secrets (auto-mounted via --update-secrets):
+#   DATABASE_URL          — PostgreSQL connection string
+#   JWT_SECRET            — JWT signing key
+#
+# Optional GitHub Secrets:
 #   REDIS_URL             — Redis connection string (defaults to internal VPC Redis)
 
 name: Deploy to GCP Cloud Run
@@ -203,6 +205,7 @@ jobs:
           CORS="${WEB_URL},http://localhost:3000"
 
           # Use # as delimiter (^#^) so commas inside CORS_ORIGINS are preserved
+          # DATABASE_URL & JWT_SECRET are managed via GCP Secret Manager (not plain env vars)
           gcloud run deploy ${{ matrix.service }} \
             --image gcr.io/${{ env.GCP_PROJECT_ID }}/${{ matrix.service }}:${{ github.sha }} \
             --region ${{ env.GCP_REGION }} \
@@ -214,7 +217,8 @@ jobs:
             --max-instances 10 \
             --concurrency 80 \
             --timeout 60s \
-            --update-env-vars "^#^NODE_ENV=production#CLOUD_SQL_CONNECTION_NAME=${{ env.GCP_PROJECT_ID }}:${REGION}:grandgold-db#DATABASE_URL=${{ secrets.DATABASE_URL }}#JWT_SECRET=${{ secrets.JWT_SECRET }}#REDIS_URL=${{ secrets.REDIS_URL || 'redis://10.10.168.107:6379' }}#CORS_ORIGINS=${CORS}" \
+            --update-env-vars "^#^NODE_ENV=production#CLOUD_SQL_CONNECTION_NAME=${{ env.GCP_PROJECT_ID }}:${REGION}:grandgold-db#REDIS_URL=${{ secrets.REDIS_URL || 'redis://10.10.168.107:6379' }}#CORS_ORIGINS=${CORS}" \
+            --update-secrets "DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest" \
             --add-cloudsql-instances "${{ env.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:grandgold-db" \
             --vpc-connector "projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.GCP_REGION }}/connectors/grandgold-connector" \
             --vpc-egress private-ranges-only \
