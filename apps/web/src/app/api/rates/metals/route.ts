@@ -272,7 +272,10 @@ async function getPricingConfig(): Promise<PricingConfigData | null> {
 /*  GET handler                                                         */
 /* ------------------------------------------------------------------ */
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const forceRefresh = searchParams.get('force') === 'true';
+
   const config = await getMetalPricingConfig();
   const pricingConfig = await getPricingConfig();
   const now = new Date();
@@ -325,7 +328,11 @@ export async function GET() {
   let currentSlotId: string | null = null;
 
   if (config?.enabled && config.apiKey) {
-    if (isWithinFetchWindow(now)) {
+    // force=true bypasses the schedule gate (admin refresh button)
+    if (forceRefresh) {
+      shouldFetch = true;
+      currentSlotId = `force-${now.toISOString()}`;
+    } else if (isWithinFetchWindow(now)) {
       currentSlotId = getCurrentSlotId(now);
       // Only fetch if we haven't already fetched for this slot
       if (currentSlotId && (!cached || cached.fetchedSlotId !== currentSlotId)) {

@@ -87,6 +87,7 @@ export default function PricingPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Editable state
   const [countries, setCountries] = useState<Record<string, CountryPricing>>({});
@@ -97,8 +98,8 @@ export default function PricingPage() {
   // Load config and live rates
   useEffect(() => {
     Promise.all([
-      fetch('/api/admin/pricing').then((r) => r.json()),
-      fetch('/api/rates/metals').then((r) => r.json()),
+      fetch('/api/admin/pricing', { credentials: 'include' }).then((r) => r.json()),
+      fetch('/api/rates/metals', { credentials: 'include' }).then((r) => r.json()),
     ])
       .then(([configRes, ratesRes]) => {
         const cfg = configRes?.data as PricingConfig;
@@ -115,11 +116,18 @@ export default function PricingPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const refreshLiveRates = () => {
-    fetch('/api/rates/metals')
-      .then((r) => r.json())
-      .then((data) => setLiveRates(data as LiveRates))
-      .catch(() => {});
+  const refreshLiveRates = async (force = false) => {
+    setRefreshing(true);
+    try {
+      const url = force ? '/api/rates/metals?force=true' : '/api/rates/metals';
+      const res = await fetch(url, { credentials: 'include', cache: 'no-store' });
+      const data = await res.json();
+      setLiveRates(data as LiveRates);
+    } catch {
+      // Silently ignore — cached data still displayed
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleSave = async () => {
@@ -128,6 +136,7 @@ export default function PricingPage() {
     try {
       const res = await fetch('/api/admin/pricing', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           countries,
@@ -141,7 +150,7 @@ export default function PricingPage() {
       setConfig(data.data);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-      // Refresh live rates to show updated values
+      // Refresh live rates to show updated values (no force — just re-read with new config applied)
       refreshLiveRates();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save');
@@ -242,11 +251,12 @@ export default function PricingPage() {
             </div>
           </div>
           <button
-            onClick={refreshLiveRates}
-            className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors"
+            onClick={() => refreshLiveRates(true)}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors disabled:opacity-50"
           >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Fetching...' : 'Refresh'}
           </button>
         </div>
         <div className="grid grid-cols-3 gap-4">
