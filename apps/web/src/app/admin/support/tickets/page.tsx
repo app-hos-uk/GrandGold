@@ -209,7 +209,7 @@ export default function TicketsPage() {
             createdAt: t.createdAt,
             updatedAt: t.updatedAt,
             resolvedAt: (t as unknown as Record<string, string>).resolvedAt,
-          })));
+          })) as unknown as Ticket[]);
         } else {
           setTickets(FALLBACK_TICKETS);
         }

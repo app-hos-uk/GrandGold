@@ -43,15 +43,15 @@ export default function SellerSettingsPage() {
 
   useEffect(() => {
     authApi.getMe()
-      .then((user: Record<string, unknown>) => {
+      .then((user) => {
         setProfile({
-          firstName: (user.firstName as string) || '',
-          lastName: (user.lastName as string) || '',
-          email: (user.email as string) || '',
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          email: user.email || '',
           phone: (user.phone as string) || '',
           storeName: (user.businessName as string) || (user.storeName as string) || '',
           storeDescription: (user.storeDescription as string) || '',
-          businessEmail: (user.businessEmail as string) || (user.email as string) || '',
+          businessEmail: (user.businessEmail as string) || user.email || '',
           businessPhone: (user.businessPhone as string) || (user.phone as string) || '',
           businessAddress: (user.businessAddress as string) || '',
         });

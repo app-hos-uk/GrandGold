@@ -125,7 +125,7 @@ export default function ProductPage() {
           countries: Array.isArray(p.countries) ? p.countries.map(String) : [],
           newArrival: Boolean(p.isNew || p.newArrival || false),
         };
-        if (!cancelled) setProduct(apiProduct);
+        if (!cancelled) setProduct(apiProduct as typeof product);
       } catch {
         // Keep local fallback
       }

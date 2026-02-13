@@ -82,19 +82,22 @@ export default function SellersPage() {
   const loadSellers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await adminApi.getUserList({ role: 'seller', limit: 500 });
-      const r = res as { users?: unknown[]; data?: { users?: unknown[] } };
+      const res = await adminApi.getUsers({ role: 'seller', limit: 500 });
+      const r = res as unknown as { users?: unknown[]; data?: { users?: unknown[] } };
       const userList = r?.users ?? r?.data?.users ?? [];
-      const list = Array.isArray(userList) ? userList.map((u: Record<string, unknown>) => mapUserToSeller({
-        id: String(u.id ?? ''),
-        email: u.email as string,
-        firstName: u.firstName as string,
-        lastName: u.lastName as string,
-        phone: u.phone as string,
-        country: u.country as string,
-        kycStatus: u.kycStatus as string,
-        createdAt: u.createdAt as string,
-      })) : [];
+      const list = Array.isArray(userList) ? userList.map((raw: unknown) => {
+        const u = raw as Record<string, unknown>;
+        return mapUserToSeller({
+          id: String(u.id ?? ''),
+          email: u.email as string,
+          firstName: u.firstName as string,
+          lastName: u.lastName as string,
+          phone: u.phone as string,
+          country: u.country as string,
+          kycStatus: u.kycStatus as string,
+          createdAt: u.createdAt as string,
+        });
+      }) : [];
       setSellers(list);
     } catch (err) {
       console.error('Failed to load sellers:', err);

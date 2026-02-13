@@ -104,7 +104,7 @@ export default function TransactionsPage() {
             currency: (t as unknown as Record<string, string>).currency || 'INR',
             reference: (t as unknown as Record<string, string>).reference || (t as unknown as Record<string, string>).orderId || '',
             gateway: (t as unknown as Record<string, string>).gateway || '—',
-          })) as Transaction[]);
+          })) as unknown as Transaction[]);
         } else {
           setTransactions(FALLBACK_TRANSACTIONS);
         }

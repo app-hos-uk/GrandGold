@@ -362,10 +362,13 @@ export interface CurrentUserProfile {
   fullName: string;
   role: string;
   country: string;
+  phone?: string;
   kycStatus?: string;
   kycTier?: number;
   preferences?: Record<string, unknown>;
   addresses?: unknown[];
+  /** Extra fields returned by the API that aren't strictly typed */
+  [key: string]: unknown;
 }
 
 // Admin API (requires admin role JWT)

@@ -55,7 +55,8 @@ export default function AddressesPage() {
     setLoading(true);
     try {
       const res = await userApi.getAddresses();
-      const data = (res as { data?: Address[] })?.data ?? (res as Address[]);
+      const raw = res as unknown as { data?: Address[] } | Address[];
+      const data = (raw && 'data' in raw ? raw.data : raw) ?? [];
       setAddresses(Array.isArray(data) ? data : []);
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 401) {
