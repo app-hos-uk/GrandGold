@@ -190,15 +190,20 @@ router.post(
   authorize('super_admin', 'country_admin', 'manager'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { marginId, metalValue, stoneValue, mcValue, orderTotal, goldWeight } = req.body;
+      const { marginId, metalValue, stoneValue, mcValue, makingCharges, orderTotal, goldWeight } = req.body;
+
+      const metal = metalValue || 0;
+      const stone = stoneValue || 0;
+      const mc = mcValue || makingCharges || 0;
+      const total = orderTotal || (metal + stone + mc);
 
       const margin = await marginService.getMargin(marginId);
       const payout = marginService.calculatePayout(margin, {
         orderId: 'simulation',
-        metalValue: metalValue || 0,
-        stoneValue: stoneValue || 0,
-        mcValue: mcValue || 0,
-        orderTotal: orderTotal || 0,
+        metalValue: metal,
+        stoneValue: stone,
+        mcValue: mc,
+        orderTotal: total,
         goldWeight: goldWeight || 0,
       });
 

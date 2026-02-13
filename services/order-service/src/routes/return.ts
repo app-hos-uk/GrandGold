@@ -106,6 +106,25 @@ router.get('/returns', authenticate, async (req: Request, res: Response, next: N
 });
 
 /**
+ * GET /api/orders/returns/gold-credit
+ * Get customer's gold credit balance
+ */
+router.get('/returns/gold-credit', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) throw new Error('Not authenticated');
+
+    const balance = returnService.getGoldCreditBalance(req.user.sub);
+
+    res.json({
+      success: true,
+      data: balance,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/orders/returns/:returnId
  * Get return details
  */
@@ -450,24 +469,5 @@ router.post(
     }
   }
 );
-
-/**
- * GET /api/orders/returns/gold-credit
- * Get customer's gold credit balance
- */
-router.get('/returns/gold-credit', authenticate, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!req.user) throw new Error('Not authenticated');
-
-    const balance = returnService.getGoldCreditBalance(req.user.sub);
-
-    res.json({
-      success: true,
-      data: balance,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 
 export { router as returnRouter };

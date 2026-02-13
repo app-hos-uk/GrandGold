@@ -24,6 +24,11 @@ const updateStockSchema = z.object({
   lowStockThreshold: z.number().int().min(0).optional(),
   poolType: z.enum(['physical', 'virtual', 'made_to_order']).optional(),
   countries: z.array(z.enum(['IN', 'AE', 'UK'])).optional(),
+  // Weight tracking fields (precious metals)
+  totalWeightGrams: z.number().min(0).optional(),
+  metalType: z.string().optional(),
+  purity: z.string().optional(),
+  lowWeightThresholdGrams: z.number().min(0).optional(),
 });
 
 const reserveSchema = z.object({
