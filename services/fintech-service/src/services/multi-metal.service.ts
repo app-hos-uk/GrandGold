@@ -33,7 +33,7 @@ export class MultiMetalService {
     try {
       this.redis = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
       this.redis.on('error', () => {});
-    } catch { return null; }
+    } catch { /* no-op */ return null; }
     return this.redis;
   }
 
@@ -56,7 +56,7 @@ export class MultiMetalService {
           return JSON.parse(cached);
         }
       }
-    } catch {}
+    } catch { /* no-op */ }
 
     const currencyMap: Record<Country, Currency> = {
       IN: 'INR',
@@ -113,7 +113,7 @@ export class MultiMetalService {
 
       try {
         if (redis) await redis.setex(cacheKey, 60, JSON.stringify(prices));
-      } catch {}
+      } catch { /* no-op */ }
 
       return prices;
     } catch (error) {
@@ -191,7 +191,7 @@ export class MultiMetalService {
           return JSON.parse(cached);
         }
       }
-    } catch {}
+    } catch { /* no-op */ }
 
     const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
     const basePrices: Record<MetalType, Record<Country, number>> = {
@@ -237,7 +237,7 @@ export class MultiMetalService {
 
     try {
       if (redis) await redis.setex(cacheKey, 3600, JSON.stringify(result));
-    } catch {}
+    } catch { /* no-op */ }
 
     return result;
   }
@@ -256,7 +256,7 @@ export class MultiMetalService {
           return parseFloat(cached);
         }
       }
-    } catch {}
+    } catch { /* no-op */ }
 
     const rates: Record<Currency, number> = {
       USD: 1,
@@ -268,7 +268,7 @@ export class MultiMetalService {
     const rate = rates[currency] || 1;
     try {
       if (redis) await redis.setex(cacheKey, 43200, rate.toString());
-    } catch {}
+    } catch { /* no-op */ }
 
     return rate;
   }

@@ -37,7 +37,7 @@ export class PriceAlertService {
     try {
       this.redis = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
       this.redis.on('error', () => {});
-    } catch { return null; }
+    } catch { /* no-op */ return null; }
     return this.redis;
   }
 
@@ -96,7 +96,7 @@ export class PriceAlertService {
         this.memSadd(userKey, alertId);
         this.memSadd(activeKey, alertId);
       }
-    } catch {
+    } catch { /* no-op */
       this.memHset('alerts', alertId, serialized);
       this.memSadd(userKey, alertId);
       this.memSadd(activeKey, alertId);
@@ -117,7 +117,7 @@ export class PriceAlertService {
       } else {
         data = this.memHget('alerts', alertId);
       }
-    } catch {
+    } catch { /* no-op */
       data = this.memHget('alerts', alertId);
     }
 
@@ -147,7 +147,7 @@ export class PriceAlertService {
       } else {
         alertIds = this.memSmembers(userKey);
       }
-    } catch {
+    } catch { /* no-op */
       alertIds = this.memSmembers(userKey);
     }
 
@@ -160,7 +160,7 @@ export class PriceAlertService {
         } else {
           data = this.memHget('alerts', alertId);
         }
-      } catch {
+      } catch { /* no-op */
         data = this.memHget('alerts', alertId);
       }
       if (data) {
@@ -197,7 +197,7 @@ export class PriceAlertService {
       } else {
         this.memHset('alerts', alertId, serialized);
       }
-    } catch {
+    } catch { /* no-op */
       this.memHset('alerts', alertId, serialized);
     }
 
@@ -223,7 +223,7 @@ export class PriceAlertService {
         this.memSrem(userKey, alertId);
         this.memSrem(activeKey, alertId);
       }
-    } catch {
+    } catch { /* no-op */
       this.memHdel('alerts', alertId);
       this.memSrem(userKey, alertId);
       this.memSrem(activeKey, alertId);
@@ -250,7 +250,7 @@ export class PriceAlertService {
         this.memHset('alerts', alertId, serialized);
         this.memSadd(activeKey, alertId);
       }
-    } catch {
+    } catch { /* no-op */
       this.memHset('alerts', alertId, serialized);
       this.memSadd(activeKey, alertId);
     }
@@ -276,7 +276,7 @@ export class PriceAlertService {
         this.memHset('alerts', alertId, serialized);
         this.memSrem(activeKey, alertId);
       }
-    } catch {
+    } catch { /* no-op */
       this.memHset('alerts', alertId, serialized);
       this.memSrem(activeKey, alertId);
     }
@@ -295,7 +295,7 @@ export class PriceAlertService {
       } else {
         alertIds = this.memSmembers(activeKey);
       }
-    } catch {
+    } catch { /* no-op */
       alertIds = this.memSmembers(activeKey);
     }
 
@@ -309,7 +309,7 @@ export class PriceAlertService {
         } else {
           data = this.memHget('alerts', alertId);
         }
-      } catch {
+      } catch { /* no-op */
         data = this.memHget('alerts', alertId);
       }
       if (!data) continue;
@@ -337,7 +337,7 @@ export class PriceAlertService {
             this.memHset('alerts', alertId, serialized);
             this.memSrem(activeKey, alertId);
           }
-        } catch {
+        } catch { /* no-op */
           this.memHset('alerts', alertId, serialized);
           this.memSrem(activeKey, alertId);
         }
@@ -375,6 +375,6 @@ export class PriceAlertService {
    * Close Redis connection
    */
   async close(): Promise<void> {
-    try { if (this.redis) await this.redis.quit(); } catch {}
+    try { if (this.redis) await this.redis.quit(); } catch { /* no-op */ }
   }
 }

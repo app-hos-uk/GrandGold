@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { ValidationError, NotFoundError, passwordSchema } from '@grandgold/utils';
 import { UserService } from '../services/user.service';
 import { authenticate, authorize } from '../middleware/auth';
@@ -299,8 +300,17 @@ router.patch('/me', async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       throw new Error('User not found');
     }
-    
-    const profile = await userService.updateProfile(req.user.sub, req.body);
+
+    const profileUpdateSchema = z.object({
+      firstName: z.string().min(1).max(100).optional(),
+      lastName: z.string().min(1).max(100).optional(),
+      phone: z.string().min(10).max(15).optional(),
+      dateOfBirth: z.string().optional(),
+      language: z.string().max(5).optional(),
+    }).strict();
+
+    const validatedData = profileUpdateSchema.parse(req.body);
+    const profile = await userService.updateProfile(req.user.sub, validatedData);
     
     res.json({
       success: true,

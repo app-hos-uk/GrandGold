@@ -1,4 +1,5 @@
 import jwt, { SignOptions, VerifyOptions } from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 import type { JwtPayload, TokenPair } from '@grandgold/types';
 
 interface JwtConfig {
@@ -14,7 +15,12 @@ function getJwtSecret(): string {
   if (!secret && process.env.NODE_ENV === 'production') {
     throw new Error('FATAL: JWT_SECRET environment variable is required in production. Do not deploy without it.');
   }
-  return secret || 'dev-only-default-secret-DO-NOT-USE-IN-PRODUCTION';
+  if (!secret) {
+    const ephemeral = randomBytes(32).toString('hex');
+    console.warn('WARNING: JWT_SECRET not set — using random ephemeral secret. Tokens will NOT survive restarts.');
+    return ephemeral;
+  }
+  return secret;
 }
 
 let config: JwtConfig = {
@@ -37,6 +43,7 @@ export function configureJwt(newConfig: Partial<JwtConfig>): void {
  */
 export function generateAccessToken(payload: Omit<JwtPayload, 'iat' | 'exp'>): string {
   const options: SignOptions = {
+    algorithm: 'HS256',
     expiresIn: config.accessExpiresIn as jwt.SignOptions['expiresIn'],
     issuer: config.issuer,
     audience: config.audience,
@@ -51,6 +58,7 @@ export function generateAccessToken(payload: Omit<JwtPayload, 'iat' | 'exp'>): s
 export function generateRefreshToken(userId: string): string {
   const payload = { sub: userId, type: 'refresh' };
   const options: SignOptions = {
+    algorithm: 'HS256',
     expiresIn: config.refreshExpiresIn as jwt.SignOptions['expiresIn'],
     issuer: config.issuer,
     audience: config.audience,
@@ -81,6 +89,7 @@ export function generateTokenPair(payload: Omit<JwtPayload, 'iat' | 'exp'>): Tok
  */
 export function verifyToken<T = JwtPayload>(token: string): T {
   const options: VerifyOptions = {
+    algorithms: ['HS256'],
     issuer: config.issuer,
     audience: config.audience,
   };

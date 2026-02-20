@@ -1,8 +1,11 @@
 import { Router, Request, Response, NextFunction, IRouter } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import { authenticate, authorize } from '../middleware/auth';
 
 const router: IRouter = Router();
+
+router.use(authenticate, authorize('super_admin', 'country_admin', 'manager'));
 
 // In-memory stores for demo (in production, use database)
 const campaignsStore: Map<string, Campaign> = new Map();
@@ -184,8 +187,12 @@ router.patch('/campaigns/:id', async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    const updateData = req.body;
-    Object.assign(campaign, updateData);
+    const allowedFields = ['name', 'channel', 'subject', 'content', 'segmentId', 'scheduledAt'] as const;
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        (campaign as Record<string, unknown>)[field] = req.body[field];
+      }
+    }
     campaignsStore.set(id, campaign);
 
     res.json({

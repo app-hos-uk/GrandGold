@@ -4,6 +4,7 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as FacebookStrategy } from 'passport-facebook';
 import { OAuthService } from '../services/oauth.service';
 import { AuthenticationError } from '@grandgold/utils';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 const oauthService = new OAuthService();
@@ -228,7 +229,7 @@ router.post('/apple/callback', async (req: Request, res: Response, next: NextFun
  * POST /api/auth/oauth/link
  * Link OAuth account to existing user
  */
-router.post('/link/:provider', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/link/:provider', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { provider } = req.params;
     // Tokens to be verified with provider in production

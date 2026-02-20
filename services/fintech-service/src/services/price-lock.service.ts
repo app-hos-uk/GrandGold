@@ -58,7 +58,7 @@ export class PriceLockService {
     try {
       this.redis = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
       this.redis.on('error', () => {});
-    } catch { return null; }
+    } catch { /* no-op */ return null; }
     return this.redis;
   }
 
@@ -150,7 +150,7 @@ export class PriceLockService {
         if (!this.memSets.has(userKey)) this.memSets.set(userKey, new Set());
         this.memSets.get(userKey)!.add(lockId);
       }
-    } catch {
+    } catch { /* no-op */
       this.memStore.set(lockKey, { value: serialized, expiresAt: Date.now() + PRICE_LOCK_DURATION * 1000 });
       if (!this.memSets.has(userKey)) this.memSets.set(userKey, new Set());
       this.memSets.get(userKey)!.add(lockId);
@@ -174,7 +174,7 @@ export class PriceLockService {
         if (entry && entry.expiresAt > Date.now()) data = entry.value;
         else if (entry) this.memStore.delete(lockKey);
       }
-    } catch {
+    } catch { /* no-op */
       const entry = this.memStore.get(lockKey);
       if (entry && entry.expiresAt > Date.now()) data = entry.value;
       else if (entry) this.memStore.delete(lockKey);
@@ -263,7 +263,7 @@ export class PriceLockService {
         }
         this.memSets.get(userKey)?.delete(lockId);
       }
-    } catch {
+    } catch { /* no-op */
       const entry = this.memStore.get(lockKey);
       if (entry && entry.expiresAt > Date.now()) {
         this.memStore.set(lockKey, { value: serialized, expiresAt: entry.expiresAt });
@@ -294,7 +294,7 @@ export class PriceLockService {
           this.memStore.delete(lockKey);
           this.memSets.get(userKey)?.delete(lockId);
         }
-      } catch {
+      } catch { /* no-op */
         this.memStore.delete(lockKey);
         this.memSets.get(userKey)?.delete(lockId);
       }
@@ -320,7 +320,7 @@ export class PriceLockService {
       } else {
         lockIds = Array.from(this.memSets.get(userKey) || []);
       }
-    } catch {
+    } catch { /* no-op */
       lockIds = Array.from(this.memSets.get(userKey) || []);
     }
 
@@ -331,11 +331,11 @@ export class PriceLockService {
         if (lock.status === 'active' && lock.expiresIn > 0) {
           locks.push(lock);
         }
-      } catch {
+      } catch { /* no-op */
         try {
           if (redis) await redis.srem(userKey, lockId);
           else this.memSets.get(userKey)?.delete(lockId);
-        } catch {
+        } catch { /* no-op */
           this.memSets.get(userKey)?.delete(lockId);
         }
       }
@@ -368,6 +368,6 @@ export class PriceLockService {
    * Close Redis connection
    */
   async close(): Promise<void> {
-    try { if (this.redis) await this.redis.quit(); } catch {}
+    try { if (this.redis) await this.redis.quit(); } catch { /* no-op */ }
   }
 }

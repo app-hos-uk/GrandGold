@@ -229,12 +229,12 @@ router.patch(
         throw new NotFoundError('Carrier not found');
       }
 
-      const updateData = req.body;
-      
-      // Don't allow changing id
-      delete updateData.id;
-      
-      Object.assign(carrier, updateData);
+      const allowedFields = ['name', 'trackingUrl', 'countries', 'isActive'] as const;
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+          (carrier as Record<string, unknown>)[field] = req.body[field];
+        }
+      }
       carriersStore.set(id, carrier);
 
       // Don't return secrets

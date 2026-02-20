@@ -445,16 +445,22 @@ export class AuthService {
     await this.redisService.set(`email_verify:${token}`, userId, 86400); // 24 hours
     
     // TODO: Integrate with Resend API
-    console.log(`Verification email sent to ${email} with token: ${token}`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DEV] Verification email for ${email}`);
+    }
   }
 
-  private async sendPasswordResetEmail(email: string, token: string): Promise<void> {
+  private async sendPasswordResetEmail(email: string, _token: string): Promise<void> {
     // TODO: Integrate with Resend API
-    console.log(`Password reset email sent to ${email} with token: ${token}`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DEV] Password reset email for ${email}`);
+    }
   }
 
-  private async sendSms(phone: string, message: string): Promise<void> {
+  private async sendSms(phone: string, _message: string): Promise<void> {
     // TODO: Integrate with Twilio
-    console.log(`SMS sent to ${phone}: ${message}`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DEV] SMS sent to ${phone}`);
+    }
   }
 }

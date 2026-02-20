@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction, IRouter } from 'express';
 import { z } from 'zod';
 import { Resend } from 'resend';
+import { authenticate, authorize } from '../middleware/auth';
 
 const router: IRouter = Router();
 
@@ -19,7 +20,7 @@ const sendEmailSchema = z.object({
   data: z.record(z.unknown()).optional(),
 });
 
-router.post('/send/email', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/send/email', authenticate, authorize('super_admin', 'country_admin', 'manager'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const payload = sendEmailSchema.parse(req.body);
 
@@ -60,7 +61,7 @@ const sendSMSSchema = z.object({
   body: z.string().min(1).max(1600),
 });
 
-router.post('/send/sms', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/send/sms', authenticate, authorize('super_admin', 'country_admin', 'manager'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const payload = sendSMSSchema.parse(req.body);
 
@@ -97,7 +98,7 @@ const sendWhatsAppSchema = z.object({
   components: z.array(z.unknown()).optional(),
 });
 
-router.post('/send/whatsapp', (req: Request, res: Response, next: NextFunction) => {
+router.post('/send/whatsapp', authenticate, authorize('super_admin', 'country_admin', 'manager'), (req: Request, res: Response, next: NextFunction) => {
   try {
     sendWhatsAppSchema.parse(req.body);
     // WhatsApp Business API requires approval — keep as demo for now
@@ -158,7 +159,7 @@ async function loadPrefs(userId: string): Promise<NotificationPrefs> {
     try {
       const raw = await r.get(`${PREFS_PREFIX}${userId}`);
       if (raw) return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
-    } catch {}
+    } catch { /* no-op */ }
   }
   return { ...DEFAULT_PREFS };
 }
@@ -175,13 +176,13 @@ async function savePrefs(userId: string, prefs: Partial<NotificationPrefs>): Pro
         'EX',
         365 * 86400,
       );
-    } catch {}
+    } catch { /* no-op */ }
   }
   return merged;
 }
 
 // Preferences (opt-in/opt-out) — persisted in Redis
-router.get('/preferences/:userId', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/preferences/:userId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const prefs = await loadPrefs(req.params.userId);
     res.json({ success: true, data: prefs });
@@ -190,7 +191,7 @@ router.get('/preferences/:userId', async (req: Request, res: Response, next: Nex
   }
 });
 
-router.patch('/preferences/:userId', async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/preferences/:userId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const allowedKeys: (keyof NotificationPrefs)[] = ['email', 'whatsapp', 'sms', 'push', 'marketing'];
     const patch: Partial<NotificationPrefs> = {};

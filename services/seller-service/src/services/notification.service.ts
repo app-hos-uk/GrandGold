@@ -111,7 +111,7 @@ export class SellerNotificationService {
       const key = `seller_notifications:${sellerId}:${id}`;
       let data: string | null = null;
       if (redis) {
-        try { data = await redis.get(key); } catch {}
+        try { data = await redis.get(key); } catch { /* no-op */ }
       }
       if (!data) data = _fallbackStore.get(key) || null;
       if (data) {
@@ -146,7 +146,7 @@ export class SellerNotificationService {
     let data: string | null = null;
 
     if (redis) {
-      try { data = await redis.get(key); } catch {}
+      try { data = await redis.get(key); } catch { /* no-op */ }
     }
     if (!data) data = _fallbackStore.get(key) || null;
 
@@ -197,7 +197,7 @@ export class SellerNotificationService {
       try {
         await redis.del(key);
         await redis.lrem(listKey, 0, notificationId);
-      } catch {}
+      } catch { /* no-op */ }
     }
     _fallbackStore.delete(key);
     const list = _fallbackLists.get(listKey);

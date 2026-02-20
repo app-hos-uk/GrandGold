@@ -164,7 +164,7 @@ export class SavedPaymentService {
     if (redis) {
       try {
         data = await redis.hget(`saved_payments:${userId}`, methodId);
-      } catch {}
+      } catch { /* no-op */ }
     }
     if (!data) {
       data = _fallbackStore.get(`saved_payments:${userId}:${methodId}`) || null;
@@ -238,7 +238,7 @@ export class SavedPaymentService {
       try {
         await redis.hdel(`saved_payments:${userId}`, methodId);
         await redis.srem(`saved_payments:list:${userId}`, methodId);
-      } catch {}
+      } catch { /* no-op */ }
     }
     _fallbackStore.delete(`saved_payments:${userId}:${methodId}`);
     const fallbackSet = _fallbackSets.get(`saved_payments:list:${userId}`);

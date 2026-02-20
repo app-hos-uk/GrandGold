@@ -71,7 +71,7 @@ export class VerificationService {
     const redis = getRedisClient();
 
     if (redis) {
-      try { storedCode = await redis.get(key); } catch {}
+      try { storedCode = await redis.get(key); } catch { /* no-op */ }
     }
     if (!storedCode) storedCode = fallbackGet(key);
 
@@ -84,7 +84,7 @@ export class VerificationService {
     }
 
     if (redis) {
-      try { await redis.del(key); } catch {}
+      try { await redis.del(key); } catch { /* no-op */ }
     }
     fallbackDel(key);
 
@@ -107,7 +107,9 @@ export class VerificationService {
       fallbackSetex(key, OTP_TTL, otp);
     }
 
-    console.log(`Phone OTP for ${countryCode}${phone}: ${otp}`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DEV] Phone OTP generated for ${countryCode}${phone}`);
+    }
   }
 
   /**
@@ -119,7 +121,7 @@ export class VerificationService {
     const redis = getRedisClient();
 
     if (redis) {
-      try { storedOtp = await redis.get(key); } catch {}
+      try { storedOtp = await redis.get(key); } catch { /* no-op */ }
     }
     if (!storedOtp) storedOtp = fallbackGet(key);
 
@@ -132,7 +134,7 @@ export class VerificationService {
     }
 
     if (redis) {
-      try { await redis.del(key); } catch {}
+      try { await redis.del(key); } catch { /* no-op */ }
     }
     fallbackDel(key);
 

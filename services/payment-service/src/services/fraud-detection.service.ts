@@ -133,12 +133,12 @@ export class FraudDetectionService {
       try {
         const cached = await redis.get(key);
         if (cached) return parseFloat(cached);
-      } catch {}
+      } catch { /* no-op */ }
     }
 
     const avgAmount = 50000;
     if (redis) {
-      try { await redis.setex(key, 3600, avgAmount.toString()); } catch {}
+      try { await redis.setex(key, 3600, avgAmount.toString()); } catch { /* no-op */ }
     }
 
     return avgAmount;
@@ -155,7 +155,7 @@ export class FraudDetectionService {
       try {
         const count = await redis.get(key);
         if (count) return parseInt(count);
-      } catch {}
+      } catch { /* no-op */ }
     }
 
     return 0;
@@ -225,7 +225,7 @@ export class FraudDetectionService {
     const key = `user:country:${userId}`;
     const redis = getRedisClient();
     if (redis) {
-      try { return await redis.get(key); } catch {}
+      try { return await redis.get(key); } catch { /* no-op */ }
     }
     return null;
   }
@@ -261,7 +261,7 @@ export class FraudDetectionService {
           return true;
         }
         return false;
-      } catch {}
+      } catch { /* no-op */ }
     }
 
     return false;

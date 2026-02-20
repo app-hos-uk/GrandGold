@@ -1,7 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { generateChatResponse } from '../services/vertex.service';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
+
+router.use(authenticate);
 
 interface ChatMessage {
   role: 'user' | 'assistant';

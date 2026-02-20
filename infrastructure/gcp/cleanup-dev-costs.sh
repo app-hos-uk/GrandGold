@@ -70,8 +70,9 @@ echo -e ""
 echo -e "${YELLOW}Step 4: Clean up old container images (keep latest 3)...${NC}"
 for svc in auth-service kyc-service seller-service fintech-service order-service payment-service product-service inventory-service promotion-service notification-service ai-service cms-service web; do
   IMAGES=$(gcloud container images list-tags gcr.io/${PROJECT_ID}/${svc} --format="value(digest)" --sort-by=~timestamp 2>/dev/null | tail -n +4)
-  COUNT=$(echo "$IMAGES" | grep -c "sha256" 2>/dev/null || echo 0)
-  if [ "$COUNT" -gt 0 ]; then
+  COUNT=$(echo "$IMAGES" | grep -c "sha256" 2>/dev/null || true)
+  COUNT=${COUNT:-0}
+  if [ "$COUNT" -gt 0 ] 2>/dev/null; then
     echo "  Cleaning ${COUNT} old images for ${svc}..."
     for digest in $IMAGES; do
       gcloud container images delete "gcr.io/${PROJECT_ID}/${svc}@${digest}" --quiet --force-delete-tags 2>/dev/null || true

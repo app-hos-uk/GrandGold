@@ -20,7 +20,7 @@ export class CurrencyConverterService {
     try {
       this.redis = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
       this.redis.on('error', () => {});
-    } catch { return null; }
+    } catch { /* no-op */ return null; }
     return this.redis;
   }
 
@@ -74,7 +74,7 @@ export class CurrencyConverterService {
           return JSON.parse(cached);
         }
       }
-    } catch {}
+    } catch { /* no-op */ }
 
     const rates: Record<Currency, number> = {
       USD: 1,
@@ -87,7 +87,7 @@ export class CurrencyConverterService {
       if (redis) {
         await redis.setex(cacheKey, 43200, JSON.stringify(rates));
       }
-    } catch {}
+    } catch { /* no-op */ }
 
     return rates;
   }
