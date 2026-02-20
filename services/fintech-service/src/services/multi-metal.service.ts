@@ -22,12 +22,22 @@ interface MetalPrices {
 }
 
 export class MultiMetalService {
-  private redis: Redis;
+  private redis: Redis | null = null;
   private metalsApiKey: string;
   private metalsApiUrl: string;
 
+  private getRedis(): Redis | null {
+    if (this.redis) return this.redis;
+    const url = process.env.REDIS_URL;
+    if (!url) return null;
+    try {
+      this.redis = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
+      this.redis.on('error', () => {});
+    } catch { return null; }
+    return this.redis;
+  }
+
   constructor() {
-    this.redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
     this.metalsApiKey = process.env.METALS_DEV_API_KEY || '';
     this.metalsApiUrl = process.env.METALS_DEV_API_URL || 'https://api.metals.dev/v1';
   }
@@ -36,13 +46,17 @@ export class MultiMetalService {
    * Get prices for all metals
    */
   async getAllMetalPrices(country: Country): Promise<MetalPrices> {
+    const redis = this.getRedis();
     const cacheKey = `metals:prices:${country}`;
     
-    // Try cache first
-    const cached = await this.redis.get(cacheKey);
-    if (cached) {
-      return JSON.parse(cached);
-    }
+    try {
+      if (redis) {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      }
+    } catch {}
 
     const currencyMap: Record<Country, Currency> = {
       IN: 'INR',
@@ -97,8 +111,9 @@ export class MultiMetalService {
         },
       };
 
-      // Cache for 1 minute
-      await this.redis.setex(cacheKey, 60, JSON.stringify(prices));
+      try {
+        if (redis) await redis.setex(cacheKey, 60, JSON.stringify(prices));
+      } catch {}
 
       return prices;
     } catch (error) {
@@ -166,12 +181,17 @@ export class MultiMetalService {
       low: number;
     };
   }> {
+    const redis = this.getRedis();
     const cacheKey = `metal:history:${metal}:${country}:${period}`;
     
-    const cached = await this.redis.get(cacheKey);
-    if (cached) {
-      return JSON.parse(cached);
-    }
+    try {
+      if (redis) {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      }
+    } catch {}
 
     const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
     const basePrices: Record<MetalType, Record<Country, number>> = {
@@ -215,7 +235,9 @@ export class MultiMetalService {
       },
     };
 
-    await this.redis.setex(cacheKey, 3600, JSON.stringify(result));
+    try {
+      if (redis) await redis.setex(cacheKey, 3600, JSON.stringify(result));
+    } catch {}
 
     return result;
   }
@@ -224,12 +246,17 @@ export class MultiMetalService {
    * Get exchange rate
    */
   private async getExchangeRate(currency: Currency): Promise<number> {
+    const redis = this.getRedis();
     const cacheKey = `exchange:rate:${currency}`;
-    const cached = await this.redis.get(cacheKey);
-    
-    if (cached) {
-      return parseFloat(cached);
-    }
+
+    try {
+      if (redis) {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          return parseFloat(cached);
+        }
+      }
+    } catch {}
 
     const rates: Record<Currency, number> = {
       USD: 1,
@@ -239,7 +266,9 @@ export class MultiMetalService {
     };
 
     const rate = rates[currency] || 1;
-    await this.redis.setex(cacheKey, 43200, rate.toString());
+    try {
+      if (redis) await redis.setex(cacheKey, 43200, rate.toString());
+    } catch {}
 
     return rate;
   }

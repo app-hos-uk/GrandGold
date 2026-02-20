@@ -4,7 +4,17 @@
  */
 import Redis from 'ioredis';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+let _redisClient: Redis | null = null;
+function getRedisClient(): Redis | null {
+  if (_redisClient) return _redisClient;
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  try {
+    _redisClient = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
+    _redisClient.on('error', () => {});
+  } catch { return null; }
+  return _redisClient;
+}
 
 const NOTIF_PREFIX = 'notif:user:';
 const PUSH_SUBS_PREFIX = 'push_subs:';
@@ -21,6 +31,8 @@ export interface NotificationItem {
 }
 
 export async function getNotifications(userId: string): Promise<NotificationItem[]> {
+  const redis = getRedisClient();
+  if (!redis) return [];
   const key = `${NOTIF_PREFIX}${userId}`;
   const raw = await redis.lrange(key, 0, 99);
   return raw.map((s) => JSON.parse(s) as NotificationItem).reverse();
@@ -36,14 +48,19 @@ export async function addNotification(
     read: false,
     createdAt: new Date().toISOString(),
   };
-  const key = `${NOTIF_PREFIX}${userId}`;
-  await redis.lpush(key, JSON.stringify(notif));
-  await redis.ltrim(key, 0, 99);
-  await redis.expire(key, TTL_DAYS * 86400);
+  const redis = getRedisClient();
+  if (redis) {
+    const key = `${NOTIF_PREFIX}${userId}`;
+    await redis.lpush(key, JSON.stringify(notif));
+    await redis.ltrim(key, 0, 99);
+    await redis.expire(key, TTL_DAYS * 86400);
+  }
   return notif;
 }
 
 export async function markNotificationRead(userId: string, id: string): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
   const items = await getNotifications(userId);
   const idx = items.findIndex((n) => n.id === id);
   if (idx < 0) return;
@@ -57,6 +74,8 @@ export async function markNotificationRead(userId: string, id: string): Promise<
 }
 
 export async function markAllRead(userId: string): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
   const items = await getNotifications(userId);
   const key = `${NOTIF_PREFIX}${userId}`;
   await redis.del(key);
@@ -68,12 +87,16 @@ export async function markAllRead(userId: string): Promise<void> {
 }
 
 export async function savePushSubscription(userId: string, subscription: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
   const key = `${PUSH_SUBS_PREFIX}${userId}`;
   await redis.hset(key, subscription.endpoint, JSON.stringify(subscription));
   await redis.expire(key, TTL_DAYS * 86400);
 }
 
 export async function getPushSubscriptions(userId: string): Promise<Array<{ endpoint: string; keys: { p256dh: string; auth: string } }>> {
+  const redis = getRedisClient();
+  if (!redis) return [];
   const key = `${PUSH_SUBS_PREFIX}${userId}`;
   const obj = await redis.hgetall(key);
   return Object.values(obj).map((v) => JSON.parse(v));

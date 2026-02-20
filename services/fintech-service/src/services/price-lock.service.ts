@@ -45,12 +45,24 @@ interface CreatePriceLockInput {
 const PRICE_LOCK_DURATION = 300;
 
 export class PriceLockService {
-  private redis: Redis;
+  private redis: Redis | null = null;
   private goldPriceService: GoldPriceService;
   private priceCalculationService: PriceCalculationService;
+  private memStore = new Map<string, { value: string; expiresAt: number }>();
+  private memSets = new Map<string, Set<string>>();
+
+  private getRedis(): Redis | null {
+    if (this.redis) return this.redis;
+    const url = process.env.REDIS_URL;
+    if (!url) return null;
+    try {
+      this.redis = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
+      this.redis.on('error', () => {});
+    } catch { return null; }
+    return this.redis;
+  }
 
   constructor() {
-    this.redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
     this.goldPriceService = new GoldPriceService();
     this.priceCalculationService = new PriceCalculationService();
   }
@@ -124,15 +136,25 @@ export class PriceLockService {
       expiresIn: PRICE_LOCK_DURATION,
     };
 
-    // Store in Redis with expiry
-    await this.redis.setex(
-      `pricelock:${lockId}`,
-      PRICE_LOCK_DURATION,
-      JSON.stringify(priceLock)
-    );
-
-    // Add to user's active locks set
-    await this.redis.sadd(`pricelock:user:${input.userId}`, lockId);
+    // Store with expiry
+    const redis = this.getRedis();
+    const lockKey = `pricelock:${lockId}`;
+    const userKey = `pricelock:user:${input.userId}`;
+    const serialized = JSON.stringify(priceLock);
+    try {
+      if (redis) {
+        await redis.setex(lockKey, PRICE_LOCK_DURATION, serialized);
+        await redis.sadd(userKey, lockId);
+      } else {
+        this.memStore.set(lockKey, { value: serialized, expiresAt: Date.now() + PRICE_LOCK_DURATION * 1000 });
+        if (!this.memSets.has(userKey)) this.memSets.set(userKey, new Set());
+        this.memSets.get(userKey)!.add(lockId);
+      }
+    } catch {
+      this.memStore.set(lockKey, { value: serialized, expiresAt: Date.now() + PRICE_LOCK_DURATION * 1000 });
+      if (!this.memSets.has(userKey)) this.memSets.set(userKey, new Set());
+      this.memSets.get(userKey)!.add(lockId);
+    }
 
     return priceLock;
   }
@@ -141,8 +163,23 @@ export class PriceLockService {
    * Get price lock by ID
    */
   async getPriceLock(lockId: string, userId: string): Promise<PriceLock> {
-    const data = await this.redis.get(`pricelock:${lockId}`);
-    
+    const redis = this.getRedis();
+    const lockKey = `pricelock:${lockId}`;
+    let data: string | null = null;
+    try {
+      if (redis) {
+        data = await redis.get(lockKey);
+      } else {
+        const entry = this.memStore.get(lockKey);
+        if (entry && entry.expiresAt > Date.now()) data = entry.value;
+        else if (entry) this.memStore.delete(lockKey);
+      }
+    } catch {
+      const entry = this.memStore.get(lockKey);
+      if (entry && entry.expiresAt > Date.now()) data = entry.value;
+      else if (entry) this.memStore.delete(lockKey);
+    }
+
     if (!data) {
       throw new NotFoundError('Price lock');
     }
@@ -208,14 +245,31 @@ export class PriceLockService {
     priceLock.status = 'used';
     priceLock.usedAt = new Date();
 
-    // Store with remaining TTL
-    const ttl = await this.redis.ttl(`pricelock:${lockId}`);
-    if (ttl > 0) {
-      await this.redis.setex(`pricelock:${lockId}`, ttl, JSON.stringify(priceLock));
+    const redis = this.getRedis();
+    const lockKey = `pricelock:${lockId}`;
+    const userKey = `pricelock:user:${userId}`;
+    const serialized = JSON.stringify(priceLock);
+    try {
+      if (redis) {
+        const ttl = await redis.ttl(lockKey);
+        if (ttl > 0) {
+          await redis.setex(lockKey, ttl, serialized);
+        }
+        await redis.srem(userKey, lockId);
+      } else {
+        const entry = this.memStore.get(lockKey);
+        if (entry && entry.expiresAt > Date.now()) {
+          this.memStore.set(lockKey, { value: serialized, expiresAt: entry.expiresAt });
+        }
+        this.memSets.get(userKey)?.delete(lockId);
+      }
+    } catch {
+      const entry = this.memStore.get(lockKey);
+      if (entry && entry.expiresAt > Date.now()) {
+        this.memStore.set(lockKey, { value: serialized, expiresAt: entry.expiresAt });
+      }
+      this.memSets.get(userKey)?.delete(lockId);
     }
-
-    // Remove from active locks
-    await this.redis.srem(`pricelock:user:${userId}`, lockId);
   }
 
   /**
@@ -226,12 +280,24 @@ export class PriceLockService {
       const priceLock = await this.getPriceLock(lockId, userId);
 
       if (priceLock.status !== 'active') {
-        return; // Already cancelled or used
+        return;
       }
 
-      // Delete from Redis
-      await this.redis.del(`pricelock:${lockId}`);
-      await this.redis.srem(`pricelock:user:${userId}`, lockId);
+      const redis = this.getRedis();
+      const lockKey = `pricelock:${lockId}`;
+      const userKey = `pricelock:user:${userId}`;
+      try {
+        if (redis) {
+          await redis.del(lockKey);
+          await redis.srem(userKey, lockId);
+        } else {
+          this.memStore.delete(lockKey);
+          this.memSets.get(userKey)?.delete(lockId);
+        }
+      } catch {
+        this.memStore.delete(lockKey);
+        this.memSets.get(userKey)?.delete(lockId);
+      }
     } catch (error) {
       if (error instanceof NotFoundError) {
         // Already expired or doesn't exist
@@ -245,18 +311,33 @@ export class PriceLockService {
    * Get user's active price locks
    */
   async getUserActiveLocks(userId: string): Promise<PriceLock[]> {
-    const lockIds = await this.redis.smembers(`pricelock:user:${userId}`);
-    const locks: PriceLock[] = [];
+    const redis = this.getRedis();
+    const userKey = `pricelock:user:${userId}`;
+    let lockIds: string[] = [];
+    try {
+      if (redis) {
+        lockIds = await redis.smembers(userKey);
+      } else {
+        lockIds = Array.from(this.memSets.get(userKey) || []);
+      }
+    } catch {
+      lockIds = Array.from(this.memSets.get(userKey) || []);
+    }
 
+    const locks: PriceLock[] = [];
     for (const lockId of lockIds) {
       try {
         const lock = await this.getPriceLock(lockId, userId);
         if (lock.status === 'active' && lock.expiresIn > 0) {
           locks.push(lock);
         }
-      } catch (error) {
-        // Lock expired, clean up
-        await this.redis.srem(`pricelock:user:${userId}`, lockId);
+      } catch {
+        try {
+          if (redis) await redis.srem(userKey, lockId);
+          else this.memSets.get(userKey)?.delete(lockId);
+        } catch {
+          this.memSets.get(userKey)?.delete(lockId);
+        }
       }
     }
 
@@ -287,6 +368,6 @@ export class PriceLockService {
    * Close Redis connection
    */
   async close(): Promise<void> {
-    await this.redis.quit();
+    try { if (this.redis) await this.redis.quit(); } catch {}
   }
 }

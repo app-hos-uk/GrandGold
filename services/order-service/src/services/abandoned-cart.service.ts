@@ -2,7 +2,17 @@ import Redis from 'ioredis';
 import type { Country } from '@grandgold/types';
 import { findUserById } from '@grandgold/database';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+let _redisClient: Redis | null = null;
+function getRedisClient(): Redis | null {
+  if (_redisClient) return _redisClient;
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  try {
+    _redisClient = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
+    _redisClient.on('error', () => {});
+  } catch { return null; }
+  return _redisClient;
+}
 
 const ABANDONED_CART_PREFIX = 'abandoned_cart:';
 const ABANDONED_CART_BY_CREATED = 'abandoned_cart:by_created';
@@ -47,6 +57,8 @@ export class AbandonedCartService {
       updatedAt: now,
     };
 
+    const redis = getRedisClient();
+    if (!redis) return;
     await redis.setex(key, TTL, JSON.stringify(record));
     const ts = new Date(now).getTime();
     await redis.zadd(ABANDONED_CART_BY_CREATED, ts, data.cartId);
@@ -56,6 +68,8 @@ export class AbandonedCartService {
    * Get abandoned cart
    */
   async getAbandonedCart(cartId: string): Promise<AbandonedCartRecord | null> {
+    const redis = getRedisClient();
+    if (!redis) return null;
     const key = `${ABANDONED_CART_PREFIX}${cartId}`;
     const data = await redis.get(key);
     return data ? JSON.parse(data) : null;
@@ -76,7 +90,8 @@ export class AbandonedCartService {
       record.updatedAt = new Date().toISOString();
 
       const key = `${ABANDONED_CART_PREFIX}${cartId}`;
-      await redis.setex(key, TTL, JSON.stringify(record));
+      const redis = getRedisClient();
+      if (redis) await redis.setex(key, TTL, JSON.stringify(record));
     }
   }
 
@@ -94,6 +109,8 @@ export class AbandonedCartService {
     const minScore = now - maxMs;
     const maxScore = now - minMs;
 
+    const redis = getRedisClient();
+    if (!redis) return [];
     const cartIds = await redis.zrangebyscore(
       ABANDONED_CART_BY_CREATED,
       minScore,
@@ -115,6 +132,8 @@ export class AbandonedCartService {
    * Delete abandoned cart (e.g., after checkout)
    */
   async deleteAbandonedCart(cartId: string): Promise<void> {
+    const redis = getRedisClient();
+    if (!redis) return;
     const key = `${ABANDONED_CART_PREFIX}${cartId}`;
     await redis.del(key);
     await redis.zrem(ABANDONED_CART_BY_CREATED, cartId);
@@ -124,6 +143,8 @@ export class AbandonedCartService {
    * Detect carts idle > 1h and record as abandoned. Called by cron.
    */
   async detectAndRecordAbandonedCarts(): Promise<number> {
+    const redis = getRedisClient();
+    if (!redis) return 0;
     let recorded = 0;
     const stream = redis.scanStream({ match: `${CART_PREFIX}*`, count: 100 });
 

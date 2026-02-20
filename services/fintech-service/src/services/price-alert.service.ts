@@ -26,10 +26,40 @@ interface CreateAlertInput {
 }
 
 export class PriceAlertService {
-  private redis: Redis;
+  private redis: Redis | null = null;
+  private memHash = new Map<string, Map<string, string>>();
+  private memSets = new Map<string, Set<string>>();
 
-  constructor() {
-    this.redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  private getRedis(): Redis | null {
+    if (this.redis) return this.redis;
+    const url = process.env.REDIS_URL;
+    if (!url) return null;
+    try {
+      this.redis = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
+      this.redis.on('error', () => {});
+    } catch { return null; }
+    return this.redis;
+  }
+
+  private memHset(hash: string, field: string, value: string) {
+    if (!this.memHash.has(hash)) this.memHash.set(hash, new Map());
+    this.memHash.get(hash)!.set(field, value);
+  }
+  private memHget(hash: string, field: string): string | null {
+    return this.memHash.get(hash)?.get(field) ?? null;
+  }
+  private memHdel(hash: string, field: string) {
+    this.memHash.get(hash)?.delete(field);
+  }
+  private memSadd(key: string, member: string) {
+    if (!this.memSets.has(key)) this.memSets.set(key, new Set());
+    this.memSets.get(key)!.add(member);
+  }
+  private memSrem(key: string, member: string) {
+    this.memSets.get(key)?.delete(member);
+  }
+  private memSmembers(key: string): string[] {
+    return Array.from(this.memSets.get(key) || []);
   }
 
   /**
@@ -52,14 +82,25 @@ export class PriceAlertService {
       updatedAt: now,
     };
 
-    // Store alert
-    await this.redis.hset('alerts', alertId, JSON.stringify(alert));
-    
-    // Add to user's alerts set
-    await this.redis.sadd(`alerts:user:${input.userId}`, alertId);
-    
-    // Add to active alerts for the purity/country
-    await this.redis.sadd(`alerts:active:${input.country}:${input.purity}`, alertId);
+    const redis = this.getRedis();
+    const serialized = JSON.stringify(alert);
+    const userKey = `alerts:user:${input.userId}`;
+    const activeKey = `alerts:active:${input.country}:${input.purity}`;
+    try {
+      if (redis) {
+        await redis.hset('alerts', alertId, serialized);
+        await redis.sadd(userKey, alertId);
+        await redis.sadd(activeKey, alertId);
+      } else {
+        this.memHset('alerts', alertId, serialized);
+        this.memSadd(userKey, alertId);
+        this.memSadd(activeKey, alertId);
+      }
+    } catch {
+      this.memHset('alerts', alertId, serialized);
+      this.memSadd(userKey, alertId);
+      this.memSadd(activeKey, alertId);
+    }
 
     return alert;
   }
@@ -68,8 +109,18 @@ export class PriceAlertService {
    * Get alert by ID
    */
   async getAlert(alertId: string, userId: string): Promise<PriceAlert> {
-    const data = await this.redis.hget('alerts', alertId);
-    
+    const redis = this.getRedis();
+    let data: string | null = null;
+    try {
+      if (redis) {
+        data = await redis.hget('alerts', alertId);
+      } else {
+        data = this.memHget('alerts', alertId);
+      }
+    } catch {
+      data = this.memHget('alerts', alertId);
+    }
+
     if (!data) {
       throw new NotFoundError('Price alert');
     }
@@ -87,11 +138,31 @@ export class PriceAlertService {
    * Get user's alerts
    */
   async getUserAlerts(userId: string): Promise<PriceAlert[]> {
-    const alertIds = await this.redis.smembers(`alerts:user:${userId}`);
-    const alerts: PriceAlert[] = [];
+    const redis = this.getRedis();
+    const userKey = `alerts:user:${userId}`;
+    let alertIds: string[] = [];
+    try {
+      if (redis) {
+        alertIds = await redis.smembers(userKey);
+      } else {
+        alertIds = this.memSmembers(userKey);
+      }
+    } catch {
+      alertIds = this.memSmembers(userKey);
+    }
 
+    const alerts: PriceAlert[] = [];
     for (const alertId of alertIds) {
-      const data = await this.redis.hget('alerts', alertId);
+      let data: string | null = null;
+      try {
+        if (redis) {
+          data = await redis.hget('alerts', alertId);
+        } else {
+          data = this.memHget('alerts', alertId);
+        }
+      } catch {
+        data = this.memHget('alerts', alertId);
+      }
       if (data) {
         alerts.push(JSON.parse(data));
       }
@@ -118,7 +189,17 @@ export class PriceAlertService {
       updatedAt: new Date(),
     };
 
-    await this.redis.hset('alerts', alertId, JSON.stringify(updatedAlert));
+    const redis = this.getRedis();
+    const serialized = JSON.stringify(updatedAlert);
+    try {
+      if (redis) {
+        await redis.hset('alerts', alertId, serialized);
+      } else {
+        this.memHset('alerts', alertId, serialized);
+      }
+    } catch {
+      this.memHset('alerts', alertId, serialized);
+    }
 
     return updatedAlert;
   }
@@ -129,9 +210,24 @@ export class PriceAlertService {
   async deleteAlert(alertId: string, userId: string): Promise<void> {
     const alert = await this.getAlert(alertId, userId);
 
-    await this.redis.hdel('alerts', alertId);
-    await this.redis.srem(`alerts:user:${userId}`, alertId);
-    await this.redis.srem(`alerts:active:${alert.country}:${alert.purity}`, alertId);
+    const redis = this.getRedis();
+    const userKey = `alerts:user:${userId}`;
+    const activeKey = `alerts:active:${alert.country}:${alert.purity}`;
+    try {
+      if (redis) {
+        await redis.hdel('alerts', alertId);
+        await redis.srem(userKey, alertId);
+        await redis.srem(activeKey, alertId);
+      } else {
+        this.memHdel('alerts', alertId);
+        this.memSrem(userKey, alertId);
+        this.memSrem(activeKey, alertId);
+      }
+    } catch {
+      this.memHdel('alerts', alertId);
+      this.memSrem(userKey, alertId);
+      this.memSrem(activeKey, alertId);
+    }
   }
 
   /**
@@ -143,8 +239,21 @@ export class PriceAlertService {
     alert.isActive = true;
     alert.updatedAt = new Date();
 
-    await this.redis.hset('alerts', alertId, JSON.stringify(alert));
-    await this.redis.sadd(`alerts:active:${alert.country}:${alert.purity}`, alertId);
+    const redis = this.getRedis();
+    const serialized = JSON.stringify(alert);
+    const activeKey = `alerts:active:${alert.country}:${alert.purity}`;
+    try {
+      if (redis) {
+        await redis.hset('alerts', alertId, serialized);
+        await redis.sadd(activeKey, alertId);
+      } else {
+        this.memHset('alerts', alertId, serialized);
+        this.memSadd(activeKey, alertId);
+      }
+    } catch {
+      this.memHset('alerts', alertId, serialized);
+      this.memSadd(activeKey, alertId);
+    }
   }
 
   /**
@@ -156,24 +265,57 @@ export class PriceAlertService {
     alert.isActive = false;
     alert.updatedAt = new Date();
 
-    await this.redis.hset('alerts', alertId, JSON.stringify(alert));
-    await this.redis.srem(`alerts:active:${alert.country}:${alert.purity}`, alertId);
+    const redis = this.getRedis();
+    const serialized = JSON.stringify(alert);
+    const activeKey = `alerts:active:${alert.country}:${alert.purity}`;
+    try {
+      if (redis) {
+        await redis.hset('alerts', alertId, serialized);
+        await redis.srem(activeKey, alertId);
+      } else {
+        this.memHset('alerts', alertId, serialized);
+        this.memSrem(activeKey, alertId);
+      }
+    } catch {
+      this.memHset('alerts', alertId, serialized);
+      this.memSrem(activeKey, alertId);
+    }
   }
 
   /**
    * Check alerts for price trigger
    */
   async checkAlerts(country: Country, purity: GoldPurity, currentPrice: number): Promise<PriceAlert[]> {
-    const alertIds = await this.redis.smembers(`alerts:active:${country}:${purity}`);
+    const redis = this.getRedis();
+    const activeKey = `alerts:active:${country}:${purity}`;
+    let alertIds: string[] = [];
+    try {
+      if (redis) {
+        alertIds = await redis.smembers(activeKey);
+      } else {
+        alertIds = this.memSmembers(activeKey);
+      }
+    } catch {
+      alertIds = this.memSmembers(activeKey);
+    }
+
     const triggeredAlerts: PriceAlert[] = [];
 
     for (const alertId of alertIds) {
-      const data = await this.redis.hget('alerts', alertId);
+      let data: string | null = null;
+      try {
+        if (redis) {
+          data = await redis.hget('alerts', alertId);
+        } else {
+          data = this.memHget('alerts', alertId);
+        }
+      } catch {
+        data = this.memHget('alerts', alertId);
+      }
       if (!data) continue;
 
       const alert: PriceAlert = JSON.parse(data);
 
-      // Check if alert should trigger
       let shouldTrigger = false;
       if (alert.direction === 'above' && currentPrice >= alert.targetPrice) {
         shouldTrigger = true;
@@ -182,13 +324,23 @@ export class PriceAlertService {
       }
 
       if (shouldTrigger) {
-        // Mark as triggered
         alert.triggeredAt = new Date();
         alert.isActive = false;
         alert.updatedAt = new Date();
 
-        await this.redis.hset('alerts', alertId, JSON.stringify(alert));
-        await this.redis.srem(`alerts:active:${country}:${purity}`, alertId);
+        const serialized = JSON.stringify(alert);
+        try {
+          if (redis) {
+            await redis.hset('alerts', alertId, serialized);
+            await redis.srem(activeKey, alertId);
+          } else {
+            this.memHset('alerts', alertId, serialized);
+            this.memSrem(activeKey, alertId);
+          }
+        } catch {
+          this.memHset('alerts', alertId, serialized);
+          this.memSrem(activeKey, alertId);
+        }
 
         triggeredAlerts.push(alert);
       }
@@ -223,6 +375,6 @@ export class PriceAlertService {
    * Close Redis connection
    */
   async close(): Promise<void> {
-    await this.redis.quit();
+    try { if (this.redis) await this.redis.quit(); } catch {}
   }
 }

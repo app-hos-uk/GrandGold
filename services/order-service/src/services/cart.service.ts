@@ -2,8 +2,18 @@ import Redis from 'ioredis';
 import { NotFoundError, ValidationError } from '@grandgold/utils';
 import type { Country } from '@grandgold/types';
 
-// Redis client for cart storage
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Redis client for cart storage (lazy, graceful when REDIS_URL is not set)
+let _redisClient: Redis | null = null;
+function getRedisClient(): Redis | null {
+  if (_redisClient) return _redisClient;
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  try {
+    _redisClient = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
+    _redisClient.on('error', () => {});
+  } catch { return null; }
+  return _redisClient;
+}
 
 const CART_TTL = 60 * 60 * 24 * 7; // 7 days
 
@@ -42,10 +52,10 @@ export class CartService {
    */
   async getCart(cartId: string): Promise<Cart> {
     const key = await this.getCartKey(cartId);
-    const data = await redis.get(key);
+    const redis = getRedisClient();
+    const data = redis ? await redis.get(key) : null;
     
     if (!data) {
-      // Return empty cart
       return {
         id: cartId,
         items: [],
@@ -106,9 +116,9 @@ export class CartService {
     cart.country = data.country as Country;
     cart.updatedAt = new Date();
     
-    // Save to Redis
     const key = await this.getCartKey(cartId);
-    await redis.setex(key, CART_TTL, JSON.stringify(cart));
+    const redis = getRedisClient();
+    if (redis) await redis.setex(key, CART_TTL, JSON.stringify(cart));
     
     return cart;
   }
@@ -142,9 +152,9 @@ export class CartService {
     cart.itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
     cart.updatedAt = new Date();
     
-    // Save to Redis
     const key = await this.getCartKey(cartId);
-    await redis.setex(key, CART_TTL, JSON.stringify(cart));
+    const redis = getRedisClient();
+    if (redis) await redis.setex(key, CART_TTL, JSON.stringify(cart));
     
     return cart;
   }
@@ -161,7 +171,8 @@ export class CartService {
    */
   async clearCart(cartId: string): Promise<void> {
     const key = await this.getCartKey(cartId);
-    await redis.del(key);
+    const redis = getRedisClient();
+    if (redis) await redis.del(key);
   }
 
   /**
@@ -191,12 +202,14 @@ export class CartService {
     userCart.itemCount = userCart.items.reduce((sum, item) => sum + item.quantity, 0);
     userCart.updatedAt = new Date();
     
-    // Save merged cart and delete guest cart
     const userKey = await this.getCartKey(userCartId);
     const guestKey = await this.getCartKey(guestCartId);
     
-    await redis.setex(userKey, CART_TTL, JSON.stringify(userCart));
-    await redis.del(guestKey);
+    const redis = getRedisClient();
+    if (redis) {
+      await redis.setex(userKey, CART_TTL, JSON.stringify(userCart));
+      await redis.del(guestKey);
+    }
     
     return userCart;
   }

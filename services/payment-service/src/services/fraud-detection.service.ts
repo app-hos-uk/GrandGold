@@ -1,7 +1,24 @@
 import { generateId } from '@grandgold/utils';
 import Redis from 'ioredis';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+let _redisClient: Redis | null = null;
+
+function getRedisClient(): Redis | null {
+  if (_redisClient) return _redisClient;
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  try {
+    _redisClient = new Redis(url, {
+      maxRetriesPerRequest: 2,
+      retryStrategy: (times) => (times <= 2 ? 500 : null),
+      lazyConnect: true,
+    });
+    _redisClient.on('error', () => {});
+  } catch {
+    return null;
+  }
+  return _redisClient;
+}
 
 interface FraudCheckInput {
   userId: string;
@@ -110,15 +127,19 @@ export class FraudDetectionService {
    */
   private async getUserAverageAmount(userId: string): Promise<number> {
     const key = `fraud:avg_amount:${userId}`;
-    const cached = await redis.get(key);
+    const redis = getRedisClient();
 
-    if (cached) {
-      return parseFloat(cached);
+    if (redis) {
+      try {
+        const cached = await redis.get(key);
+        if (cached) return parseFloat(cached);
+      } catch {}
     }
 
-    // In production, calculate from transaction history
-    const avgAmount = 50000; // Mock
-    await redis.setex(key, 3600, avgAmount.toString());
+    const avgAmount = 50000;
+    if (redis) {
+      try { await redis.setex(key, 3600, avgAmount.toString()); } catch {}
+    }
 
     return avgAmount;
   }
@@ -128,13 +149,15 @@ export class FraudDetectionService {
    */
   private async getRecentTransactions(userId: string): Promise<number> {
     const key = `fraud:recent_txns:${userId}`;
-    const count = await redis.get(key);
+    const redis = getRedisClient();
 
-    if (count) {
-      return parseInt(count);
+    if (redis) {
+      try {
+        const count = await redis.get(key);
+        if (count) return parseInt(count);
+      } catch {}
     }
 
-    // In production, count from database
     return 0;
   }
 
@@ -200,7 +223,11 @@ export class FraudDetectionService {
    */
   private async getUserCountry(userId: string): Promise<string | null> {
     const key = `user:country:${userId}`;
-    return await redis.get(key);
+    const redis = getRedisClient();
+    if (redis) {
+      try { return await redis.get(key); } catch {}
+    }
+    return null;
   }
 
   /**
@@ -224,11 +251,17 @@ export class FraudDetectionService {
    */
   private async isNewDevice(deviceId: string, userId: string): Promise<boolean> {
     const key = `user:devices:${userId}`;
-    const exists = await redis.sismember(key, deviceId);
+    const redis = getRedisClient();
 
-    if (!exists) {
-      await redis.sadd(key, deviceId);
-      return true;
+    if (redis) {
+      try {
+        const exists = await redis.sismember(key, deviceId);
+        if (!exists) {
+          await redis.sadd(key, deviceId);
+          return true;
+        }
+        return false;
+      } catch {}
     }
 
     return false;

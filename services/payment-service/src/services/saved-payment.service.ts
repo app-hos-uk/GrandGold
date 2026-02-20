@@ -3,7 +3,26 @@ import Redis from 'ioredis';
 import { StripeService } from './stripe.service';
 import { RazorpayService } from './razorpay.service';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+let _redisClient: Redis | null = null;
+const _fallbackStore = new Map<string, string>();
+const _fallbackSets = new Map<string, Set<string>>();
+
+function getRedisClient(): Redis | null {
+  if (_redisClient) return _redisClient;
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  try {
+    _redisClient = new Redis(url, {
+      maxRetriesPerRequest: 2,
+      retryStrategy: (times) => (times <= 2 ? 500 : null),
+      lazyConnect: true,
+    });
+    _redisClient.on('error', () => {});
+  } catch {
+    return null;
+  }
+  return _redisClient;
+}
 
 interface SavedPaymentMethod {
   id: string;
@@ -71,15 +90,24 @@ export class SavedPaymentService {
       await this.unsetDefault(userId);
     }
 
-    // Store in Redis
-    await redis.hset(
-      `saved_payments:${userId}`,
-      savedMethodId,
-      JSON.stringify(savedMethod)
-    );
-
-    // Add to user's payment methods list
-    await redis.sadd(`saved_payments:list:${userId}`, savedMethodId);
+    // Store in Redis (or fallback)
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        await redis.hset(`saved_payments:${userId}`, savedMethodId, JSON.stringify(savedMethod));
+        await redis.sadd(`saved_payments:list:${userId}`, savedMethodId);
+      } catch {
+        _fallbackStore.set(`saved_payments:${userId}:${savedMethodId}`, JSON.stringify(savedMethod));
+        const set = _fallbackSets.get(`saved_payments:list:${userId}`) || new Set();
+        set.add(savedMethodId);
+        _fallbackSets.set(`saved_payments:list:${userId}`, set);
+      }
+    } else {
+      _fallbackStore.set(`saved_payments:${userId}:${savedMethodId}`, JSON.stringify(savedMethod));
+      const set = _fallbackSets.get(`saved_payments:list:${userId}`) || new Set();
+      set.add(savedMethodId);
+      _fallbackSets.set(`saved_payments:list:${userId}`, set);
+    }
 
     return savedMethod;
   }
@@ -88,13 +116,31 @@ export class SavedPaymentService {
    * Get user's saved payment methods
    */
   async getSavedPaymentMethods(userId: string): Promise<SavedPaymentMethod[]> {
-    const methodIds = await redis.smembers(`saved_payments:list:${userId}`);
+    const redis = getRedisClient();
+    let methodIds: string[] = [];
     const methods: SavedPaymentMethod[] = [];
 
-    for (const methodId of methodIds) {
-      const data = await redis.hget(`saved_payments:${userId}`, methodId);
-      if (data) {
-        methods.push(JSON.parse(data));
+    if (redis) {
+      try {
+        methodIds = await redis.smembers(`saved_payments:list:${userId}`);
+        for (const methodId of methodIds) {
+          const data = await redis.hget(`saved_payments:${userId}`, methodId);
+          if (data) {
+            methods.push(JSON.parse(data));
+          }
+        }
+      } catch {
+        // Fall through to fallback
+      }
+    }
+
+    if (!redis || methods.length === 0) {
+      const fallbackSet = _fallbackSets.get(`saved_payments:list:${userId}`);
+      if (fallbackSet) {
+        for (const methodId of fallbackSet) {
+          const data = _fallbackStore.get(`saved_payments:${userId}:${methodId}`);
+          if (data) methods.push(JSON.parse(data));
+        }
       }
     }
 
@@ -113,7 +159,16 @@ export class SavedPaymentService {
     methodId: string,
     userId: string
   ): Promise<SavedPaymentMethod> {
-    const data = await redis.hget(`saved_payments:${userId}`, methodId);
+    let data: string | null = null;
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        data = await redis.hget(`saved_payments:${userId}`, methodId);
+      } catch {}
+    }
+    if (!data) {
+      data = _fallbackStore.get(`saved_payments:${userId}:${methodId}`) || null;
+    }
 
     if (!data) {
       throw new NotFoundError('Saved payment method');
@@ -137,11 +192,16 @@ export class SavedPaymentService {
     await this.unsetDefault(userId);
 
     method.isDefault = true;
-    await redis.hset(
-      `saved_payments:${userId}`,
-      methodId,
-      JSON.stringify(method)
-    );
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        await redis.hset(`saved_payments:${userId}`, methodId, JSON.stringify(method));
+      } catch {
+        _fallbackStore.set(`saved_payments:${userId}:${methodId}`, JSON.stringify(method));
+      }
+    } else {
+      _fallbackStore.set(`saved_payments:${userId}:${methodId}`, JSON.stringify(method));
+    }
   }
 
   /**
@@ -153,11 +213,16 @@ export class SavedPaymentService {
     for (const method of methods) {
       if (method.isDefault) {
         method.isDefault = false;
-        await redis.hset(
-          `saved_payments:${userId}`,
-          method.id,
-          JSON.stringify(method)
-        );
+        const redis = getRedisClient();
+        if (redis) {
+          try {
+            await redis.hset(`saved_payments:${userId}`, method.id, JSON.stringify(method));
+          } catch {
+            _fallbackStore.set(`saved_payments:${userId}:${method.id}`, JSON.stringify(method));
+          }
+        } else {
+          _fallbackStore.set(`saved_payments:${userId}:${method.id}`, JSON.stringify(method));
+        }
       }
     }
   }
@@ -168,8 +233,16 @@ export class SavedPaymentService {
   async deletePaymentMethod(methodId: string, userId: string): Promise<void> {
     const method = await this.getSavedPaymentMethod(methodId, userId);
 
-    await redis.hdel(`saved_payments:${userId}`, methodId);
-    await redis.srem(`saved_payments:list:${userId}`, methodId);
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        await redis.hdel(`saved_payments:${userId}`, methodId);
+        await redis.srem(`saved_payments:list:${userId}`, methodId);
+      } catch {}
+    }
+    _fallbackStore.delete(`saved_payments:${userId}:${methodId}`);
+    const fallbackSet = _fallbackSets.get(`saved_payments:list:${userId}`);
+    if (fallbackSet) fallbackSet.delete(methodId);
   }
 
   /**

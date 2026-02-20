@@ -1,7 +1,43 @@
 import { generateId, ValidationError } from '@grandgold/utils';
 import Redis from 'ioredis';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+let _redisClient: Redis | null = null;
+const _fallbackStore = new Map<string, { value: string; expiresAt: number }>();
+
+function getRedisClient(): Redis | null {
+  if (_redisClient) return _redisClient;
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  try {
+    _redisClient = new Redis(url, {
+      maxRetriesPerRequest: 2,
+      retryStrategy: (times) => (times <= 2 ? 500 : null),
+      lazyConnect: true,
+    });
+    _redisClient.on('error', () => {});
+  } catch {
+    return null;
+  }
+  return _redisClient;
+}
+
+function fallbackGet(key: string): string | null {
+  const entry = _fallbackStore.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    _fallbackStore.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function fallbackSetex(key: string, ttl: number, value: string): void {
+  _fallbackStore.set(key, { value, expiresAt: Date.now() + ttl * 1000 });
+}
+
+function fallbackDel(key: string): void {
+  _fallbackStore.delete(key);
+}
 
 const OTP_TTL = 300; // 5 minutes
 const EMAIL_CODE_TTL = 3600; // 1 hour
@@ -12,11 +48,17 @@ export class VerificationService {
    */
   async sendEmailVerification(userId: string, email: string): Promise<void> {
     const code = this.generateCode(6);
-    
-    // Store in Redis
-    await redis.setex(`email_verification:${userId}`, EMAIL_CODE_TTL, code);
-    
-    // Send email (mock - in production use email service)
+    const key = `email_verification:${userId}`;
+    const redis = getRedisClient();
+
+    if (redis) {
+      try { await redis.setex(key, EMAIL_CODE_TTL, code); } catch {
+        fallbackSetex(key, EMAIL_CODE_TTL, code);
+      }
+    } else {
+      fallbackSetex(key, EMAIL_CODE_TTL, code);
+    }
+
     console.log(`Email verification code for ${email}: ${code}`);
   }
 
@@ -24,19 +66,28 @@ export class VerificationService {
    * Verify email with code
    */
   async verifyEmail(userId: string, code: string): Promise<{ verified: boolean }> {
-    const storedCode = await redis.get(`email_verification:${userId}`);
-    
+    const key = `email_verification:${userId}`;
+    let storedCode: string | null = null;
+    const redis = getRedisClient();
+
+    if (redis) {
+      try { storedCode = await redis.get(key); } catch {}
+    }
+    if (!storedCode) storedCode = fallbackGet(key);
+
     if (!storedCode) {
       throw new ValidationError('Verification code expired or not found');
     }
-    
+
     if (storedCode !== code) {
       throw new ValidationError('Invalid verification code');
     }
-    
-    // Delete the code
-    await redis.del(`email_verification:${userId}`);
-    
+
+    if (redis) {
+      try { await redis.del(key); } catch {}
+    }
+    fallbackDel(key);
+
     return { verified: true };
   }
 
@@ -45,11 +96,17 @@ export class VerificationService {
    */
   async sendPhoneOtp(userId: string, phone: string, countryCode: string): Promise<void> {
     const otp = this.generateCode(6);
-    
-    // Store in Redis
-    await redis.setex(`phone_otp:${userId}`, OTP_TTL, otp);
-    
-    // Send SMS (mock - in production use SMS service like Twilio)
+    const key = `phone_otp:${userId}`;
+    const redis = getRedisClient();
+
+    if (redis) {
+      try { await redis.setex(key, OTP_TTL, otp); } catch {
+        fallbackSetex(key, OTP_TTL, otp);
+      }
+    } else {
+      fallbackSetex(key, OTP_TTL, otp);
+    }
+
     console.log(`Phone OTP for ${countryCode}${phone}: ${otp}`);
   }
 
@@ -57,19 +114,28 @@ export class VerificationService {
    * Verify phone with OTP
    */
   async verifyPhone(userId: string, otp: string): Promise<{ verified: boolean }> {
-    const storedOtp = await redis.get(`phone_otp:${userId}`);
-    
+    const key = `phone_otp:${userId}`;
+    let storedOtp: string | null = null;
+    const redis = getRedisClient();
+
+    if (redis) {
+      try { storedOtp = await redis.get(key); } catch {}
+    }
+    if (!storedOtp) storedOtp = fallbackGet(key);
+
     if (!storedOtp) {
       throw new ValidationError('OTP expired or not found');
     }
-    
+
     if (storedOtp !== otp) {
       throw new ValidationError('Invalid OTP');
     }
-    
-    // Delete the OTP
-    await redis.del(`phone_otp:${userId}`);
-    
+
+    if (redis) {
+      try { await redis.del(key); } catch {}
+    }
+    fallbackDel(key);
+
     return { verified: true };
   }
 

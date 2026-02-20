@@ -11,10 +11,17 @@ interface ConversionResult {
 }
 
 export class CurrencyConverterService {
-  private redis: Redis;
+  private redis: Redis | null = null;
 
-  constructor() {
-    this.redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  private getRedis(): Redis | null {
+    if (this.redis) return this.redis;
+    const url = process.env.REDIS_URL;
+    if (!url) return null;
+    try {
+      this.redis = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
+      this.redis.on('error', () => {});
+    } catch { return null; }
+    return this.redis;
   }
 
   /**
@@ -57,15 +64,18 @@ export class CurrencyConverterService {
    * Get exchange rates
    */
   async getExchangeRates(): Promise<Record<Currency, number>> {
+    const redis = this.getRedis();
     const cacheKey = 'exchange:rates';
-    const cached = await this.redis.get(cacheKey);
-    
-    if (cached) {
-      return JSON.parse(cached);
-    }
 
-    // In production, fetch from API
-    // For now, use fallback rates
+    try {
+      if (redis) {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      }
+    } catch {}
+
     const rates: Record<Currency, number> = {
       USD: 1,
       INR: 83.12,
@@ -73,7 +83,11 @@ export class CurrencyConverterService {
       GBP: 0.79,
     };
 
-    await this.redis.setex(cacheKey, 43200, JSON.stringify(rates));
+    try {
+      if (redis) {
+        await redis.setex(cacheKey, 43200, JSON.stringify(rates));
+      }
+    } catch {}
 
     return rates;
   }

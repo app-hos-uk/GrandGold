@@ -135,19 +135,30 @@ import Redis from 'ioredis';
 
 let redis: Redis | null = null;
 
-function getRedis(): Redis {
-  if (!redis) {
-    redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+function getRedis(): Redis | null {
+  if (redis) return redis;
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  try {
+    redis = new Redis(url, {
+      maxRetriesPerRequest: 2,
+      retryStrategy: (times) => (times <= 2 ? 500 : null),
+      lazyConnect: true,
+    });
+    redis.on('error', () => {});
+  } catch {
+    return null;
   }
   return redis;
 }
 
 async function loadPrefs(userId: string): Promise<NotificationPrefs> {
-  try {
-    const raw = await getRedis().get(`${PREFS_PREFIX}${userId}`);
-    if (raw) return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
-  } catch {
-    // Redis unavailable — return defaults
+  const r = getRedis();
+  if (r) {
+    try {
+      const raw = await r.get(`${PREFS_PREFIX}${userId}`);
+      if (raw) return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+    } catch {}
   }
   return { ...DEFAULT_PREFS };
 }
@@ -155,15 +166,16 @@ async function loadPrefs(userId: string): Promise<NotificationPrefs> {
 async function savePrefs(userId: string, prefs: Partial<NotificationPrefs>): Promise<NotificationPrefs> {
   const current = await loadPrefs(userId);
   const merged: NotificationPrefs = { ...current, ...prefs };
-  try {
-    await getRedis().set(
-      `${PREFS_PREFIX}${userId}`,
-      JSON.stringify(merged),
-      'EX',
-      365 * 86400, // 1 year TTL
-    );
-  } catch {
-    // Redis unavailable — preference will still be returned in-memory
+  const r = getRedis();
+  if (r) {
+    try {
+      await r.set(
+        `${PREFS_PREFIX}${userId}`,
+        JSON.stringify(merged),
+        'EX',
+        365 * 86400,
+      );
+    } catch {}
   }
   return merged;
 }

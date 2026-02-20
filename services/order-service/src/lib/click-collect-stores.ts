@@ -4,7 +4,18 @@
 import Redis from 'ioredis';
 import type { Country } from '@grandgold/types';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+let _redisClient: Redis | null = null;
+function getRedisClient(): Redis | null {
+  if (_redisClient) return _redisClient;
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  try {
+    _redisClient = new Redis(url, { maxRetriesPerRequest: 2, retryStrategy: (times) => (times <= 2 ? 500 : null), lazyConnect: true });
+    _redisClient.on('error', () => {});
+  } catch { return null; }
+  return _redisClient;
+}
+
 const STORES_KEY = 'click_collect:stores';
 
 export interface StoreLocation {
@@ -36,17 +47,23 @@ const DEFAULT_STORES: Record<Country, StoreLocation[]> = {
 };
 
 export async function getStores(country: Country): Promise<StoreLocation[]> {
-  const key = `${STORES_KEY}:${country}`;
-  const raw = await redis.get(key);
-  if (raw) {
-    return JSON.parse(raw) as StoreLocation[];
+  const redis = getRedisClient();
+  if (redis) {
+    const key = `${STORES_KEY}:${country}`;
+    const raw = await redis.get(key);
+    if (raw) {
+      return JSON.parse(raw) as StoreLocation[];
+    }
+    const stores = DEFAULT_STORES[country] ?? DEFAULT_STORES.IN;
+    await redis.set(key, JSON.stringify(stores), 'EX', 86400 * 365);
+    return stores;
   }
-  const stores = DEFAULT_STORES[country] ?? DEFAULT_STORES.IN;
-  await redis.set(key, JSON.stringify(stores), 'EX', 86400 * 365);
-  return stores;
+  return DEFAULT_STORES[country] ?? DEFAULT_STORES.IN;
 }
 
 export async function setStores(country: Country, stores: StoreLocation[]): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
   const key = `${STORES_KEY}:${country}`;
   await redis.set(key, JSON.stringify(stores), 'EX', 86400 * 365);
 }

@@ -15,8 +15,11 @@
 #   JWT_SECRET            — JWT signing key
 #   (Created by infrastructure/gcp/setup-database.sh or manually)
 #
-# Optional GitHub Secrets:
-#   REDIS_URL             — Redis connection string (defaults to internal VPC Redis)
+# Cost Optimization (dev environment):
+#   - Redis Memorystore REMOVED — all services use in-memory fallbacks (saves ~₹6,700/mo)
+#   - VPC connector REMOVED — only needed for Memorystore access (saves ~₹2,000/mo)
+#   - Max instances reduced from 10 → 3 for services, 2 for web
+#   - Multi-region deployments should be done via manual dispatch only
 
 name: Deploy to GCP Cloud Run
 
@@ -69,14 +72,39 @@ jobs:
               - 'packages/**'
               - 'tsconfig.base.json'
               - 'pnpm-lock.yaml'
-            services:
-              - 'services/**'
+            packages:
               - 'packages/**'
               - 'pnpm-lock.yaml'
+            auth-service:
+              - 'services/auth-service/**'
+            kyc-service:
+              - 'services/kyc-service/**'
+            seller-service:
+              - 'services/seller-service/**'
+            fintech-service:
+              - 'services/fintech-service/**'
+            order-service:
+              - 'services/order-service/**'
+            payment-service:
+              - 'services/payment-service/**'
+            product-service:
+              - 'services/product-service/**'
+            inventory-service:
+              - 'services/inventory-service/**'
+            promotion-service:
+              - 'services/promotion-service/**'
+            notification-service:
+              - 'services/notification-service/**'
+            ai-service:
+              - 'services/ai-service/**'
+            cms-service:
+              - 'services/cms-service/**'
 
       - name: Determine services to deploy
         id: services-list
         run: |
+          ALL_SERVICES='["auth-service","kyc-service","seller-service","fintech-service","order-service","payment-service","product-service","inventory-service","promotion-service","notification-service","ai-service","cms-service"]'
+
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             TARGET="${{ github.event.inputs.deploy_target }}"
             if [[ "$TARGET" == "single-service" ]]; then
@@ -84,12 +112,44 @@ jobs:
             elif [[ "$TARGET" == "web-only" ]]; then
               echo "list=[]" >> $GITHUB_OUTPUT
             else
-              echo 'list=["auth-service","kyc-service","seller-service","fintech-service","order-service","payment-service","product-service","inventory-service","promotion-service","notification-service","ai-service","cms-service"]' >> $GITHUB_OUTPUT
+              echo "list=${ALL_SERVICES}" >> $GITHUB_OUTPUT
             fi
-          elif [[ "${{ steps.filter.outputs.services }}" == "true" ]]; then
-            echo 'list=["auth-service","kyc-service","seller-service","fintech-service","order-service","payment-service","product-service","inventory-service","promotion-service","notification-service","ai-service","cms-service"]' >> $GITHUB_OUTPUT
           else
-            echo "list=[]" >> $GITHUB_OUTPUT
+            # Only build services that changed (or all if shared packages changed)
+            PACKAGES_CHANGED="${{ steps.filter.outputs.packages }}"
+            if [[ "$PACKAGES_CHANGED" == "true" ]]; then
+              echo "list=${ALL_SERVICES}" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+
+            CHANGED=""
+            add_if_changed() {
+              local svc=$1
+              local changed=$2
+              if [[ "$changed" == "true" ]]; then
+                if [[ -n "$CHANGED" ]]; then CHANGED="${CHANGED},"; fi
+                CHANGED="${CHANGED}\"${svc}\""
+              fi
+            }
+
+            add_if_changed "auth-service" "${{ steps.filter.outputs.auth-service }}"
+            add_if_changed "kyc-service" "${{ steps.filter.outputs.kyc-service }}"
+            add_if_changed "seller-service" "${{ steps.filter.outputs.seller-service }}"
+            add_if_changed "fintech-service" "${{ steps.filter.outputs.fintech-service }}"
+            add_if_changed "order-service" "${{ steps.filter.outputs.order-service }}"
+            add_if_changed "payment-service" "${{ steps.filter.outputs.payment-service }}"
+            add_if_changed "product-service" "${{ steps.filter.outputs.product-service }}"
+            add_if_changed "inventory-service" "${{ steps.filter.outputs.inventory-service }}"
+            add_if_changed "promotion-service" "${{ steps.filter.outputs.promotion-service }}"
+            add_if_changed "notification-service" "${{ steps.filter.outputs.notification-service }}"
+            add_if_changed "ai-service" "${{ steps.filter.outputs.ai-service }}"
+            add_if_changed "cms-service" "${{ steps.filter.outputs.cms-service }}"
+
+            if [[ -z "$CHANGED" ]]; then
+              echo "list=[]" >> $GITHUB_OUTPUT
+            else
+              echo "list=[${CHANGED}]" >> $GITHUB_OUTPUT
+            fi
           fi
 
   # ─────────────────────────────────────────────────────
@@ -290,6 +350,7 @@ jobs:
 
           # Use # as delimiter (^#^) so commas inside CORS_ORIGINS are preserved
           # DATABASE_URL & JWT_SECRET are mounted from GCP Secret Manager
+          # Redis + VPC connector removed for cost optimization — services use in-memory fallbacks
           gcloud run deploy ${{ matrix.service }} \
             --image gcr.io/${{ env.GCP_PROJECT_ID }}/${{ matrix.service }}:${{ github.sha }} \
             --region ${{ env.GCP_REGION }} \
@@ -298,14 +359,13 @@ jobs:
             --memory ${MEMORY} \
             --cpu 1 \
             --min-instances 0 \
-            --max-instances 10 \
+            --max-instances 3 \
             --concurrency 80 \
             --timeout ${TIMEOUT} \
-            --update-env-vars "^#^NODE_ENV=production#CLOUD_SQL_CONNECTION_NAME=${{ env.GCP_PROJECT_ID }}:${REGION}:grandgold-db#REDIS_URL=${{ secrets.REDIS_URL || 'redis://10.10.168.107:6379' }}#CORS_ORIGINS=${CORS}" \
+            --update-env-vars "^#^NODE_ENV=production#CLOUD_SQL_CONNECTION_NAME=${{ env.GCP_PROJECT_ID }}:${REGION}:grandgold-db#CORS_ORIGINS=${CORS}" \
             --update-secrets "${SECRETS}" \
             --add-cloudsql-instances "${{ env.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:grandgold-db" \
-            --vpc-connector "projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.GCP_REGION }}/connectors/grandgold-connector" \
-            --vpc-egress private-ranges-only \
+            --clear-vpc-connector \
             --quiet
 
       - name: Get service URL
@@ -380,13 +440,14 @@ jobs:
             --region ${{ env.GCP_REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --memory 1Gi \
+            --memory 512Mi \
             --cpu 1 \
             --min-instances 0 \
-            --max-instances 10 \
+            --max-instances 2 \
             --concurrency 80 \
             --timeout 120s \
             --set-env-vars "NODE_ENV=production" \
+            --clear-vpc-connector \
             --quiet
 
       - name: Get Web URL
