@@ -190,7 +190,7 @@ router.patch('/campaigns/:id', async (req: Request, res: Response, next: NextFun
     const allowedFields = ['name', 'channel', 'subject', 'content', 'segmentId', 'scheduledAt'] as const;
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
-        (campaign as Record<string, unknown>)[field] = req.body[field];
+        (campaign as unknown as Record<string, unknown>)[field] = req.body[field];
       }
     }
     campaignsStore.set(id, campaign);
