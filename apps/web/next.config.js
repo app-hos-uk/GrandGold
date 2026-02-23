@@ -21,6 +21,10 @@ const nextConfig = {
       'storage.googleapis.com',
       'lh3.googleusercontent.com', // Google avatars
       'platform-lookaside.fbsbx.com', // Facebook avatars
+      'cdn.shopify.com', // Shopify product images (HOS marketplace)
+    ],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'cdn.shopify.com', port: '', pathname: '/**' },
     ],
     formats: ['image/avif', 'image/webp'],
   },

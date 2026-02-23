@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
+import { SafeImage } from '@/components/SafeImage';
 import { Sparkles, ShoppingBag, Wallet, TrendingUp } from 'lucide-react';
 import { influencerApi } from '@/lib/api';
 
@@ -151,7 +151,7 @@ export default function InfluencerStorefrontPage() {
                 <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow">
                   <div className="aspect-square bg-gradient-to-br from-gold-100 to-cream-200 flex items-center justify-center relative overflow-hidden">
                     {product.images?.[0] ? (
-                      <Image src={product.images[0]} alt={product.name} fill className="object-cover" />
+                      <SafeImage src={product.images[0]} alt={product.name} fill className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
                     ) : (
                       <Sparkles className="w-16 h-16 text-gold-300" />
                     )}
